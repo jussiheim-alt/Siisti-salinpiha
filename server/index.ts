@@ -1,0 +1,2000 @@
+import express from 'express'
+import cors from 'cors'
+import cookieParser from 'cookie-parser'
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
+import multer from 'multer'
+import path from 'node:path'
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { startOfWeek, format, parseISO, addDays } from 'date-fns'
+import {
+  CONSTRAINT_LABELS,
+  TASK_CATALOG_V1,
+} from './catalog.ts'
+import { db, initDb, publicUser, parseConstraints } from './db.ts'
+import { vapidKeys } from './vapid.ts'
+import { getWeather } from './weather.ts'
+import { getCapWarnings } from './capWarnings.ts'
+import { notifyUsers, runWeatherAlertCheck, startWeatherAlertScheduler } from './weatherAlerts.ts'
+import {
+  getHubInspection,
+  hubOpenSummary,
+  listHubInspections,
+  seedHubYear,
+  updateHubInspection,
+  updateHubItem,
+} from './hub.ts'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const root = path.resolve(__dirname, '..')
+const PORT = Number(process.env.PORT || 8787)
+
+function loadJwtSecret() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET
+  const secretPath = path.join(root, 'data', 'jwt-secret.txt')
+  if (fs.existsSync(secretPath)) {
+    const existing = fs.readFileSync(secretPath, 'utf8').trim()
+    if (existing) return existing
+  }
+  const generated = crypto.randomUUID() + crypto.randomUUID()
+  fs.mkdirSync(path.dirname(secretPath), { recursive: true })
+  fs.writeFileSync(secretPath, generated, { mode: 0o600 })
+  console.warn('JWT_SECRET puuttui — luotiin data/jwt-secret.txt (aseta JWT_SECRET tuotannossa)')
+  return generated
+}
+
+const EFFECTIVE_JWT = loadJwtSecret()
+
+initDb()
+
+const app = express()
+app.set('trust proxy', 1)
+app.use(cors({ origin: true, credentials: true }))
+app.use(express.json({ limit: '2mb' }))
+app.use(cookieParser())
+app.use('/uploads', express.static(path.join(root, 'uploads')))
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(root, 'uploads')),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.jpg'
+      cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`)
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024 },
+})
+
+type AuthUser = {
+  id: string
+  name: string
+  email: string
+  role: 'admin' | 'member'
+  constraints: string[]
+}
+
+function signToken(user: AuthUser) {
+  return jwt.sign(
+    { sub: user.id, role: user.role, name: user.name, email: user.email },
+    EFFECTIVE_JWT,
+    { expiresIn: '30d' },
+  )
+}
+
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const header = req.headers.authorization
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : req.cookies?.token
+  if (!token) return res.status(401).json({ error: 'Kirjaudu sisään' })
+  try {
+    const payload = jwt.verify(token, EFFECTIVE_JWT) as { sub: string }
+    const row = db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(payload.sub) as
+      | Record<string, unknown>
+      | undefined
+    if (!row) return res.status(401).json({ error: 'Käyttäjää ei löydy' })
+    ;(req as express.Request & { user: AuthUser }).user = {
+      id: String(row.id),
+      name: String(row.name),
+      email: String(row.email),
+      role: row.role as 'admin' | 'member',
+      constraints: parseConstraints(String(row.constraints_json)),
+    }
+    next()
+  } catch {
+    return res.status(401).json({ error: 'Istunto vanhentunut' })
+  }
+}
+
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const user = (req as express.Request & { user: AuthUser }).user
+  if (user.role !== 'admin') return res.status(403).json({ error: 'Vain ylläpitäjälle' })
+  next()
+}
+
+function mondayOf(dateStr?: string) {
+  const d = dateStr ? parseISO(dateStr) : new Date()
+  return format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+}
+
+function seasonForDate(weekStart: string): 'talvi' | 'sulankausi' {
+  const m = parseISO(weekStart).getMonth() + 1
+  return m >= 11 || m <= 3 ? 'talvi' : 'sulankausi'
+}
+
+function getAssignments(pihavuoroId: string) {
+  return db
+    .prepare(
+      `SELECT a.*, u.name AS user_name, u.constraints_json, u.constraint_note
+       FROM assignments a JOIN users u ON u.id = a.user_id
+       WHERE a.pihavuoro_id = ?
+       ORDER BY CASE a.role WHEN 'lead' THEN 0 ELSE 1 END, u.name`,
+    )
+    .all(pihavuoroId)
+    .map((row) => {
+      const r = row as Record<string, unknown>
+      return {
+        id: r.id,
+        userId: r.user_id,
+        role: r.role,
+        userName: r.user_name,
+        constraints: parseConstraints(String(r.constraints_json)),
+        constraintNote: r.constraint_note ?? null,
+        constraintLabels: parseConstraints(String(r.constraints_json)).map(
+          (c) => CONSTRAINT_LABELS[c] || c,
+        ),
+      }
+    })
+}
+
+function getTasks(pihavuoroId: string) {
+  return db
+    .prepare(
+      `SELECT t.*, u.name AS assignee_name, d.name AS done_by_name
+       FROM shift_tasks t
+       LEFT JOIN users u ON u.id = t.assignee_user_id
+       LEFT JOIN users d ON d.id = t.done_by_user_id
+       WHERE t.pihavuoro_id = ?
+       ORDER BY t.sort_order, t.title`,
+    )
+    .all(pihavuoroId)
+    .map((row) => {
+      const r = row as Record<string, unknown>
+      return {
+        id: r.id,
+        templateId: r.template_id,
+        title: r.title,
+        instructions: r.instructions,
+        effort: r.effort,
+        assigneeUserId: r.assignee_user_id,
+        assigneeName: r.assignee_name ?? null,
+        status: r.status,
+        skipReason: r.skip_reason,
+        doneByUserId: r.done_by_user_id,
+        doneByName: r.done_by_name ?? null,
+        doneAt: r.done_at,
+        sortOrder: r.sort_order,
+      }
+    })
+}
+
+function hydratePihavuoro(row: Record<string, unknown>) {
+  const id = String(row.id)
+  return {
+    id,
+    weekStart: row.week_start,
+    weekEnd: format(addDays(parseISO(String(row.week_start)), 6), 'yyyy-MM-dd'),
+    status: row.status,
+    season: row.season,
+    notes: row.notes,
+    createdAt: row.created_at,
+    assignments: getAssignments(id),
+    tasks: getTasks(id),
+  }
+}
+
+function createTasksForPihavuoro(pihavuoroId: string, season: 'talvi' | 'sulankausi', assignments: { userId: string; role: string }[]) {
+  const templates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+  const lead = assignments.find((a) => a.role === 'lead')
+  const helpers = assignments.filter((a) => a.role === 'helper')
+  const insert = db.prepare(
+    `INSERT INTO shift_tasks (id, pihavuoro_id, template_id, title, instructions, effort, assignee_user_id, status, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+  )
+
+  let helperCursor = 0
+  let allCursor = 0
+  for (const t of templates) {
+    let assignee: string | null = null
+    if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
+    else if (t.defaultAssignee === 'helpers' || t.defaultAssignee === 'all') {
+      const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
+      const eligible = pool.filter((h) => {
+        const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(h.userId) as
+          | { constraints_json: string }
+          | undefined
+        const c = parseConstraints(u?.constraints_json ?? '[]')
+        if (t.effort === 'heavy' && c.includes('no_heavy')) return false
+        return true
+      })
+      if (eligible.length) {
+        const cursor = t.defaultAssignee === 'all' ? allCursor : helperCursor
+        assignee = eligible[cursor % eligible.length]!.userId
+        if (t.defaultAssignee === 'all') allCursor += 1
+        else helperCursor += 1
+      } else {
+        assignee = lead?.userId ?? helpers[0]?.userId ?? null
+      }
+    }
+    if (assignee) {
+      const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(assignee) as
+        | { constraints_json: string }
+        | undefined
+      const c = parseConstraints(u?.constraints_json ?? '[]')
+      if (t.effort === 'heavy' && c.includes('no_heavy')) assignee = lead?.userId ?? null
+    }
+    insert.run(
+      crypto.randomUUID(),
+      pihavuoroId,
+      t.id,
+      t.title,
+      t.instructions,
+      t.effort,
+      assignee,
+      t.sortOrder,
+    )
+  }
+}
+
+function lastShiftAt(userId: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT p.week_start FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE a.user_id = ? AND p.status IN ('published','done')
+       ORDER BY p.week_start DESC LIMIT 1`,
+    )
+    .get(userId) as { week_start: string } | undefined
+  return row?.week_start ?? null
+}
+
+function upcomingMondays(count = 10): string[] {
+  const start = mondayOf()
+  return Array.from({ length: count }, (_, i) =>
+    format(addDays(parseISO(start), i * 7), 'yyyy-MM-dd'),
+  )
+}
+
+function blockedUserIdsForWeek(weekStart: string): Set<string> {
+  return new Set(
+    (
+      db.prepare(`SELECT user_id FROM week_blocks WHERE week_start = ?`).all(weekStart) as {
+        user_id: string
+      }[]
+    ).map((r) => r.user_id),
+  )
+}
+
+function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek?: boolean } = {}) {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const blocked = blockedUserIdsForWeek(weekStart)
+  const users = (
+    db.prepare(`SELECT * FROM users WHERE active = 1 AND role IN ('admin','member')`).all() as Record<
+      string,
+      unknown
+    >[]
+  )
+    .map(publicUser)
+    .filter((u) => !u.snoozeUntil || String(u.snoozeUntil) <= today)
+    .filter((u) => !blocked.has(u.id))
+
+  const already = new Set(
+    opts.ignoreCurrentWeek
+      ? []
+      : (
+          db
+            .prepare(
+              `SELECT a.user_id FROM assignments a
+           JOIN pihavuorot p ON p.id = a.pihavuoro_id
+           WHERE p.week_start = ?`,
+            )
+            .all(weekStart) as { user_id: string }[]
+        ).map((r) => r.user_id),
+  )
+
+  const ranked = users
+    .filter((u) => !already.has(u.id))
+    .map((u) => ({ ...u, last: lastShiftAt(u.id) }))
+    .sort((a, b) => {
+      if (!a.last && !b.last) return a.name.localeCompare(b.name, 'fi')
+      if (!a.last) return -1
+      if (!b.last) return 1
+      return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
+    })
+
+  const lead = ranked.find((u) => !u.constraints.includes('no_lead')) || null
+  const helpers = ranked
+    .filter((u) => u.id !== lead?.id)
+    .slice(0, Math.min(5, Math.max(3, helperCount)))
+
+  return {
+    lead,
+    helpers,
+    ranked,
+    blockedCount: blocked.size,
+    availableCount: ranked.length,
+  }
+}
+
+// ——— Auth ———
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body as { email?: string; password?: string }
+  if (!email || !password) return res.status(400).json({ error: 'Anna sähköposti ja salasana' })
+  const row = db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(email.trim()) as
+    | Record<string, unknown>
+    | undefined
+  if (!row || !row.active) return res.status(401).json({ error: 'Virheellinen tunnus tai salasana' })
+  if (!bcrypt.compareSync(password, String(row.password_hash))) {
+    return res.status(401).json({ error: 'Virheellinen tunnus tai salasana' })
+  }
+  const user = publicUser(row) as AuthUser & Record<string, unknown>
+  const token = signToken(user as AuthUser)
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https'
+  res.cookie('token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    maxAge: 30 * 24 * 3600 * 1000,
+  })
+  res.json({ token, user })
+})
+
+app.post('/api/auth/logout', (req, res) => {
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https'
+  res.clearCookie('token', { sameSite: 'lax', secure, httpOnly: true })
+  res.json({ ok: true })
+})
+
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  const auth = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(auth.id) as Record<string, unknown>
+  res.json({ user: publicUser(row) })
+})
+
+// ——— Users ———
+app.get('/api/users', authMiddleware, requireAdmin, (_req, res) => {
+  const rows = db.prepare('SELECT * FROM users ORDER BY name').all() as Record<string, unknown>[]
+  res.json({ users: rows.map(publicUser) })
+})
+
+app.get('/api/directory', authMiddleware, (_req, res) => {
+  const rows = db
+    .prepare(`SELECT id, name FROM users WHERE active = 1 ORDER BY name`)
+    .all() as { id: string; name: string }[]
+  res.json({ users: rows })
+})
+
+app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
+  const { name, email, password, role, constraints, constraintNote, snoozeUntil } = req.body as {
+    name?: string
+    email?: string
+    password?: string
+    role?: 'admin' | 'member'
+    constraints?: string[]
+    constraintNote?: string
+    snoozeUntil?: string | null
+  }
+  if (!name?.trim() || !email?.trim() || !password) {
+    return res.status(400).json({ error: 'Nimi, sähköposti ja salasana vaaditaan' })
+  }
+  const id = crypto.randomUUID()
+  try {
+    db.prepare(
+      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, constraint_note, snooze_until, created_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      name.trim(),
+      email.trim().toLowerCase(),
+      bcrypt.hashSync(password, 10),
+      role === 'admin' ? 'admin' : 'member',
+      JSON.stringify(constraints ?? []),
+      constraintNote ?? null,
+      snoozeUntil || null,
+      new Date().toISOString(),
+    )
+  } catch {
+    return res.status(400).json({ error: 'Sähköposti on jo käytössä' })
+  }
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Record<string, unknown>
+  res.status(201).json({ user: publicUser(row) })
+})
+
+app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  const body = req.body as Record<string, unknown>
+  const name = body.name != null ? String(body.name) : String(row.name)
+  const email = body.email != null ? String(body.email).toLowerCase() : String(row.email)
+  const role = body.role === 'admin' || body.role === 'member' ? body.role : row.role
+  const active = body.active != null ? (body.active ? 1 : 0) : row.active
+  const constraints = body.constraints != null ? JSON.stringify(body.constraints) : row.constraints_json
+  const constraintNote =
+    body.constraintNote !== undefined ? (body.constraintNote as string | null) : row.constraint_note
+  const snoozeUntil =
+    body.snoozeUntil !== undefined ? (body.snoozeUntil as string | null) : row.snooze_until
+  db.prepare(
+    `UPDATE users SET name=?, email=?, role=?, active=?, constraints_json=?, constraint_note=?, snooze_until=? WHERE id=?`,
+  ).run(name, email, role, active, constraints, constraintNote, snoozeUntil || null, req.params.id)
+  if (body.password) {
+    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(
+      bcrypt.hashSync(String(body.password), 10),
+      req.params.id,
+    )
+  }
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ user: publicUser(updated) })
+})
+
+app.get('/api/catalog', authMiddleware, (_req, res) => {
+  res.json({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
+})
+
+// ——— Esteviikot (saatavuus) ———
+app.get('/api/availability', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const count = Math.min(16, Math.max(4, Number(req.query.weeks) || 10))
+  const weeks = upcomingMondays(count)
+  const targetId =
+    user.role === 'admin' && req.query.userId ? String(req.query.userId) : user.id
+
+  const blocked = new Set(
+    (
+      db
+        .prepare(
+          `SELECT week_start FROM week_blocks
+           WHERE user_id = ? AND week_start >= ? AND week_start <= ?`,
+        )
+        .all(targetId, weeks[0], weeks[weeks.length - 1]!) as { week_start: string }[]
+    ).map((r) => r.week_start),
+  )
+
+  const published = new Set(
+    (
+      db
+        .prepare(
+          `SELECT week_start FROM pihavuorot
+           WHERE status IN ('published','done') AND week_start >= ? AND week_start <= ?`,
+        )
+        .all(weeks[0], weeks[weeks.length - 1]!) as { week_start: string }[]
+    ).map((r) => r.week_start),
+  )
+
+  const myAssignments = new Map(
+    (
+      db
+        .prepare(
+          `SELECT p.week_start, a.role FROM assignments a
+           JOIN pihavuorot p ON p.id = a.pihavuoro_id
+           WHERE a.user_id = ? AND p.week_start >= ? AND p.week_start <= ?`,
+        )
+        .all(targetId, weeks[0], weeks[weeks.length - 1]!) as {
+        week_start: string
+        role: string
+      }[]
+    ).map((r) => [r.week_start, r.role]),
+  )
+
+  res.json({
+    userId: targetId,
+    weeks: weeks.map((weekStart) => ({
+      weekStart,
+      weekEnd: format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd'),
+      blocked: blocked.has(weekStart),
+      published: published.has(weekStart),
+      myRole: myAssignments.get(weekStart) || null,
+    })),
+  })
+})
+
+app.put('/api/availability', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const count = Math.min(16, Math.max(4, Number(req.body?.weeks) || 10))
+  const window = upcomingMondays(count)
+  const windowSet = new Set(window)
+  const blockedWeeks = Array.isArray(req.body?.blockedWeeks)
+    ? (req.body.blockedWeeks as unknown[]).map(String).filter((w) => windowSet.has(w))
+    : []
+
+  const del = db.prepare(
+    `DELETE FROM week_blocks WHERE user_id = ? AND week_start >= ? AND week_start <= ?`,
+  )
+  const insert = db.prepare(
+    `INSERT INTO week_blocks (id, user_id, week_start, note, created_at) VALUES (?, ?, ?, NULL, ?)`,
+  )
+  const now = new Date().toISOString()
+  const tx = db.transaction(() => {
+    del.run(user.id, window[0], window[window.length - 1]!)
+    for (const weekStart of blockedWeeks) {
+      // Don't block a week you're already assigned to as published — admin should reassign first
+      const assigned = db
+        .prepare(
+          `SELECT a.id FROM assignments a
+           JOIN pihavuorot p ON p.id = a.pihavuoro_id
+           WHERE a.user_id = ? AND p.week_start = ? AND p.status = 'published'`,
+        )
+        .get(user.id, weekStart)
+      if (assigned) continue
+      insert.run(crypto.randomUUID(), user.id, weekStart, now)
+    }
+  })
+  tx()
+
+  const saved = (
+    db
+      .prepare(
+        `SELECT week_start FROM week_blocks
+         WHERE user_id = ? AND week_start >= ? AND week_start <= ?
+         ORDER BY week_start`,
+      )
+      .all(user.id, window[0], window[window.length - 1]!) as { week_start: string }[]
+  ).map((r) => r.week_start)
+
+  res.json({ ok: true, blockedWeeks: saved })
+})
+
+app.get('/api/availability/summary', authMiddleware, requireAdmin, (req, res) => {
+  const count = Math.min(16, Math.max(4, Number(req.query.weeks) || 10))
+  const weeks = upcomingMondays(count)
+  const users = (
+    db.prepare(`SELECT id, name FROM users WHERE active = 1 ORDER BY name`).all() as {
+      id: string
+      name: string
+    }[]
+  )
+  const blocks = db
+    .prepare(
+      `SELECT user_id, week_start FROM week_blocks
+       WHERE week_start >= ? AND week_start <= ?`,
+    )
+    .all(weeks[0], weeks[weeks.length - 1]!) as { user_id: string; week_start: string }[]
+
+  const byWeek = weeks.map((weekStart) => {
+    const blockedUsers = blocks
+      .filter((b) => b.week_start === weekStart)
+      .map((b) => {
+        const u = users.find((x) => x.id === b.user_id)
+        return { id: b.user_id, name: u?.name || '—' }
+      })
+    const activeCount = users.length - blockedUsers.length
+    return {
+      weekStart,
+      weekEnd: format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd'),
+      blockedUsers,
+      availableCount: activeCount,
+      tight: activeCount < 5,
+    }
+  })
+
+  res.json({ weeks: byWeek, userCount: users.length })
+})
+
+// ——— Pihavuorot ———
+app.get('/api/pihavuorot', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const rows = db
+    .prepare('SELECT * FROM pihavuorot ORDER BY week_start DESC')
+    .all() as Record<string, unknown>[]
+  const list = rows
+    .map(hydratePihavuoro)
+    .filter((p) => user.role === 'admin' || p.status !== 'draft')
+  res.json({ pihavuorot: list })
+})
+
+app.get('/api/pihavuorot/meta/recommend', authMiddleware, requireAdmin, (req, res) => {
+  const weekStart = mondayOf(String(req.query.weekStart || ''))
+  const helperCount = Number(req.query.helperCount || 4)
+  const ignoreCurrentWeek = String(req.query.fresh || '') === '1'
+  res.json({
+    weekStart,
+    ...recommend(weekStart, helperCount, { ignoreCurrentWeek }),
+    season: seasonForDate(weekStart),
+  })
+})
+
+app.get('/api/pihavuorot/:id', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  const p = hydratePihavuoro(row)
+  if (p.status === 'draft' && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Luonnos vain ylläpitäjälle' })
+  }
+  res.json({ pihavuoro: p })
+})
+
+app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
+  let weekStart = mondayOf(req.body.weekStart)
+  // Jos viikko on jo olemassa tai weekStart ei annettu, etsi seuraava vapaa maanantai
+  if (!req.body.weekStart) {
+    for (let i = 0; i < 52; i++) {
+      const candidate = format(addDays(parseISO(weekStart), i * 7), 'yyyy-MM-dd')
+      const exists = db.prepare('SELECT id FROM pihavuorot WHERE week_start = ?').get(candidate)
+      if (!exists) {
+        weekStart = candidate
+        break
+      }
+    }
+  }
+  const season = (req.body.season as 'talvi' | 'sulankausi') || seasonForDate(weekStart)
+  const helperCount = Number(req.body.helperCount ?? 4)
+  const useRecommend = req.body.recommend !== false
+  const id = crypto.randomUUID()
+
+  const existing = db.prepare('SELECT id FROM pihavuorot WHERE week_start = ?').get(weekStart)
+  if (existing) return res.status(400).json({ error: 'Viikolle on jo Pihavuoro' })
+
+  let leadId = req.body.leadUserId as string | undefined
+  let helperIds = (req.body.helperUserIds as string[] | undefined) ?? []
+
+  if (useRecommend && !leadId) {
+    const rec = recommend(weekStart, helperCount)
+    leadId = rec.lead?.id
+    helperIds = rec.helpers.map((h) => h.id)
+  }
+
+  if (!leadId) {
+    return res.status(400).json({
+      error:
+        'Vastuuhenkilöä ei löytynyt — liian monta esteviikkoa tai rajoitetta tälle viikolle',
+    })
+  }
+  if (helperIds.length < 3 || helperIds.length > 5) {
+    return res.status(400).json({
+      error:
+        helperIds.length < 3
+          ? `Vain ${helperIds.length} saatavilla olevaa jäsentä tälle viikolle (tarvitaan 3–5 avustajaa). Tarkista esteviikot.`
+          : 'Avustajia tarvitaan 3–5',
+    })
+  }
+
+  const now = new Date().toISOString()
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO pihavuorot (id, week_start, status, season, notes, created_at) VALUES (?, ?, 'draft', ?, ?, ?)`,
+    ).run(id, weekStart, season, req.body.notes ?? null, now)
+    db.prepare(
+      `INSERT INTO assignments (id, pihavuoro_id, user_id, role) VALUES (?, ?, ?, 'lead')`,
+    ).run(crypto.randomUUID(), id, leadId)
+    for (const hid of helperIds) {
+      db.prepare(
+        `INSERT INTO assignments (id, pihavuoro_id, user_id, role) VALUES (?, ?, ?, 'helper')`,
+      ).run(crypto.randomUUID(), id, hid)
+    }
+    const assignments = [
+      { userId: leadId!, role: 'lead' },
+      ...helperIds.map((userId) => ({ userId, role: 'helper' })),
+    ]
+    createTasksForPihavuoro(id, season, assignments)
+  })
+  tx()
+
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(id) as Record<string, unknown>
+  res.status(201).json({ pihavuoro: hydratePihavuoro(row) })
+})
+
+app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  const status = req.body.status ?? row.status
+  const season = req.body.season ?? row.season
+  const notes = req.body.notes !== undefined ? req.body.notes : row.notes
+  db.prepare('UPDATE pihavuorot SET status=?, season=?, notes=? WHERE id=?').run(
+    status,
+    season,
+    notes,
+    req.params.id,
+  )
+
+  if (req.body.leadUserId || req.body.helperUserIds) {
+    const leadId = req.body.leadUserId as string
+    const helperIds = req.body.helperUserIds as string[]
+    if (!leadId || !helperIds || helperIds.length < 3 || helperIds.length > 5) {
+      return res.status(400).json({ error: 'Kokoonpano: 1 vastuu + 3–5 avustajaa' })
+    }
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM assignments WHERE pihavuoro_id = ?').run(req.params.id)
+      db.prepare('DELETE FROM shift_tasks WHERE pihavuoro_id = ?').run(req.params.id)
+      db.prepare(
+        `INSERT INTO assignments (id, pihavuoro_id, user_id, role) VALUES (?, ?, ?, 'lead')`,
+      ).run(crypto.randomUUID(), req.params.id, leadId)
+      for (const hid of helperIds) {
+        db.prepare(
+          `INSERT INTO assignments (id, pihavuoro_id, user_id, role) VALUES (?, ?, ?, 'helper')`,
+        ).run(crypto.randomUUID(), req.params.id, hid)
+      }
+      createTasksForPihavuoro(String(req.params.id), season as 'talvi' | 'sulankausi', [
+        { userId: leadId, role: 'lead' },
+        ...helperIds.map((userId) => ({ userId, role: 'helper' })),
+      ])
+    })
+    tx()
+  }
+
+  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ pihavuoro: hydratePihavuoro(updated) })
+})
+
+app.post('/api/pihavuorot/:id/publish', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  db.prepare(`UPDATE pihavuorot SET status='published' WHERE id=?`).run(req.params.id)
+  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  const hydrated = hydratePihavuoro(updated)
+  const assigneeIds = hydrated.assignments.map((a) => String(a.userId))
+  if (assigneeIds.length) {
+    notifyUsers(
+      assigneeIds,
+      'Pihavuoro julkaistu',
+      `${hydrated.weekStart} – ${hydrated.weekEnd}: vuorosi on valmis katsottavaksi.`,
+      `/pihavuoro/${hydrated.id}`,
+      'shift',
+    )
+  }
+  res.json({ pihavuoro: hydrated })
+})
+
+// ——— Task completion ———
+app.post('/api/tasks/:id/complete', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const task = db.prepare('SELECT * FROM shift_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!task) return res.status(404).json({ error: 'Tehtävää ei löydy' })
+
+  const assignment = db
+    .prepare('SELECT * FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
+    .get(task.pihavuoro_id, user.id) as Record<string, unknown> | undefined
+  if (!assignment && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Et ole tässä Pihavuorossa' })
+  }
+
+  const isLead = assignment?.role === 'lead'
+  const isAssignee = task.assignee_user_id === user.id
+  const unassigned = !task.assignee_user_id
+
+  if (!isLead && !isAssignee && !(unassigned && assignment) && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Voit kuitata vain oman tehtäväsi (vastuuhenkilö kaikkien)' })
+  }
+
+  // heavy restriction for self-complete
+  if (task.effort === 'heavy' && user.constraints.includes('no_heavy') && !isLead) {
+    return res.status(403).json({ error: 'Rajoitus: ei raskaisiin töihin' })
+  }
+
+  const status = req.body.status === 'skipped' ? 'skipped' : 'done'
+  db.prepare(
+    `UPDATE shift_tasks SET status=?, skip_reason=?, done_by_user_id=?, done_at=? WHERE id=?`,
+  ).run(
+    status,
+    status === 'skipped' ? req.body.skipReason || 'Ei tarvetta' : null,
+    user.id,
+    new Date().toISOString(),
+    req.params.id,
+  )
+
+  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(task.pihavuoro_id) as Record<
+    string,
+    unknown
+  >
+  res.json({ pihavuoro: hydratePihavuoro(piha) })
+})
+
+app.patch('/api/tasks/:id', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const task = db.prepare('SELECT * FROM shift_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!task) return res.status(404).json({ error: 'Ei löydy' })
+  const assignment = db
+    .prepare('SELECT * FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
+    .get(task.pihavuoro_id, user.id) as Record<string, unknown> | undefined
+  if (user.role !== 'admin' && assignment?.role !== 'lead') {
+    return res.status(403).json({ error: 'Vain vastuuhenkilö tai admin' })
+  }
+  const assigneeUserId =
+    req.body.assigneeUserId !== undefined ? req.body.assigneeUserId : task.assignee_user_id
+  if (assigneeUserId) {
+    const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(assigneeUserId) as
+      | { constraints_json: string }
+      | undefined
+    const c = parseConstraints(u?.constraints_json ?? '[]')
+    if (task.effort === 'heavy' && c.includes('no_heavy')) {
+      return res.status(400).json({ error: 'Henkilöllä on rajoitus: ei raskaisiin töihin' })
+    }
+  }
+  db.prepare('UPDATE shift_tasks SET assignee_user_id=? WHERE id=?').run(
+    assigneeUserId || null,
+    req.params.id,
+  )
+  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(task.pihavuoro_id) as Record<
+    string,
+    unknown
+  >
+  res.json({ pihavuoro: hydratePihavuoro(piha) })
+})
+
+// ——— Vuoronvaihto ———
+function hydrateSwap(row: Record<string, unknown>) {
+  const p = db.prepare('SELECT week_start, status FROM pihavuorot WHERE id = ?').get(row.pihavuoro_id) as
+    | { week_start: string; status: string }
+    | undefined
+  const fromName = (
+    db.prepare('SELECT name FROM users WHERE id = ?').get(row.from_user_id) as { name: string } | undefined
+  )?.name
+  const toName = row.to_user_id
+    ? (
+        db.prepare('SELECT name FROM users WHERE id = ?').get(row.to_user_id) as
+          | { name: string }
+          | undefined
+      )?.name
+    : null
+  const acceptedName = row.accepted_by_user_id
+    ? (
+        db.prepare('SELECT name FROM users WHERE id = ?').get(row.accepted_by_user_id) as
+          | { name: string }
+          | undefined
+      )?.name
+    : null
+  const weekStart = p?.week_start || ''
+  return {
+    id: row.id,
+    pihavuoroId: row.pihavuoro_id,
+    weekStart,
+    weekEnd: weekStart ? format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd') : '',
+    pihavuoroStatus: p?.status || null,
+    fromUserId: row.from_user_id,
+    fromUserName: fromName || '—',
+    toUserId: row.to_user_id ?? null,
+    toUserName: toName,
+    role: row.role,
+    message: row.message ?? null,
+    status: row.status,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at ?? null,
+    acceptedByUserId: row.accepted_by_user_id ?? null,
+    acceptedByUserName: acceptedName,
+  }
+}
+
+function isAssignedTo(pihavuoroId: string, userId: string) {
+  return Boolean(
+    db
+      .prepare('SELECT id FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
+      .get(pihavuoroId, userId),
+  )
+}
+
+function applySwapTransfer(pihavuoroId: string, fromUserId: string, toUserId: string, role: string) {
+  const existingTo = db
+    .prepare('SELECT id FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
+    .get(pihavuoroId, toUserId)
+  if (existingTo) throw new Error('Vastaanottaja on jo tässä vuorossa')
+
+  const assignment = db
+    .prepare('SELECT id FROM assignments WHERE pihavuoro_id = ? AND user_id = ? AND role = ?')
+    .get(pihavuoroId, fromUserId, role) as { id: string } | undefined
+  if (!assignment) throw new Error('Alkuperäistä vuoropaikkaa ei löydy')
+
+  const toUser = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(toUserId) as
+    | { constraints_json: string }
+    | undefined
+  const constraints = parseConstraints(toUser?.constraints_json ?? '[]')
+  if (role === 'lead' && constraints.includes('no_lead')) {
+    throw new Error('Vastaanottajalla on rajoitus: ei vastuuhenkilöksi')
+  }
+
+  db.prepare('UPDATE assignments SET user_id = ? WHERE id = ?').run(toUserId, assignment.id)
+
+  const openTasks = db
+    .prepare(
+      `SELECT id, effort FROM shift_tasks
+       WHERE pihavuoro_id = ? AND assignee_user_id = ? AND status = 'open'`,
+    )
+    .all(pihavuoroId, fromUserId) as { id: string; effort: string }[]
+
+  for (const t of openTasks) {
+    if (t.effort === 'heavy' && constraints.includes('no_heavy')) {
+      db.prepare('UPDATE shift_tasks SET assignee_user_id = NULL WHERE id = ?').run(t.id)
+    } else {
+      db.prepare('UPDATE shift_tasks SET assignee_user_id = ? WHERE id = ?').run(toUserId, t.id)
+    }
+  }
+}
+
+function mapSwapRows(rows: Record<string, unknown>[]) {
+  return rows.map(hydrateSwap)
+}
+
+app.get('/api/swaps', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const mine = db
+    .prepare(
+      `SELECT s.* FROM swap_offers s
+       JOIN pihavuorot p ON p.id = s.pihavuoro_id
+       WHERE s.from_user_id = ? AND s.status = 'open'
+       ORDER BY p.week_start`,
+    )
+    .all(user.id) as Record<string, unknown>[]
+
+  const available = db
+    .prepare(
+      `SELECT s.* FROM swap_offers s
+       JOIN pihavuorot p ON p.id = s.pihavuoro_id
+       WHERE s.status = 'open'
+         AND p.status = 'published'
+         AND s.from_user_id != ?
+         AND (s.to_user_id IS NULL OR s.to_user_id = ?)
+         AND NOT EXISTS (
+           SELECT 1 FROM assignments a
+           WHERE a.pihavuoro_id = s.pihavuoro_id AND a.user_id = ?
+         )
+       ORDER BY p.week_start`,
+    )
+    .all(user.id, user.id, user.id) as Record<string, unknown>[]
+
+  res.json({
+    mine: mapSwapRows(mine),
+    available: mapSwapRows(available),
+  })
+})
+
+app.get('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT * FROM swap_offers WHERE pihavuoro_id = ? AND status = 'open' ORDER BY created_at`,
+    )
+    .all(req.params.id) as Record<string, unknown>[]
+  res.json({ swaps: mapSwapRows(rows) })
+})
+
+app.post('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!piha) return res.status(404).json({ error: 'Pihavuoroa ei löydy' })
+  if (piha.status !== 'published') {
+    return res.status(400).json({ error: 'Vaihto vain julkaistulle vuorolle' })
+  }
+
+  const assignment = db
+    .prepare('SELECT * FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
+    .get(req.params.id, user.id) as Record<string, unknown> | undefined
+  if (!assignment) return res.status(403).json({ error: 'Et ole tässä vuorossa' })
+
+  const existing = db
+    .prepare(
+      `SELECT id FROM swap_offers WHERE pihavuoro_id = ? AND from_user_id = ? AND status = 'open'`,
+    )
+    .get(req.params.id, user.id)
+  if (existing) return res.status(400).json({ error: 'Sinulla on jo avoin vaihtotarjous tälle viikolle' })
+
+  const toUserId = req.body.toUserId ? String(req.body.toUserId) : null
+  if (toUserId) {
+    if (toUserId === user.id) return res.status(400).json({ error: 'Et voi tarjota itsellesi' })
+    const target = db.prepare('SELECT id, active FROM users WHERE id = ?').get(toUserId) as
+      | { id: string; active: number }
+      | undefined
+    if (!target?.active) return res.status(400).json({ error: 'Kohdekäyttäjää ei löydy' })
+    if (isAssignedTo(String(req.params.id), toUserId)) {
+      return res.status(400).json({ error: 'Kohdehenkilö on jo tässä vuorossa' })
+    }
+  }
+
+  const message = String(req.body.message || '').trim().slice(0, 400) || null
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO swap_offers
+     (id, pihavuoro_id, from_user_id, to_user_id, role, message, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'open', ?)`,
+  ).run(id, req.params.id, user.id, toUserId, assignment.role, message, now)
+
+  const hydrated = hydrateSwap(
+    db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(id) as Record<string, unknown>,
+  )
+  const roleLabel = assignment.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'
+  const link = `/pihavuoro/${req.params.id}`
+  if (toUserId) {
+    notifyUsers(
+      [toUserId],
+      'Sinulle tarjottiin vuoronvaihtoa',
+      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+      link,
+      'swap',
+    )
+  } else {
+    const recipients = (
+      db
+        .prepare(
+          `SELECT id FROM users
+           WHERE active = 1 AND id != ?
+             AND id NOT IN (SELECT user_id FROM assignments WHERE pihavuoro_id = ?)`,
+        )
+        .all(user.id, req.params.id) as { id: string }[]
+    ).map((u) => u.id)
+    notifyUsers(
+      recipients,
+      'Avoin vuoronvaihto',
+      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+      '/vaihdot',
+      'swap',
+    )
+  }
+
+  res.status(201).json({ swap: hydrated })
+})
+
+app.post('/api/swaps/:id/accept', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const offer = db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!offer) return res.status(404).json({ error: 'Tarjousta ei löydy' })
+  if (offer.status !== 'open') return res.status(400).json({ error: 'Tarjous ei ole enää auki' })
+  if (offer.from_user_id === user.id) {
+    return res.status(400).json({ error: 'Et voi hyväksyä omaa tarjoustasi' })
+  }
+  if (offer.to_user_id && offer.to_user_id !== user.id) {
+    return res.status(403).json({ error: 'Tarjous on suunnattu toiselle henkilölle' })
+  }
+
+  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(offer.pihavuoro_id) as
+    | Record<string, unknown>
+    | undefined
+  if (!piha || piha.status !== 'published') {
+    return res.status(400).json({ error: 'Vuoro ei ole enää vaihdettavissa' })
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      applySwapTransfer(
+        String(offer.pihavuoro_id),
+        String(offer.from_user_id),
+        user.id,
+        String(offer.role),
+      )
+      const now = new Date().toISOString()
+      db.prepare(
+        `UPDATE swap_offers
+         SET status = 'accepted', resolved_at = ?, accepted_by_user_id = ?
+         WHERE id = ?`,
+      ).run(now, user.id, offer.id)
+      db.prepare(
+        `UPDATE swap_offers SET status = 'cancelled', resolved_at = ?
+         WHERE pihavuoro_id = ? AND from_user_id = ? AND status = 'open' AND id != ?`,
+      ).run(now, offer.pihavuoro_id, offer.from_user_id, offer.id)
+    })
+    tx()
+  } catch (e) {
+    return res.status(400).json({
+      error: e instanceof Error ? e.message : 'Vaihto epäonnistui',
+    })
+  }
+
+  const hydrated = hydrateSwap(
+    db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as Record<string, unknown>,
+  )
+  const roleLabel = offer.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'
+  notifyUsers(
+    [String(offer.from_user_id)],
+    'Vuoronvaihto hyväksytty',
+    `${user.name} otti paikkasi (${roleLabel}) viikolla ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+    `/pihavuoro/${offer.pihavuoro_id}`,
+    'swap',
+  )
+  const others = (
+    db
+      .prepare(
+        `SELECT user_id FROM assignments
+         WHERE pihavuoro_id = ? AND user_id NOT IN (?, ?)`,
+      )
+      .all(offer.pihavuoro_id, offer.from_user_id, user.id) as { user_id: string }[]
+  ).map((r) => r.user_id)
+  if (others.length) {
+    notifyUsers(
+      others,
+      'Kokoonpano päivittyi',
+      `${user.name} tuli vuoroon ${hydrated.weekStart} – ${hydrated.weekEnd} (${roleLabel}).`,
+      `/pihavuoro/${offer.pihavuoro_id}`,
+      'swap',
+    )
+  }
+
+  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(offer.pihavuoro_id) as Record<
+    string,
+    unknown
+  >
+  res.json({ swap: hydrated, pihavuoro: hydratePihavuoro(updated) })
+})
+
+app.post('/api/swaps/:id/cancel', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const offer = db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!offer) return res.status(404).json({ error: 'Tarjousta ei löydy' })
+  if (offer.status !== 'open') return res.status(400).json({ error: 'Tarjous ei ole enää auki' })
+  if (offer.from_user_id !== user.id && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Vain tarjouksen tekijä tai ylläpitäjä voi perua' })
+  }
+  db.prepare(
+    `UPDATE swap_offers SET status = 'cancelled', resolved_at = ? WHERE id = ?`,
+  ).run(new Date().toISOString(), offer.id)
+  res.json({
+    swap: hydrateSwap(
+      db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as Record<
+        string,
+        unknown
+      >,
+    ),
+  })
+})
+
+// ——— Viikkokeskustelu (vain vuorossa oleville) ———
+function requireShiftMember(pihavuoroId: string, userId: string) {
+  return isAssignedTo(pihavuoroId, userId)
+}
+
+function hydrateMessage(row: Record<string, unknown>) {
+  const authorName = (
+    db.prepare('SELECT name FROM users WHERE id = ?').get(row.author_user_id) as
+      | { name: string }
+      | undefined
+  )?.name
+  return {
+    id: row.id,
+    pihavuoroId: row.pihavuoro_id,
+    authorUserId: row.author_user_id,
+    authorName: authorName || '—',
+    body: row.body,
+    createdAt: row.created_at,
+  }
+}
+
+app.get('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const piha = db.prepare('SELECT id FROM pihavuorot WHERE id = ?').get(req.params.id)
+  if (!piha) return res.status(404).json({ error: 'Pihavuoroa ei löydy' })
+  if (!requireShiftMember(String(req.params.id), user.id)) {
+    return res.status(403).json({ error: 'Viestit näkyvät vain tämän viikon vuorossa oleville' })
+  }
+  const messages = (
+    db
+      .prepare(
+        `SELECT * FROM shift_messages WHERE pihavuoro_id = ? ORDER BY created_at ASC LIMIT 200`,
+      )
+      .all(req.params.id) as Record<string, unknown>[]
+  ).map(hydrateMessage)
+  res.json({ messages })
+})
+
+app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!piha) return res.status(404).json({ error: 'Pihavuoroa ei löydy' })
+  if (!requireShiftMember(String(req.params.id), user.id)) {
+    return res.status(403).json({ error: 'Vain vuorossa olevat voivat lähettää viestejä' })
+  }
+  if (piha.status === 'draft') {
+    return res.status(400).json({ error: 'Keskustelu aukeaa kun vuoro on julkaistu' })
+  }
+  const body = String(req.body.body || '').trim()
+  if (!body) return res.status(400).json({ error: 'Kirjoita viesti' })
+  if (body.length > 2000) return res.status(400).json({ error: 'Viesti on liian pitkä' })
+
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO shift_messages (id, pihavuoro_id, author_user_id, body, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(id, req.params.id, user.id, body, now)
+
+  const recipients = (
+    db
+      .prepare(
+        `SELECT user_id FROM assignments WHERE pihavuoro_id = ? AND user_id != ?`,
+      )
+      .all(req.params.id, user.id) as { user_id: string }[]
+  ).map((r) => r.user_id)
+  const weekStart = String(piha.week_start)
+  const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
+  if (recipients.length) {
+    notifyUsers(
+      recipients,
+      'Viesti Pihavuorossa',
+      `${user.name}: ${body.length > 100 ? `${body.slice(0, 97)}…` : body}`,
+      `/pihavuoro/${req.params.id}?chat=1`,
+      'chat',
+    )
+  }
+
+  res.status(201).json({
+    message: hydrateMessage(
+      db.prepare('SELECT * FROM shift_messages WHERE id = ?').get(id) as Record<string, unknown>,
+    ),
+    weekLabel: `${weekStart} – ${weekEnd}`,
+  })
+})
+
+app.get('/api/chat/current', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const row = db
+    .prepare(
+      `SELECT p.* FROM pihavuorot p
+       JOIN assignments a ON a.pihavuoro_id = p.id
+       WHERE a.user_id = ?
+         AND p.status = 'published'
+         AND date(p.week_start, '+6 days') >= ?
+       ORDER BY p.week_start ASC
+       LIMIT 1`,
+    )
+    .get(user.id, today) as Record<string, unknown> | undefined
+
+  if (!row) {
+    return res.json({ chat: null })
+  }
+
+  const pihavuoroId = String(row.id)
+  const weekStart = String(row.week_start)
+  const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
+  const messageCount = (
+    db
+      .prepare(`SELECT COUNT(*) AS c FROM shift_messages WHERE pihavuoro_id = ?`)
+      .get(pihavuoroId) as { c: number }
+  ).c
+  const last = db
+    .prepare(
+      `SELECT created_at FROM shift_messages WHERE pihavuoro_id = ? ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(pihavuoroId) as { created_at: string } | undefined
+  const assignment = db
+    .prepare(`SELECT role FROM assignments WHERE pihavuoro_id = ? AND user_id = ?`)
+    .get(pihavuoroId, user.id) as { role: string } | undefined
+
+  res.json({
+    chat: {
+      pihavuoroId,
+      weekStart,
+      weekEnd,
+      messageCount,
+      lastMessageAt: last?.created_at ?? null,
+      myRole: assignment?.role || null,
+    },
+  })
+})
+
+// ——— Notices ———
+app.get('/api/notices', authMiddleware, (_req, res) => {
+  const notices = db
+    .prepare(
+      `SELECT n.*, u.name AS author_name FROM notices n
+       JOIN users u ON u.id = n.author_user_id
+       ORDER BY n.created_at DESC`,
+    )
+    .all()
+    .map((row) => {
+      const r = row as Record<string, unknown>
+      const replies = db
+        .prepare(
+          `SELECT r.*, u.name AS author_name FROM notice_replies r
+           JOIN users u ON u.id = r.author_user_id
+           WHERE r.notice_id = ? ORDER BY r.created_at`,
+        )
+        .all(r.id)
+        .map((rr) => {
+          const x = rr as Record<string, unknown>
+          return {
+            id: x.id,
+            body: x.body,
+            authorName: x.author_name,
+            authorUserId: x.author_user_id,
+            createdAt: x.created_at,
+          }
+        })
+      return {
+        id: r.id,
+        body: r.body,
+        photoUrl: r.photo_path ? `/uploads/${path.basename(String(r.photo_path))}` : null,
+        status: r.status,
+        authorName: r.author_name,
+        authorUserId: r.author_user_id,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+        replies,
+      }
+    })
+  res.json({ notices })
+})
+
+app.post('/api/notices', authMiddleware, upload.single('photo'), (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const body = String(req.body.body || '').trim()
+  if (!body) return res.status(400).json({ error: 'Kirjoita viesti' })
+  const id = crypto.randomUUID()
+  const photoPath = req.file ? req.file.path : null
+  db.prepare(
+    `INSERT INTO notices (id, author_user_id, body, photo_path, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)`,
+  ).run(id, user.id, body, photoPath, new Date().toISOString())
+
+  const recipients = (
+    db.prepare(`SELECT id FROM users WHERE active = 1 AND id != ?`).all(user.id) as { id: string }[]
+  ).map((u) => u.id)
+  notifyUsers(
+    recipients,
+    'Uusi huomio',
+    body.length > 120 ? `${body.slice(0, 117)}…` : body,
+    '/huomiot',
+    'notice',
+  )
+
+  res.status(201).json({ id })
+})
+
+app.post('/api/notices/:id/replies', authMiddleware, requireAdmin, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const notice = db.prepare('SELECT * FROM notices WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!notice) return res.status(404).json({ error: 'Ei löydy' })
+  const body = String(req.body.body || '').trim()
+  if (!body) return res.status(400).json({ error: 'Kirjoita vastaus' })
+  db.prepare(
+    `INSERT INTO notice_replies (id, notice_id, author_user_id, body, created_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run(crypto.randomUUID(), req.params.id, user.id, body, new Date().toISOString())
+  if (req.body.status) {
+    db.prepare('UPDATE notices SET status=?, resolved_at=? WHERE id=?').run(
+      req.body.status,
+      req.body.status === 'resolved' ? new Date().toISOString() : null,
+      req.params.id,
+    )
+  }
+  const authorId = String(notice.author_user_id)
+  if (authorId && authorId !== user.id) {
+    notifyUsers(
+      [authorId],
+      'Vastaus huomioosi',
+      body.length > 120 ? `${body.slice(0, 117)}…` : body,
+      '/huomiot',
+      'notice',
+    )
+  }
+  res.json({ ok: true })
+})
+
+app.patch('/api/notices/:id', authMiddleware, requireAdmin, (req, res) => {
+  const status = req.body.status as string
+  if (!['open', 'in_progress', 'resolved'].includes(status)) {
+    return res.status(400).json({ error: 'Virheellinen tila' })
+  }
+  db.prepare('UPDATE notices SET status=?, resolved_at=? WHERE id=?').run(
+    status,
+    status === 'resolved' ? new Date().toISOString() : null,
+    req.params.id,
+  )
+  res.json({ ok: true })
+})
+
+// ——— Home summary ———
+app.get('/api/home', authMiddleware, async (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const weekStart = mondayOf()
+  const row = db
+    .prepare(
+      `SELECT p.* FROM pihavuorot p
+       JOIN assignments a ON a.pihavuoro_id = p.id
+       WHERE a.user_id = ? AND p.status = 'published' AND p.week_start >= ?
+       ORDER BY p.week_start ASC LIMIT 1`,
+    )
+    .get(user.id, weekStart) as Record<string, unknown> | undefined
+
+  const openNotices = (
+    db.prepare(`SELECT COUNT(*) AS c FROM notices WHERE status != 'resolved'`).get() as { c: number }
+  ).c
+
+  const openExtras = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM extra_tasks WHERE status IN ('open','ready','in_progress')`,
+      )
+      .get() as { c: number }
+  ).c
+
+  let weather = null
+  try {
+    const [forecast, warnings] = await Promise.all([getWeather(), getCapWarnings()])
+    weather = { ...forecast, warnings }
+  } catch (err) {
+    console.warn('Weather fetch failed', err)
+  }
+
+  const unreadNotifications = (
+    db
+      .prepare(`SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL`)
+      .get(user.id) as { c: number }
+  ).c
+
+  const recentNotifications = db
+    .prepare(
+      `SELECT id, title, body, link, kind, read_at, created_at
+       FROM notifications WHERE user_id = ?
+       ORDER BY created_at DESC LIMIT 5`,
+    )
+    .all(user.id)
+    .map((r) => {
+      const row = r as Record<string, unknown>
+      return {
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        link: row.link,
+        kind: row.kind || 'general',
+        readAt: row.read_at ?? null,
+        createdAt: row.created_at,
+      }
+    })
+
+  const availabilityWindow = upcomingMondays(10)
+  const myBlockedCount = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM week_blocks
+         WHERE user_id = ? AND week_start >= ? AND week_start <= ?`,
+      )
+      .get(user.id, availabilityWindow[0], availabilityWindow[availabilityWindow.length - 1]!) as {
+      c: number
+    }
+  ).c
+
+  const openSwapOffers = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM swap_offers s
+         JOIN pihavuorot p ON p.id = s.pihavuoro_id
+         WHERE s.status = 'open'
+           AND p.status = 'published'
+           AND s.from_user_id != ?
+           AND (s.to_user_id IS NULL OR s.to_user_id = ?)
+           AND NOT EXISTS (
+             SELECT 1 FROM assignments a
+             WHERE a.pihavuoro_id = s.pihavuoro_id AND a.user_id = ?
+           )`,
+      )
+      .get(user.id, user.id, user.id) as { c: number }
+  ).c
+
+  const myOpenSwaps = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM swap_offers WHERE from_user_id = ? AND status = 'open'`,
+      )
+      .get(user.id) as { c: number }
+  ).c
+
+  const nextId = row ? String(row.id) : null
+  const chatMessageCount = nextId
+    ? (
+        db
+          .prepare(`SELECT COUNT(*) AS c FROM shift_messages WHERE pihavuoro_id = ?`)
+          .get(nextId) as { c: number }
+      ).c
+    : 0
+
+  res.json({
+    nextPihavuoro: row ? hydratePihavuoro(row) : null,
+    openNotices,
+    openExtraTasks: openExtras,
+    canCreateExtraTask: user.role === 'admin' || isCurrentWeekLead(user.id),
+    constraintLabels: CONSTRAINT_LABELS,
+    weather,
+    unreadNotifications,
+    recentNotifications,
+    hub: hubOpenSummary(),
+    availability: {
+      weeksAhead: 10,
+      blockedCount: myBlockedCount,
+    },
+    swaps: {
+      availableCount: openSwapOffers,
+      myOpenCount: myOpenSwaps,
+    },
+    chat: nextId
+      ? {
+          pihavuoroId: nextId,
+          messageCount: chatMessageCount,
+        }
+      : null,
+  })
+})
+
+app.get('/api/weather', authMiddleware, async (_req, res) => {
+  try {
+    const [forecast, warnings] = await Promise.all([getWeather(), getCapWarnings()])
+    res.json({ ...forecast, warnings })
+  } catch (err) {
+    console.warn('Weather fetch failed', err)
+    res.status(502).json({ error: 'Säätietoja ei saatu juuri nyt' })
+  }
+})
+
+app.post('/api/weather/alerts/run', authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    res.json(await runWeatherAlertCheck())
+  } catch (err) {
+    console.warn('Weather alert run failed', err)
+    res.status(502).json({ error: 'Säähälytysten ajo epäonnistui' })
+  }
+})
+
+app.get('/api/notifications', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const rows = db
+    .prepare(
+      `SELECT id, title, body, link, kind, read_at, created_at
+       FROM notifications WHERE user_id = ?
+       ORDER BY created_at DESC LIMIT 40`,
+    )
+    .all(user.id) as Record<string, unknown>[]
+  const unreadCount = (
+    db
+      .prepare(`SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL`)
+      .get(user.id) as { c: number }
+  ).c
+  res.json({
+    unreadCount,
+    items: rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      link: r.link,
+      kind: r.kind || 'general',
+      readAt: r.read_at ?? null,
+      createdAt: r.created_at,
+    })),
+  })
+})
+
+app.post('/api/notifications/read-all', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  db.prepare(
+    `UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL`,
+  ).run(new Date().toISOString(), user.id)
+  res.json({ ok: true })
+})
+
+app.post('/api/notifications/:id/read', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  db.prepare(
+    `UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL`,
+  ).run(new Date().toISOString(), req.params.id, user.id)
+  res.json({ ok: true })
+})
+
+// ——— Extra tasks (apukutsut) ———
+function isCurrentWeekLead(userId: string) {
+  const weekStart = mondayOf()
+  const row = db
+    .prepare(
+      `SELECT a.id FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE a.user_id = ? AND a.role = 'lead' AND p.status = 'published' AND p.week_start = ?`,
+    )
+    .get(userId, weekStart)
+  return Boolean(row)
+}
+
+function canCreateExtra(user: AuthUser) {
+  return user.role === 'admin' || isCurrentWeekLead(user.id)
+}
+
+function notifyAllActive(title: string, body: string, link: string) {
+  const users = db.prepare(`SELECT id FROM users WHERE active = 1`).all() as { id: string }[]
+  notifyUsers(
+    users.map((u) => u.id),
+    title,
+    body,
+    link,
+    'extra',
+  )
+}
+
+app.get('/api/push/vapid-public-key', authMiddleware, (_req, res) => {
+  res.json({ publicKey: vapidKeys.publicKey })
+})
+
+app.get('/api/push/status', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const count = (
+    db.prepare(`SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?`).get(user.id) as {
+      c: number
+    }
+  ).c
+  res.json({ subscribed: count > 0 })
+})
+
+app.post('/api/push/subscribe', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const sub = req.body?.subscription as
+    | { endpoint?: string; keys?: { p256dh?: string; auth?: string } }
+    | undefined
+  if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+    return res.status(400).json({ error: 'Virheellinen tilaus' })
+  }
+  const existing = db.prepare(`SELECT id FROM push_subscriptions WHERE endpoint = ?`).get(sub.endpoint) as
+    | { id: string }
+    | undefined
+  if (existing) {
+    db.prepare(
+      `UPDATE push_subscriptions SET user_id=?, p256dh=?, auth=? WHERE id=?`,
+    ).run(user.id, sub.keys.p256dh, sub.keys.auth, existing.id)
+  } else {
+    db.prepare(
+      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(
+      crypto.randomUUID(),
+      user.id,
+      sub.endpoint,
+      sub.keys.p256dh,
+      sub.keys.auth,
+      new Date().toISOString(),
+    )
+  }
+  res.json({ ok: true })
+})
+
+app.delete('/api/push/subscribe', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const endpoint = String(req.body?.endpoint || '')
+  if (endpoint) {
+    db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?`).run(
+      user.id,
+      endpoint,
+    )
+  } else {
+    db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ?`).run(user.id)
+  }
+  res.json({ ok: true })
+})
+
+function hydrateExtraTask(row: Record<string, unknown>, viewerId?: string) {
+  const id = String(row.id)
+  const signups = db
+    .prepare(
+      `SELECT s.*, u.name AS user_name FROM extra_task_signups s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.extra_task_id = ?
+       ORDER BY s.signed_up_at`,
+    )
+    .all(id)
+    .map((s) => {
+      const x = s as Record<string, unknown>
+      return {
+        id: x.id,
+        userId: x.user_id,
+        userName: x.user_name,
+        signedUpAt: x.signed_up_at,
+      }
+    })
+  const minRequired = Number(row.min_required)
+  const signupCount = signups.length
+  const creator = db.prepare('SELECT name FROM users WHERE id = ?').get(row.created_by_user_id) as
+    | { name: string }
+    | undefined
+  return {
+    id,
+    title: row.title,
+    description: row.description,
+    minRequired,
+    status: row.status,
+    createdByUserId: row.created_by_user_id,
+    createdByName: creator?.name ?? '',
+    relatedPihavuoroId: row.related_pihavuoro_id,
+    createdAt: row.created_at,
+    startedAt: row.started_at,
+    doneAt: row.done_at,
+    signups,
+    signupCount,
+    spotsLeft: Math.max(0, minRequired - signupCount),
+    iSignedUp: viewerId ? signups.some((s) => s.userId === viewerId) : false,
+  }
+}
+
+function refreshExtraStatus(taskId: string) {
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(taskId) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return
+  if (row.status !== 'open' && row.status !== 'ready') return
+  const count = (
+    db.prepare(`SELECT COUNT(*) AS c FROM extra_task_signups WHERE extra_task_id = ?`).get(taskId) as {
+      c: number
+    }
+  ).c
+  const next = count >= Number(row.min_required) ? 'ready' : 'open'
+  if (next !== row.status) {
+    db.prepare(`UPDATE extra_tasks SET status = ? WHERE id = ?`).run(next, taskId)
+    if (next === 'ready') {
+      notifyAllActive(
+        'Apukutsu valmis aloitettavaksi',
+        String(row.title),
+        `/apukutsut`,
+      )
+    }
+  }
+}
+
+app.get('/api/extra-tasks', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const rows = db
+    .prepare(`SELECT * FROM extra_tasks ORDER BY created_at DESC`)
+    .all() as Record<string, unknown>[]
+  res.json({
+    tasks: rows.map((r) => hydrateExtraTask(r, user.id)),
+    canCreate: canCreateExtra(user),
+  })
+})
+
+app.post('/api/extra-tasks', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  if (!canCreateExtra(user)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö voi luoda apukutsun' })
+  }
+  const title = String(req.body.title || '').trim()
+  const description = String(req.body.description || '').trim()
+  const minRequired = Math.max(1, Number(req.body.minRequired || 1))
+  if (!title) return res.status(400).json({ error: 'Anna otsikko' })
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  const weekStart = mondayOf()
+  const current = db
+    .prepare(`SELECT id FROM pihavuorot WHERE week_start = ? AND status = 'published'`)
+    .get(weekStart) as { id: string } | undefined
+  db.prepare(
+    `INSERT INTO extra_tasks (id, created_by_user_id, title, description, min_required, status, related_pihavuoro_id, created_at)
+     VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
+  ).run(id, user.id, title, description || null, minRequired, current?.id ?? null, now)
+  notifyAllActive('Uusi apukutsu', title, '/apukutsut')
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(id) as Record<string, unknown>
+  res.status(201).json({ task: hydrateExtraTask(row, user.id) })
+})
+
+app.post('/api/extra-tasks/:id/signup', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  if (row.status !== 'open' && row.status !== 'ready') {
+    return res.status(400).json({ error: 'Tehtävään ei voi enää ilmoittautua' })
+  }
+  try {
+    db.prepare(
+      `INSERT INTO extra_task_signups (id, extra_task_id, user_id, signed_up_at) VALUES (?, ?, ?, ?)`,
+    ).run(crypto.randomUUID(), req.params.id, user.id, new Date().toISOString())
+  } catch {
+    return res.status(400).json({ error: 'Olet jo ilmoittautunut' })
+  }
+  refreshExtraStatus(String(req.params.id))
+  const updated = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ task: hydrateExtraTask(updated, user.id) })
+})
+
+app.delete('/api/extra-tasks/:id/signup', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  if (row.status === 'in_progress' || row.status === 'done' || row.status === 'cancelled') {
+    return res.status(400).json({ error: 'Ilmoittautumista ei voi perua tässä tilassa' })
+  }
+  db.prepare(`DELETE FROM extra_task_signups WHERE extra_task_id = ? AND user_id = ?`).run(
+    req.params.id,
+    user.id,
+  )
+  refreshExtraStatus(String(req.params.id))
+  const updated = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ task: hydrateExtraTask(updated, user.id) })
+})
+
+app.post('/api/extra-tasks/:id/start', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  if (row.status !== 'ready') return res.status(400).json({ error: 'Tehtävä ei ole vielä valmis aloitettavaksi' })
+  if (user.role !== 'admin' && row.created_by_user_id !== user.id) {
+    return res.status(403).json({ error: 'Vain perustaja tai admin voi aloittaa' })
+  }
+  db.prepare(`UPDATE extra_tasks SET status='in_progress', started_at=? WHERE id=?`).run(
+    new Date().toISOString(),
+    req.params.id,
+  )
+  const updated = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ task: hydrateExtraTask(updated, user.id) })
+})
+
+app.post('/api/extra-tasks/:id/complete', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  if (row.status !== 'in_progress' && row.status !== 'ready') {
+    return res.status(400).json({ error: 'Tehtävää ei voi merkitä valmiiksi' })
+  }
+  const signed = db
+    .prepare(`SELECT id FROM extra_task_signups WHERE extra_task_id = ? AND user_id = ?`)
+    .get(req.params.id, user.id)
+  if (user.role !== 'admin' && row.created_by_user_id !== user.id && !signed) {
+    return res.status(403).json({ error: 'Ei oikeutta' })
+  }
+  db.prepare(`UPDATE extra_tasks SET status='done', done_at=? WHERE id=?`).run(
+    new Date().toISOString(),
+    req.params.id,
+  )
+  const updated = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ task: hydrateExtraTask(updated, user.id) })
+})
+
+app.post('/api/extra-tasks/:id/cancel', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  if (user.role !== 'admin' && row.created_by_user_id !== user.id) {
+    return res.status(403).json({ error: 'Ei oikeutta' })
+  }
+  if (row.status === 'done') return res.status(400).json({ error: 'Valmista tehtävää ei voi peruuttaa' })
+  db.prepare(`UPDATE extra_tasks SET status='cancelled' WHERE id=?`).run(req.params.id)
+  const updated = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ task: hydrateExtraTask(updated, user.id) })
+})
+
+// ——— Hub inspections ———
+app.get('/api/hub', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const year = Number(req.query.year) || undefined
+  res.json({
+    summary: hubOpenSummary(year),
+    inspections: listHubInspections(year),
+    canEdit: canEditHub(user),
+  })
+})
+
+app.post('/api/hub/seed', authMiddleware, requireAdmin, (req, res) => {
+  const year = Number(req.body?.year) || undefined
+  res.json({ inspections: seedHubYear(year) })
+})
+
+app.get('/api/hub/:id', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const insp = getHubInspection(String(req.params.id))
+  if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  res.json({ inspection: insp, canEdit: canEditHub(user) })
+})
+
+function canEditHub(user: AuthUser) {
+  return user.role === 'admin' || isCurrentWeekLead(user.id)
+}
+
+app.patch('/api/hub/:id/items/:itemId', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  if (!canEditHub(user)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  }
+  const status = req.body?.status as 'open' | 'ok' | 'issue' | undefined
+  const note = req.body?.note as string | null | undefined
+  if (status && !['open', 'ok', 'issue'].includes(status)) {
+    return res.status(400).json({ error: 'Virheellinen tila' })
+  }
+  const insp = updateHubItem(String(req.params.id), String(req.params.itemId), { status, note })
+  if (!insp) return res.status(404).json({ error: 'Kohtaa ei löydy' })
+
+  if (status === 'issue') {
+    const admins = db
+      .prepare(`SELECT id FROM users WHERE role = 'admin' AND active = 1`)
+      .all() as { id: string }[]
+    notifyUsers(
+      admins.map((a) => a.id),
+      `Hub: huomio — ${insp.title}`,
+      note?.trim() || 'Tarkastuksessa merkitty puute',
+      `/huolto/${insp.id}`,
+      'hub',
+    )
+  }
+
+  res.json({ inspection: insp })
+})
+
+app.patch('/api/hub/:id', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  if (!canEditHub(user)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  }
+  const notes = req.body?.notes as string | null | undefined
+  const status = req.body?.status as 'open' | 'in_progress' | 'done' | undefined
+  if (status && !['open', 'in_progress', 'done'].includes(status)) {
+    return res.status(400).json({ error: 'Virheellinen tila' })
+  }
+  const insp = updateHubInspection(String(req.params.id), {
+    notes,
+    status,
+    completedByUserId: status === 'done' ? user.id : undefined,
+  })
+  if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  res.json({ inspection: insp })
+})
+
+app.post('/api/hub/:id/photo', authMiddleware, upload.single('photo'), (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  if (!canEditHub(user)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  }
+  if (!req.file) return res.status(400).json({ error: 'Kuva puuttuu' })
+  const insp = updateHubInspection(String(req.params.id), { photoPath: req.file.filename })
+  if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  res.json({ inspection: insp })
+})
+
+// Production static
+const dist = path.join(root, 'dist')
+if (fs.existsSync(dist)) {
+  app.use(express.static(dist))
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.sendFile(path.join(dist, 'index.html'))
+  })
+}
+
+app.listen(PORT, () => {
+  console.log(`Siisti piha API http://localhost:${PORT}`)
+  startWeatherAlertScheduler()
+})

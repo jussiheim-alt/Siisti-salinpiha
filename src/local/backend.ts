@@ -1,0 +1,1414 @@
+import { CONSTRAINT_LABELS, TASK_CATALOG_V1 } from '../shared/catalog'
+
+const DB_KEY = 'siisti-piha-local-db-v1'
+const SESSION_KEY = 'siisti-piha-local-session'
+
+type Role = 'admin' | 'member'
+type User = {
+  id: string
+  name: string
+  email: string
+  passwordHash: string
+  role: Role
+  active: boolean
+  constraints: string[]
+  constraintNote?: string | null
+  snoozeUntil?: string | null
+  createdAt: string
+}
+
+type Assignment = { id: string; userId: string; role: 'lead' | 'helper' }
+type ShiftTask = {
+  id: string
+  templateId?: string
+  title: string
+  instructions: string
+  effort: 'light' | 'heavy'
+  assigneeUserId?: string | null
+  status: 'open' | 'done' | 'skipped'
+  skipReason?: string | null
+  doneByUserId?: string | null
+  doneAt?: string | null
+  sortOrder: number
+}
+type Pihavuoro = {
+  id: string
+  weekStart: string
+  status: 'draft' | 'published' | 'done'
+  season: 'talvi' | 'sulankausi'
+  notes?: string | null
+  createdAt: string
+  assignments: Assignment[]
+  tasks: ShiftTask[]
+}
+type Notice = {
+  id: string
+  authorUserId: string
+  body: string
+  photoDataUrl?: string | null
+  status: 'open' | 'in_progress' | 'resolved'
+  createdAt: string
+  resolvedAt?: string | null
+  replies: { id: string; authorUserId: string; body: string; createdAt: string }[]
+}
+type SwapOffer = {
+  id: string
+  pihavuoroId: string
+  fromUserId: string
+  toUserId?: string | null
+  role: 'lead' | 'helper'
+  message?: string | null
+  status: 'open' | 'accepted' | 'cancelled'
+  createdAt: string
+  resolvedAt?: string | null
+  acceptedByUserId?: string | null
+}
+type ShiftMessage = {
+  id: string
+  pihavuoroId: string
+  authorUserId: string
+  body: string
+  createdAt: string
+}
+type WeekBlock = { id: string; userId: string; weekStart: string; createdAt: string }
+type Notification = {
+  id: string
+  userId: string
+  title: string
+  body: string
+  link?: string | null
+  kind: string
+  readAt?: string | null
+  createdAt: string
+}
+type HubInspection = {
+  id: string
+  templateId: string
+  year: number
+  title: string
+  cadenceLabel: string
+  windowStart: string
+  windowEnd: string
+  intro?: string | null
+  status: 'open' | 'in_progress' | 'done'
+  notes?: string | null
+  photoDataUrl?: string | null
+  completedByUserId?: string | null
+  completedAt?: string | null
+  createdAt: string
+  items: {
+    id: string
+    templateItemId: string
+    label: string
+    sortOrder: number
+    status: 'open' | 'ok' | 'issue'
+    note?: string | null
+  }[]
+}
+
+type Db = {
+  users: User[]
+  pihavuorot: Pihavuoro[]
+  notices: Notice[]
+  swaps: SwapOffer[]
+  messages: ShiftMessage[]
+  weekBlocks: WeekBlock[]
+  notifications: Notification[]
+  hub: HubInspection[]
+  extraTasks: {
+    id: string
+    createdByUserId: string
+    title: string
+    description?: string | null
+    minRequired: number
+    status: string
+    createdAt: string
+    signups: { id: string; userId: string; signedUpAt: string }[]
+  }[]
+}
+
+function uid() {
+  return crypto.randomUUID()
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function mondayOf(dateStr?: string) {
+  const d = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date()
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  return d.toISOString().slice(0, 10)
+}
+
+function addDays(iso: string, n: number) {
+  const d = new Date(`${iso}T12:00:00`)
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+function seasonFor(weekStart: string): 'talvi' | 'sulankausi' {
+  const m = new Date(`${weekStart}T12:00:00`).getMonth() + 1
+  return m >= 11 || m <= 3 ? 'talvi' : 'sulankausi'
+}
+
+async function hashPassword(password: string) {
+  const data = new TextEncoder().encode(`siisti:${password}`)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function loadDb(): Db {
+  const raw = localStorage.getItem(DB_KEY)
+  if (raw) return JSON.parse(raw) as Db
+  return {
+    users: [],
+    pihavuorot: [],
+    notices: [],
+    swaps: [],
+    messages: [],
+    weekBlocks: [],
+    notifications: [],
+    hub: [],
+    extraTasks: [],
+  }
+}
+
+function saveDb(db: Db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(db))
+}
+
+async function ensureSeed(db: Db) {
+  if (db.users.length) return db
+  const now = new Date().toISOString()
+  const adminHash = await hashPassword('admin123')
+  const demoHash = await hashPassword('demo123')
+  db.users = [
+    {
+      id: uid(),
+      name: 'Ylläpitäjä',
+      email: 'admin@siistipiha.local',
+      passwordHash: adminHash,
+      role: 'admin',
+      active: true,
+      constraints: [],
+      createdAt: now,
+    },
+    ...(
+      [
+        ['Aino Virtanen', 'aino@siistipiha.local', []],
+        ['Matti Korhonen', 'matti@siistipiha.local', ['no_heavy']],
+        ['Liisa Nieminen', 'liisa@siistipiha.local', []],
+        ['Juhani Heikkilä', 'juhani@siistipiha.local', ['no_lead']],
+        ['Sari Laine', 'sari@siistipiha.local', []],
+      ] as const
+    ).map(([name, email, constraints]) => ({
+      id: uid(),
+      name,
+      email,
+      passwordHash: demoHash,
+      role: 'member' as const,
+      active: true,
+      constraints: [...constraints],
+      createdAt: now,
+    })),
+  ]
+
+  const year = new Date().getFullYear()
+  db.hub = [
+    {
+      id: uid(),
+      templateId: 'hub-spring',
+      year,
+      title: 'Kevättarkastus',
+      cadenceLabel: 'Kevät',
+      windowStart: `${year}-04-01`,
+      windowEnd: `${year}-05-31`,
+      intro: 'Tarkista piha-alueen kevätkunto.',
+      status: 'open',
+      createdAt: now,
+      items: [
+        { id: uid(), templateItemId: '1', label: 'Sadevesijärjestelmä', sortOrder: 1, status: 'open' },
+        { id: uid(), templateItemId: '2', label: 'Pihavarusteet', sortOrder: 2, status: 'open' },
+        { id: uid(), templateItemId: '3', label: 'Kulku-urat ja portaat', sortOrder: 3, status: 'open' },
+        { id: uid(), templateItemId: '4', label: 'Roska-alue', sortOrder: 4, status: 'open' },
+        { id: uid(), templateItemId: '5', label: 'Valaisimet', sortOrder: 5, status: 'open' },
+      ],
+    },
+  ]
+  for (const u of db.users) {
+    db.notifications.push({
+      id: uid(),
+      userId: u.id,
+      title: 'Tervetuloa Siisti pihaan',
+      body: 'Täältä näet ilmoitukset vuorosta, huomioista ja apukutsuista.',
+      link: '/',
+      kind: 'general',
+      createdAt: now,
+    })
+  }
+  saveDb(db)
+  return db
+}
+
+function publicUser(u: User) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    active: u.active,
+    constraints: u.constraints,
+    constraintNote: u.constraintNote ?? null,
+    snoozeUntil: u.snoozeUntil ?? null,
+  }
+}
+
+function hydratePihavuoro(db: Db, p: Pihavuoro) {
+  return {
+    id: p.id,
+    weekStart: p.weekStart,
+    weekEnd: addDays(p.weekStart, 6),
+    status: p.status,
+    season: p.season,
+    notes: p.notes ?? null,
+    createdAt: p.createdAt,
+    assignments: p.assignments
+      .map((a) => {
+        const u = db.users.find((x) => x.id === a.userId)
+        return {
+          id: a.id,
+          userId: a.userId,
+          role: a.role,
+          userName: u?.name || '—',
+          constraints: u?.constraints || [],
+          constraintLabels: (u?.constraints || []).map((c) => CONSTRAINT_LABELS[c] || c),
+        }
+      })
+      .sort((a, b) => (a.role === 'lead' ? -1 : b.role === 'lead' ? 1 : a.userName.localeCompare(b.userName, 'fi'))),
+    tasks: p.tasks
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((t) => {
+        const assignee = t.assigneeUserId ? db.users.find((u) => u.id === t.assigneeUserId) : null
+        const doneBy = t.doneByUserId ? db.users.find((u) => u.id === t.doneByUserId) : null
+        return {
+          id: t.id,
+          templateId: t.templateId,
+          title: t.title,
+          instructions: t.instructions,
+          effort: t.effort,
+          assigneeUserId: t.assigneeUserId ?? null,
+          assigneeName: assignee?.name ?? null,
+          status: t.status,
+          skipReason: t.skipReason ?? null,
+          doneByUserId: t.doneByUserId ?? null,
+          doneByName: doneBy?.name ?? null,
+          doneAt: t.doneAt ?? null,
+          sortOrder: t.sortOrder,
+        }
+      }),
+  }
+}
+
+function createTasks(season: 'talvi' | 'sulankausi', assignments: Assignment[], db: Db): ShiftTask[] {
+  const templates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+  const lead = assignments.find((a) => a.role === 'lead')
+  const helpers = assignments.filter((a) => a.role === 'helper')
+  let helperCursor = 0
+  let allCursor = 0
+  return templates.map((t, idx) => {
+    let assignee: string | null = null
+    if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
+    else {
+      const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
+      const eligible = pool.filter((h) => {
+        const u = db.users.find((x) => x.id === h.userId)
+        if (t.effort === 'heavy' && u?.constraints.includes('no_heavy')) return false
+        return true
+      })
+      if (eligible.length) {
+        const cursor = t.defaultAssignee === 'all' ? allCursor++ : helperCursor++
+        assignee = eligible[cursor % eligible.length]!.userId
+      }
+    }
+    return {
+      id: uid(),
+      templateId: t.id,
+      title: t.title,
+      instructions: t.instructions,
+      effort: t.effort,
+      assigneeUserId: assignee,
+      status: 'open' as const,
+      sortOrder: t.sortOrder || idx * 10,
+    }
+  })
+}
+
+function getSessionUser(db: Db): User | null {
+  let sid = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY)
+  if (!sid) {
+    const token = localStorage.getItem('siisti-piha-token')
+    if (token?.startsWith('local.')) sid = token.slice('local.'.length)
+  }
+  if (!sid) return null
+  return db.users.find((u) => u.id === sid && u.active) || null
+}
+
+function setSession(userId: string | null) {
+  if (userId) {
+    sessionStorage.setItem(SESSION_KEY, userId)
+    localStorage.setItem(SESSION_KEY, userId)
+  } else {
+    sessionStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(SESSION_KEY)
+  }
+}
+
+function notify(db: Db, userIds: string[], title: string, body: string, link: string, kind: string) {
+  const now = new Date().toISOString()
+  for (const userId of [...new Set(userIds)]) {
+    db.notifications.unshift({
+      id: uid(),
+      userId,
+      title,
+      body,
+      link,
+      kind,
+      createdAt: now,
+    })
+  }
+}
+
+function upcomingMondays(count = 10) {
+  const start = mondayOf()
+  return Array.from({ length: count }, (_, i) => addDays(start, i * 7))
+}
+
+function stubWeather() {
+  return {
+    place: 'Vääksy',
+    updatedAt: new Date().toISOString(),
+    current: {
+      time: new Date().toISOString(),
+      temperature: 8,
+      symbol: 1,
+      symbolLabel: 'Selkeää',
+      windMs: 2,
+      precipitationMm: 0,
+    },
+    days: [0, 1, 2].map((i) => {
+      const date = addDays(today(), i)
+      return {
+        date,
+        label: i === 0 ? 'Tänään' : i === 1 ? 'Huomenna' : date.slice(5),
+        symbol: 1,
+        symbolLabel: 'Selkeää',
+        tempMin: 5,
+        tempMax: 12,
+        precipMm: 0,
+        windMaxMs: 3,
+      }
+    }),
+    tips: [],
+    source: 'fmi-edited',
+    warnings: [],
+  }
+}
+
+function parsePath(path: string) {
+  const [pathname, search = ''] = path.split('?')
+  const params = new URLSearchParams(search)
+  return { pathname: pathname || '/', params }
+}
+
+export async function localApi<T = unknown>(
+  path: string,
+  options: { method?: string; json?: unknown; formData?: FormData; headers?: Headers } = {},
+): Promise<T> {
+  let db = await ensureSeed(loadDb())
+  const method = (options.method || 'GET').toUpperCase()
+  const { pathname, params } = parsePath(path)
+  const body = (options.json || {}) as Record<string, unknown>
+  const user = getSessionUser(db)
+
+  const ok = (data: unknown) => data as T
+  const err = (message: string) => {
+    throw new Error(message)
+  }
+
+  // Auth
+  if (pathname === '/api/auth/login' && method === 'POST') {
+    const email = String(body.email || '').trim()
+    const password = String(body.password || '')
+    const hash = await hashPassword(password)
+    const found = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.active)
+    if (!found || found.passwordHash !== hash) err('Virheellinen tunnus tai salasana')
+    setSession(found!.id)
+    const token = `local.${found!.id}`
+    return ok({ token, user: publicUser(found!) })
+  }
+  if (pathname === '/api/auth/logout' && method === 'POST') {
+    setSession(null)
+    return ok({ ok: true })
+  }
+  if (pathname === '/api/auth/me' && method === 'GET') {
+    if (!user) err('Istunto vanhentunut')
+    return ok({ user: publicUser(user!) })
+  }
+
+  if (!user && pathname.startsWith('/api/')) err('Istunto vanhentunut')
+
+  if (pathname === '/api/users' && method === 'GET') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    return ok({ users: db.users.map(publicUser) })
+  }
+  if (pathname === '/api/users' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const name = String(body.name || '').trim()
+    const email = String(body.email || '').trim().toLowerCase()
+    const password = String(body.password || '')
+    if (!name || !email || password.length < 6) err('Nimi, sähköposti ja salasana (min. 6) vaaditaan')
+    if (db.users.some((u) => u.email.toLowerCase() === email)) err('Sähköposti on jo käytössä')
+    const nu: User = {
+      id: uid(),
+      name,
+      email,
+      passwordHash: await hashPassword(password),
+      role: body.role === 'admin' ? 'admin' : 'member',
+      active: true,
+      constraints: Array.isArray(body.constraints) ? (body.constraints as string[]) : [],
+      createdAt: new Date().toISOString(),
+    }
+    db.users.push(nu)
+    saveDb(db)
+    return ok({ user: publicUser(nu) })
+  }
+  const userPatch = pathname.match(/^\/api\/users\/([^/]+)$/)
+  if (userPatch && method === 'PATCH') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const target = db.users.find((u) => u.id === userPatch[1])
+    if (!target) err('Käyttäjää ei löydy')
+    if (body.name !== undefined) target!.name = String(body.name).trim()
+    if (body.email !== undefined) target!.email = String(body.email).trim().toLowerCase()
+    if (body.role === 'admin' || body.role === 'member') target!.role = body.role
+    if (typeof body.active === 'boolean') target!.active = body.active
+    if (Array.isArray(body.constraints)) target!.constraints = body.constraints as string[]
+    if (body.constraintNote !== undefined) target!.constraintNote = String(body.constraintNote || '') || null
+    if (body.snoozeUntil !== undefined) target!.snoozeUntil = body.snoozeUntil ? String(body.snoozeUntil) : null
+    if (body.password) target!.passwordHash = await hashPassword(String(body.password))
+    saveDb(db)
+    return ok({ user: publicUser(target!) })
+  }
+  if (pathname === '/api/directory' && method === 'GET') {
+    return ok({ users: db.users.filter((u) => u.active).map((u) => ({ id: u.id, name: u.name })) })
+  }
+  if (pathname === '/api/catalog' && method === 'GET') {
+    return ok({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
+  }
+
+  if (pathname === '/api/home' && method === 'GET') {
+    const weekStart = mondayOf()
+    const next = db.pihavuorot
+      .filter(
+        (p) =>
+          p.status === 'published' &&
+          p.weekStart >= weekStart &&
+          p.assignments.some((a) => a.userId === user!.id),
+      )
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart))[0]
+    const openNotices = db.notices.filter((n) => n.status !== 'resolved').length
+    const openExtras = db.extraTasks.filter((t) =>
+      ['open', 'ready', 'in_progress'].includes(t.status),
+    ).length
+    const unread = db.notifications.filter((n) => n.userId === user!.id && !n.readAt).length
+    const recent = db.notifications
+      .filter((n) => n.userId === user!.id)
+      .slice(0, 5)
+      .map((n) => ({
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        link: n.link,
+        kind: n.kind,
+        readAt: n.readAt ?? null,
+        createdAt: n.createdAt,
+      }))
+    const window = upcomingMondays(10)
+    const blockedCount = db.weekBlocks.filter(
+      (b) => b.userId === user!.id && b.weekStart >= window[0]! && b.weekStart <= window[window.length - 1]!,
+    ).length
+    const openSwapOffers = db.swaps.filter((s) => {
+      if (s.status !== 'open') return false
+      const p = db.pihavuorot.find((x) => x.id === s.pihavuoroId)
+      if (!p || p.status !== 'published') return false
+      if (s.fromUserId === user!.id) return false
+      if (s.toUserId && s.toUserId !== user!.id) return false
+      if (p.assignments.some((a) => a.userId === user!.id)) return false
+      return true
+    }).length
+    const myOpenSwaps = db.swaps.filter((s) => s.fromUserId === user!.id && s.status === 'open').length
+    const hubOpen = db.hub.filter((h) => h.status !== 'done')
+    const hubDue = hubOpen.filter((h) => h.windowStart <= today() && h.windowEnd >= today())
+    return ok({
+      nextPihavuoro: next ? hydratePihavuoro(db, next) : null,
+      openNotices,
+      openExtraTasks: openExtras,
+      canCreateExtraTask: user!.role === 'admin',
+      constraintLabels: CONSTRAINT_LABELS,
+      weather: stubWeather(),
+      unreadNotifications: unread,
+      recentNotifications: recent,
+      hub: {
+        year: new Date().getFullYear(),
+        openCount: hubOpen.length,
+        dueCount: hubDue.length,
+        issueCount: hubOpen.reduce(
+          (n, h) => n + h.items.filter((i) => i.status === 'issue').length,
+          0,
+        ),
+      },
+      availability: { weeksAhead: 10, blockedCount },
+      swaps: { availableCount: openSwapOffers, myOpenCount: myOpenSwaps },
+      chat: next
+        ? {
+            pihavuoroId: next.id,
+            messageCount: db.messages.filter((m) => m.pihavuoroId === next.id).length,
+          }
+        : null,
+    })
+  }
+
+  if (pathname === '/api/weather' && method === 'GET') return ok(stubWeather())
+
+  if (pathname === '/api/chat/current' && method === 'GET') {
+    const t = today()
+    const current = db.pihavuorot
+      .filter(
+        (p) =>
+          p.status === 'published' &&
+          addDays(p.weekStart, 6) >= t &&
+          p.assignments.some((a) => a.userId === user!.id),
+      )
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart))[0]
+    if (!current) return ok({ chat: null })
+    const msgs = db.messages.filter((m) => m.pihavuoroId === current.id)
+    const last = msgs.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    const myRole = current.assignments.find((a) => a.userId === user!.id)?.role || null
+    return ok({
+      chat: {
+        pihavuoroId: current.id,
+        weekStart: current.weekStart,
+        weekEnd: addDays(current.weekStart, 6),
+        messageCount: msgs.length,
+        lastMessageAt: last?.createdAt ?? null,
+        myRole,
+      },
+    })
+  }
+
+  if (pathname === '/api/pihavuorot' && method === 'GET') {
+    const list = db.pihavuorot
+      .filter((p) => user!.role === 'admin' || p.status !== 'draft')
+      .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
+      .map((p) => hydratePihavuoro(db, p))
+    return ok({ pihavuorot: list })
+  }
+
+  if (pathname === '/api/pihavuorot' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    let weekStart = mondayOf(body.weekStart ? String(body.weekStart) : undefined)
+    if (!body.weekStart) {
+      for (let i = 0; i < 52; i++) {
+        const candidate = addDays(weekStart, i * 7)
+        if (!db.pihavuorot.some((p) => p.weekStart === candidate)) {
+          weekStart = candidate
+          break
+        }
+      }
+    }
+    if (db.pihavuorot.some((p) => p.weekStart === weekStart)) err('Viikolle on jo Pihavuoro')
+    const active = db.users.filter((u) => u.active && !u.snoozeUntil)
+    const blocked = new Set(db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId))
+    const available = active
+      .filter((u) => !blocked.has(u.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fi'))
+    const lead = available.find((u) => !u.constraints.includes('no_lead')) || available[0]
+    if (!lead) err('Vastuuhenkilöä ei löytynyt')
+    const helpers = available.filter((u) => u.id !== lead!.id).slice(0, 4)
+    if (helpers.length < 3) err('Vain vähän saatavilla olevia jäseniä tälle viikolle')
+    const assignments: Assignment[] = [
+      { id: uid(), userId: lead!.id, role: 'lead' },
+      ...helpers.map((h) => ({ id: uid(), userId: h.id, role: 'helper' as const })),
+    ]
+    const season = seasonFor(weekStart)
+    const p: Pihavuoro = {
+      id: uid(),
+      weekStart,
+      status: 'draft',
+      season,
+      createdAt: new Date().toISOString(),
+      assignments,
+      tasks: createTasks(season, assignments, db),
+    }
+    db.pihavuorot.push(p)
+    saveDb(db)
+    return ok({ pihavuoro: hydratePihavuoro(db, p) })
+  }
+
+  const pihaMatch = pathname.match(/^\/api\/pihavuorot\/([^/]+)(.*)$/)
+  if (pihaMatch) {
+    const id = pihaMatch[1]!
+    const rest = pihaMatch[2] || ''
+
+    if (id === 'meta' && rest.startsWith('/recommend') && method === 'GET') {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      const weekStart = mondayOf(params.get('weekStart') || undefined)
+      const helperCount = Math.min(5, Math.max(3, Number(params.get('helperCount') || 4)))
+      const ignoreCurrent = params.get('fresh') === '1'
+      const blocked = new Set(
+        db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId),
+      )
+      const already = new Set(
+        ignoreCurrent
+          ? []
+          : (db.pihavuorot.find((x) => x.weekStart === weekStart)?.assignments.map((a) => a.userId) ??
+              []),
+      )
+      const ranked = db.users
+        .filter((u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()))
+        .filter((u) => !blocked.has(u.id) && !already.has(u.id))
+        .map((u) => {
+          const last = db.pihavuorot
+            .filter((p) => p.assignments.some((a) => a.userId === u.id))
+            .map((p) => p.weekStart)
+            .sort()
+            .at(-1) as string | undefined
+          return { ...publicUser(u), last }
+        })
+        .sort((a, b) => {
+          if (!a.last && !b.last) return a.name.localeCompare(b.name, 'fi')
+          if (!a.last) return -1
+          if (!b.last) return 1
+          return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
+        })
+      const lead = ranked.find((u) => !u.constraints.includes('no_lead')) || null
+      const helpers = ranked.filter((u) => u.id !== lead?.id).slice(0, helperCount)
+      return ok({
+        weekStart,
+        lead,
+        helpers,
+        ranked,
+        blockedCount: blocked.size,
+        availableCount: ranked.length,
+        season: seasonFor(weekStart),
+      })
+    }
+
+    const p = db.pihavuorot.find((x) => x.id === id)
+    if (!p) err('Ei löydy')
+
+    if (rest === '' && method === 'GET' && p) {
+      if (p.status === 'draft' && user!.role !== 'admin') err('Luonnos vain ylläpitäjälle')
+      return ok({ pihavuoro: hydratePihavuoro(db, p) })
+    }
+    if (rest === '' && method === 'PATCH' && p) {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      if (body.status === 'draft' || body.status === 'published' || body.status === 'done') {
+        p.status = body.status
+      }
+      if (body.season === 'talvi' || body.season === 'sulankausi') p.season = body.season
+      if (body.notes !== undefined) p.notes = String(body.notes || '') || null
+      if (body.leadUserId || body.helperUserIds) {
+        const leadId = String(body.leadUserId || '')
+        const helperIds = Array.isArray(body.helperUserIds)
+          ? (body.helperUserIds as string[]).map(String)
+          : []
+        if (!leadId || helperIds.length < 3 || helperIds.length > 5) {
+          err('Kokoonpano: 1 vastuu + 3–5 avustajaa')
+        }
+        if (helperIds.includes(leadId)) err('Vastuuhenkilö ei voi olla samalla avustaja')
+        const assignments: Assignment[] = [
+          { id: uid(), userId: leadId, role: 'lead' },
+          ...helperIds.map((hid) => ({ id: uid(), userId: hid, role: 'helper' as const })),
+        ]
+        p.assignments = assignments
+        p.tasks = createTasks(p.season, assignments, db)
+      }
+      saveDb(db)
+      return ok({ pihavuoro: hydratePihavuoro(db, p) })
+    }
+    if (rest === '/publish' && method === 'POST' && p) {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      p.status = 'published'
+      notify(
+        db,
+        p.assignments.map((a) => a.userId),
+        'Pihavuoro julkaistu',
+        `${p.weekStart} – ${addDays(p.weekStart, 6)}: vuorosi on valmis katsottavaksi.`,
+        `/pihavuoro/${p.id}`,
+        'shift',
+      )
+      saveDb(db)
+      return ok({ pihavuoro: hydratePihavuoro(db, p) })
+    }
+    if (rest === '/messages' && method === 'GET' && p) {
+      if (!p.assignments.some((a) => a.userId === user!.id)) {
+        err('Viestit näkyvät vain tämän viikon vuorossa oleville')
+      }
+      const messages = db.messages
+        .filter((m) => m.pihavuoroId === p.id)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .map((m) => ({
+          id: m.id,
+          pihavuoroId: m.pihavuoroId,
+          authorUserId: m.authorUserId,
+          authorName: db.users.find((u) => u.id === m.authorUserId)?.name || '—',
+          body: m.body,
+          createdAt: m.createdAt,
+        }))
+      return ok({ messages })
+    }
+    if (rest === '/messages' && method === 'POST' && p) {
+      if (!p.assignments.some((a) => a.userId === user!.id)) {
+        err('Vain vuorossa olevat voivat lähettää viestejä')
+      }
+      if (p.status === 'draft') err('Keskustelu aukeaa kun vuoro on julkaistu')
+      const text = String(body.body || '').trim()
+      if (!text) err('Kirjoita viesti')
+      const msg: ShiftMessage = {
+        id: uid(),
+        pihavuoroId: p.id,
+        authorUserId: user!.id,
+        body: text,
+        createdAt: new Date().toISOString(),
+      }
+      db.messages.push(msg)
+      notify(
+        db,
+        p.assignments.map((a) => a.userId).filter((id) => id !== user!.id),
+        'Viesti Pihavuorossa',
+        `${user!.name}: ${text.length > 100 ? `${text.slice(0, 97)}…` : text}`,
+        `/pihavuoro/${p.id}?chat=1`,
+        'chat',
+      )
+      saveDb(db)
+      return ok({
+        message: {
+          id: msg.id,
+          pihavuoroId: msg.pihavuoroId,
+          authorUserId: msg.authorUserId,
+          authorName: user!.name,
+          body: msg.body,
+          createdAt: msg.createdAt,
+        },
+      })
+    }
+    if (rest === '/swaps' && method === 'GET' && p) {
+      const swaps = db.swaps
+        .filter((s) => s.pihavuoroId === p.id && s.status === 'open')
+        .map((s) => hydrateSwap(db, s))
+      return ok({ swaps })
+    }
+    if (rest === '/swaps' && method === 'POST' && p) {
+      if (p.status !== 'published') err('Vaihto vain julkaistulle vuorolle')
+      const assignment = p.assignments.find((a) => a.userId === user!.id)
+      if (!assignment) err('Et ole tässä vuorossa')
+      if (db.swaps.some((s) => s.pihavuoroId === p.id && s.fromUserId === user!.id && s.status === 'open')) {
+        err('Sinulla on jo avoin vaihtotarjous tälle viikolle')
+      }
+      const toUserId = body.toUserId ? String(body.toUserId) : null
+      const swap: SwapOffer = {
+        id: uid(),
+        pihavuoroId: p.id,
+        fromUserId: user!.id,
+        toUserId,
+        role: assignment!.role,
+        message: String(body.message || '').trim() || null,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+      }
+      db.swaps.push(swap)
+      const recipients = toUserId
+        ? [toUserId]
+        : db.users
+            .filter((u) => u.active && u.id !== user!.id && !p.assignments.some((a) => a.userId === u.id))
+            .map((u) => u.id)
+      notify(
+        db,
+        recipients,
+        toUserId ? 'Sinulle tarjottiin vuoronvaihtoa' : 'Avoin vuoronvaihto',
+        `${user!.name} etsii sijaisia viikolle ${p.weekStart}.`,
+        '/vaihdot',
+        'swap',
+      )
+      saveDb(db)
+      return ok({ swap: hydrateSwap(db, swap) })
+    }
+  }
+
+  if (pathname === '/api/swaps' && method === 'GET') {
+    const mine = db.swaps
+      .filter((s) => s.fromUserId === user!.id && s.status === 'open')
+      .map((s) => hydrateSwap(db, s))
+    const available = db.swaps
+      .filter((s) => {
+        if (s.status !== 'open' || s.fromUserId === user!.id) return false
+        const p = db.pihavuorot.find((x) => x.id === s.pihavuoroId)
+        if (!p || p.status !== 'published') return false
+        if (s.toUserId && s.toUserId !== user!.id) return false
+        if (p.assignments.some((a) => a.userId === user!.id)) return false
+        return true
+      })
+      .map((s) => hydrateSwap(db, s))
+    return ok({ mine, available })
+  }
+
+  const swapAccept = pathname.match(/^\/api\/swaps\/([^/]+)\/accept$/)
+  if (swapAccept && method === 'POST') {
+    const swap = db.swaps.find((s) => s.id === swapAccept[1])
+    if (!swap || swap.status !== 'open') err('Tarjous ei ole enää auki')
+    if (swap!.fromUserId === user!.id) err('Et voi hyväksyä omaa tarjoustasi')
+    if (swap!.toUserId && swap!.toUserId !== user!.id) err('Tarjous on suunnattu toiselle')
+    const p = db.pihavuorot.find((x) => x.id === swap!.pihavuoroId)
+    if (!p || p.status !== 'published') err('Vuoro ei ole enää vaihdettavissa')
+    if (p!.assignments.some((a) => a.userId === user!.id)) err('Olet jo tässä vuorossa')
+    const assignment = p!.assignments.find((a) => a.userId === swap!.fromUserId && a.role === swap!.role)
+    if (!assignment) err('Alkuperäistä vuoropaikkaa ei löydy')
+    assignment!.userId = user!.id
+    for (const t of p!.tasks) {
+      if (t.assigneeUserId === swap!.fromUserId && t.status === 'open') {
+        const me = db.users.find((u) => u.id === user!.id)
+        if (t.effort === 'heavy' && me?.constraints.includes('no_heavy')) t.assigneeUserId = null
+        else t.assigneeUserId = user!.id
+      }
+    }
+    swap!.status = 'accepted'
+    swap!.resolvedAt = new Date().toISOString()
+    swap!.acceptedByUserId = user!.id
+    notify(db, [swap!.fromUserId], 'Vuoronvaihto hyväksytty', `${user!.name} otti paikkasi.`, `/pihavuoro/${p!.id}`, 'swap')
+    saveDb(db)
+    return ok({ swap: hydrateSwap(db, swap!), pihavuoro: hydratePihavuoro(db, p!) })
+  }
+
+  const swapCancel = pathname.match(/^\/api\/swaps\/([^/]+)\/cancel$/)
+  if (swapCancel && method === 'POST') {
+    const swap = db.swaps.find((s) => s.id === swapCancel[1])
+    if (!swap || swap.status !== 'open') err('Tarjous ei ole enää auki')
+    if (swap!.fromUserId !== user!.id && user!.role !== 'admin') err('Ei oikeutta')
+    swap!.status = 'cancelled'
+    swap!.resolvedAt = new Date().toISOString()
+    saveDb(db)
+    return ok({ swap: hydrateSwap(db, swap!) })
+  }
+
+  if (pathname === '/api/availability' && method === 'GET') {
+    const weeks = upcomingMondays(Number(params.get('weeks') || 10))
+    const targetId =
+      user!.role === 'admin' && params.get('userId') ? String(params.get('userId')) : user!.id
+    const blocked = new Set(
+      db.weekBlocks.filter((b) => b.userId === targetId).map((b) => b.weekStart),
+    )
+    return ok({
+      userId: targetId,
+      weeks: weeks.map((weekStart) => {
+        const p = db.pihavuorot.find((x) => x.weekStart === weekStart)
+        const myRole = p?.assignments.find((a) => a.userId === targetId)?.role || null
+        return {
+          weekStart,
+          weekEnd: addDays(weekStart, 6),
+          blocked: blocked.has(weekStart),
+          published: p?.status === 'published' || p?.status === 'done',
+          myRole,
+        }
+      }),
+    })
+  }
+  if (pathname === '/api/availability' && method === 'PUT') {
+    const weeks = upcomingMondays(Number(body.weeks || 10))
+    const windowSet = new Set(weeks)
+    const blockedWeeks = Array.isArray(body.blockedWeeks)
+      ? (body.blockedWeeks as string[]).filter((w) => windowSet.has(w))
+      : []
+    db.weekBlocks = db.weekBlocks.filter(
+      (b) =>
+        !(b.userId === user!.id && b.weekStart >= weeks[0]! && b.weekStart <= weeks[weeks.length - 1]!),
+    )
+    for (const weekStart of blockedWeeks) {
+      const p = db.pihavuorot.find((x) => x.weekStart === weekStart)
+      if (p?.status === 'published' && p.assignments.some((a) => a.userId === user!.id)) continue
+      db.weekBlocks.push({
+        id: uid(),
+        userId: user!.id,
+        weekStart,
+        createdAt: new Date().toISOString(),
+      })
+    }
+    saveDb(db)
+    return ok({
+      ok: true,
+      blockedWeeks: db.weekBlocks
+        .filter((b) => b.userId === user!.id && windowSet.has(b.weekStart))
+        .map((b) => b.weekStart),
+    })
+  }
+  if (pathname === '/api/availability/summary' && method === 'GET') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const weeks = upcomingMondays(Number(params.get('weeks') || 10))
+    return ok({
+      userCount: db.users.filter((u) => u.active).length,
+      weeks: weeks.map((weekStart) => {
+        const blockedUsers = db.weekBlocks
+          .filter((b) => b.weekStart === weekStart)
+          .map((b) => {
+            const u = db.users.find((x) => x.id === b.userId)
+            return { id: b.userId, name: u?.name || '—' }
+          })
+        const availableCount = db.users.filter((u) => u.active).length - blockedUsers.length
+        return {
+          weekStart,
+          weekEnd: addDays(weekStart, 6),
+          blockedUsers,
+          availableCount,
+          tight: availableCount < 5,
+        }
+      }),
+    })
+  }
+
+  if (pathname === '/api/notices' && method === 'GET') {
+    return ok({
+      notices: db.notices
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((n) => ({
+          id: n.id,
+          body: n.body,
+          photoUrl: n.photoDataUrl || null,
+          status: n.status,
+          authorName: db.users.find((u) => u.id === n.authorUserId)?.name || '—',
+          authorUserId: n.authorUserId,
+          createdAt: n.createdAt,
+          replies: n.replies.map((r) => ({
+            id: r.id,
+            body: r.body,
+            authorName: db.users.find((u) => u.id === r.authorUserId)?.name || '—',
+            authorUserId: r.authorUserId,
+            createdAt: r.createdAt,
+          })),
+        })),
+    })
+  }
+  if (pathname === '/api/notices' && method === 'POST') {
+    let text = String(body.body || '').trim()
+    let photoDataUrl: string | null = null
+    if (options.formData) {
+      text = String(options.formData.get('body') || '').trim()
+      const file = options.formData.get('photo')
+      if (file instanceof File) {
+        photoDataUrl = await fileToDataUrl(file)
+      }
+    }
+    if (!text) err('Kirjoita viesti')
+    const notice: Notice = {
+      id: uid(),
+      authorUserId: user!.id,
+      body: text,
+      photoDataUrl,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      replies: [],
+    }
+    db.notices.unshift(notice)
+    notify(
+      db,
+      db.users.filter((u) => u.id !== user!.id && u.active).map((u) => u.id),
+      'Uusi huomio',
+      text.slice(0, 120),
+      '/huomiot',
+      'notice',
+    )
+    saveDb(db)
+    return ok({ ok: true })
+  }
+  const noticeReply = pathname.match(/^\/api\/notices\/([^/]+)\/replies$/)
+  if (noticeReply && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const notice = db.notices.find((n) => n.id === noticeReply[1])
+    if (!notice) err('Huomiota ei löydy')
+    const text = String(body.body || '').trim()
+    if (!text) err('Kirjoita vastaus')
+    notice!.replies.push({
+      id: uid(),
+      authorUserId: user!.id,
+      body: text,
+      createdAt: new Date().toISOString(),
+    })
+    if (notice!.status === 'open') notice!.status = 'in_progress'
+    notify(db, [notice!.authorUserId], 'Vastaus huomioon', text.slice(0, 120), '/huomiot', 'notice')
+    saveDb(db)
+    return ok({ ok: true })
+  }
+  const noticePatch = pathname.match(/^\/api\/notices\/([^/]+)$/)
+  if (noticePatch && method === 'PATCH') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const notice = db.notices.find((n) => n.id === noticePatch[1])
+    if (!notice) err('Huomiota ei löydy')
+    if (body.status === 'resolved' || body.status === 'open' || body.status === 'in_progress') {
+      notice!.status = body.status
+      if (body.status === 'resolved') notice!.resolvedAt = new Date().toISOString()
+    }
+    saveDb(db)
+    return ok({ ok: true })
+  }
+
+  if (pathname === '/api/notifications' && method === 'GET') {
+    const items = db.notifications
+      .filter((n) => n.userId === user!.id)
+      .slice(0, 50)
+      .map((n) => ({
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        link: n.link ?? null,
+        kind: n.kind || 'general',
+        readAt: n.readAt ?? null,
+        createdAt: n.createdAt,
+      }))
+    return ok({
+      items,
+      unreadCount: items.filter((n) => !n.readAt).length,
+    })
+  }
+  if (pathname === '/api/notifications/read-all' && method === 'POST') {
+    const now = new Date().toISOString()
+    for (const n of db.notifications) {
+      if (n.userId === user!.id && !n.readAt) n.readAt = now
+    }
+    saveDb(db)
+    return ok({ ok: true })
+  }
+  const notifRead = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/)
+  if (notifRead && method === 'POST') {
+    const n = db.notifications.find((x) => x.id === notifRead[1] && x.userId === user!.id)
+    if (n && !n.readAt) n.readAt = new Date().toISOString()
+    saveDb(db)
+    return ok({ ok: true })
+  }
+
+  if (pathname === '/api/hub' && method === 'GET') {
+    return ok({
+      year: new Date().getFullYear(),
+      inspections: db.hub.map((h) => hydrateHub(h, db)),
+      summary: {
+        year: new Date().getFullYear(),
+        openCount: db.hub.filter((h) => h.status !== 'done').length,
+        dueCount: db.hub.filter(
+          (h) => h.status !== 'done' && h.windowStart <= today() && h.windowEnd >= today(),
+        ).length,
+        issueCount: db.hub.reduce(
+          (n, h) => n + h.items.filter((i) => i.status === 'issue').length,
+          0,
+        ),
+      },
+    })
+  }
+  if (pathname === '/api/hub/seed' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const year = new Date().getFullYear()
+    if (!db.hub.some((h) => h.year === year && h.templateId === 'hub-spring')) {
+      const now = new Date().toISOString()
+      db.hub.push({
+        id: uid(),
+        templateId: 'hub-spring',
+        year,
+        title: 'Kevättarkastus',
+        cadenceLabel: 'Kevät',
+        windowStart: `${year}-04-01`,
+        windowEnd: `${year}-05-31`,
+        intro: 'Tarkista piha-alueen kevätkunto.',
+        status: 'open',
+        createdAt: now,
+        items: [
+          { id: uid(), templateItemId: '1', label: 'Sadevesijärjestelmä', sortOrder: 1, status: 'open' },
+          { id: uid(), templateItemId: '2', label: 'Pihavarusteet', sortOrder: 2, status: 'open' },
+          { id: uid(), templateItemId: '3', label: 'Kulku-urat ja portaat', sortOrder: 3, status: 'open' },
+          { id: uid(), templateItemId: '4', label: 'Roska-alue', sortOrder: 4, status: 'open' },
+          { id: uid(), templateItemId: '5', label: 'Valaisimet', sortOrder: 5, status: 'open' },
+        ],
+      })
+      saveDb(db)
+    }
+    return ok({
+      year,
+      inspections: db.hub.map((h) => hydrateHub(h, db)),
+    })
+  }
+  const hubItem = pathname.match(/^\/api\/hub\/([^/]+)\/items\/([^/]+)$/)
+  if (hubItem && method === 'PATCH') {
+    const insp = db.hub.find((h) => h.id === hubItem[1])
+    if (!insp) err('Ei löydy')
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const item = insp!.items.find((i) => i.id === hubItem[2])
+    if (!item) err('Kohtaa ei löydy')
+    if (body.status === 'ok' || body.status === 'issue' || body.status === 'open') {
+      item!.status = body.status
+    }
+    if (body.note !== undefined) item!.note = String(body.note || '') || null
+    if (insp!.status === 'open') insp!.status = 'in_progress'
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp!) })
+  }
+  const hubPhoto = pathname.match(/^\/api\/hub\/([^/]+)\/photo$/)
+  if (hubPhoto && method === 'POST') {
+    const insp = db.hub.find((h) => h.id === hubPhoto[1])
+    if (!insp) err('Ei löydy')
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const file = options.formData?.get('photo')
+    if (!(file instanceof File)) err('Kuva puuttuu')
+    insp!.photoDataUrl = await fileToDataUrl(file as File)
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp!) })
+  }
+  const hubMatch = pathname.match(/^\/api\/hub\/([^/]+)$/)
+  if (hubMatch && method === 'GET') {
+    const insp = db.hub.find((h) => h.id === hubMatch[1])
+    if (!insp) err('Ei löydy')
+    return ok({ inspection: hydrateHub(insp!), canEdit: user!.role === 'admin' })
+  }
+  if (hubMatch && method === 'PATCH') {
+    const insp = db.hub.find((h) => h.id === hubMatch[1])
+    if (!insp) err('Ei löydy')
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    if (body.notes !== undefined) insp!.notes = String(body.notes || '') || null
+    if (body.status === 'done' || body.status === 'open' || body.status === 'in_progress') {
+      insp!.status = body.status
+      if (body.status === 'done') {
+        insp!.completedByUserId = user!.id
+        insp!.completedAt = new Date().toISOString()
+      }
+    }
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp!) })
+  }
+
+  if (pathname === '/api/extra-tasks' && method === 'GET') {
+    return ok({
+      tasks: db.extraTasks.map((t) => hydrateExtra(db, t, user!.id)),
+      canCreate: user!.role === 'admin',
+    })
+  }
+  if (pathname === '/api/extra-tasks' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const title = String(body.title || '').trim()
+    if (!title) err('Anna otsikko')
+    const task = {
+      id: uid(),
+      createdByUserId: user!.id,
+      title,
+      description: String(body.description || '').trim() || null,
+      minRequired: Math.max(1, Number(body.minRequired) || 2),
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      signups: [] as { id: string; userId: string; signedUpAt: string }[],
+    }
+    db.extraTasks.unshift(task)
+    notify(
+      db,
+      db.users.filter((u) => u.active && u.id !== user!.id).map((u) => u.id),
+      'Uusi apukutsu',
+      title,
+      '/apukutsut',
+      'extra',
+    )
+    saveDb(db)
+    return ok({ task: hydrateExtra(db, task, user!.id) })
+  }
+  const extraAct = pathname.match(/^\/api\/extra-tasks\/([^/]+)\/(signup|start|complete|cancel)$/)
+  if (extraAct) {
+    const task = db.extraTasks.find((t) => t.id === extraAct[1])
+    if (!task) err('Tehtävää ei löydy')
+    const action = extraAct[2]!
+    if (action === 'signup' && method === 'POST') {
+      if (task!.signups.some((s) => s.userId === user!.id)) err('Olet jo ilmoittautunut')
+      task!.signups.push({ id: uid(), userId: user!.id, signedUpAt: new Date().toISOString() })
+      if (task!.signups.length >= task!.minRequired && task!.status === 'open') task!.status = 'ready'
+      saveDb(db)
+      return ok({ task: hydrateExtra(db, task!, user!.id) })
+    }
+    if (action === 'signup' && method === 'DELETE') {
+      task!.signups = task!.signups.filter((s) => s.userId !== user!.id)
+      if (task!.status === 'ready' && task!.signups.length < task!.minRequired) task!.status = 'open'
+      saveDb(db)
+      return ok({ task: hydrateExtra(db, task!, user!.id) })
+    }
+    if (action === 'start' && method === 'POST') {
+      if (user!.role !== 'admin' && !task!.signups.some((s) => s.userId === user!.id)) {
+        err('Ei oikeutta')
+      }
+      task!.status = 'in_progress'
+      saveDb(db)
+      return ok({ task: hydrateExtra(db, task!, user!.id) })
+    }
+    if (action === 'complete' && method === 'POST') {
+      if (user!.role !== 'admin' && !task!.signups.some((s) => s.userId === user!.id)) {
+        err('Ei oikeutta')
+      }
+      task!.status = 'done'
+      saveDb(db)
+      return ok({ task: hydrateExtra(db, task!, user!.id) })
+    }
+    if (action === 'cancel' && method === 'POST') {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      task!.status = 'cancelled'
+      saveDb(db)
+      return ok({ task: hydrateExtra(db, task!, user!.id) })
+    }
+  }
+
+  // task complete / assign
+  const taskComplete = pathname.match(/^\/api\/tasks\/([^/]+)\/complete$/)
+  if (taskComplete && method === 'POST') {
+    const taskId = taskComplete[1]!
+    const p = db.pihavuorot.find((x) => x.tasks.some((t) => t.id === taskId))
+    if (!p) err('Tehtävää ei löydy')
+    const task = p!.tasks.find((t) => t.id === taskId)!
+    const assignment = p!.assignments.find((a) => a.userId === user!.id)
+    if (!assignment && user!.role !== 'admin') err('Et ole tässä Pihavuorossa')
+    task.status = body.status === 'skipped' ? 'skipped' : 'done'
+    task.skipReason = task.status === 'skipped' ? String(body.skipReason || 'Ei tarvetta') : null
+    task.doneByUserId = user!.id
+    task.doneAt = new Date().toISOString()
+    saveDb(db)
+    return ok({ pihavuoro: hydratePihavuoro(db, p!) })
+  }
+  const taskPatch = pathname.match(/^\/api\/tasks\/([^/]+)$/)
+  if (taskPatch && method === 'PATCH') {
+    const taskId = taskPatch[1]!
+    const p = db.pihavuorot.find((x) => x.tasks.some((t) => t.id === taskId))
+    if (!p) err('Ei löydy')
+    const task = p!.tasks.find((t) => t.id === taskId)!
+    const assignment = p!.assignments.find((a) => a.userId === user!.id)
+    if (user!.role !== 'admin' && assignment?.role !== 'lead') {
+      err('Vain vastuuhenkilö tai admin')
+    }
+    if (body.assigneeUserId !== undefined) {
+      const assigneeId = body.assigneeUserId ? String(body.assigneeUserId) : null
+      if (assigneeId) {
+        const assignee = db.users.find((u) => u.id === assigneeId)
+        if (task.effort === 'heavy' && assignee?.constraints.includes('no_heavy')) {
+          err('Henkilöllä on rajoitus: ei raskaisiin töihin')
+        }
+      }
+      task.assigneeUserId = assigneeId
+    }
+    saveDb(db)
+    return ok({ pihavuoro: hydratePihavuoro(db, p!) })
+  }
+
+  // push stubs (no VAPID in Netlify Drop / local mode)
+  if (pathname === '/api/push/vapid-public-key' && method === 'GET') {
+    return ok({ publicKey: null })
+  }
+  if (pathname === '/api/push/status' && method === 'GET') {
+    return ok({ subscribed: false })
+  }
+  if (pathname === '/api/push/subscribe' && (method === 'POST' || method === 'DELETE')) {
+    return ok({ ok: true })
+  }
+  if (pathname.startsWith('/api/push')) {
+    return ok({ ok: true, publicKey: null, subscribed: false })
+  }
+
+  err(`Paikallinen tila: reittiä ei tueta (${method} ${pathname})`)
+  return ok({})
+}
+
+function hydrateSwap(db: Db, s: SwapOffer) {
+  const p = db.pihavuorot.find((x) => x.id === s.pihavuoroId)
+  return {
+    id: s.id,
+    pihavuoroId: s.pihavuoroId,
+    weekStart: p?.weekStart || '',
+    weekEnd: p ? addDays(p.weekStart, 6) : '',
+    pihavuoroStatus: p?.status || null,
+    fromUserId: s.fromUserId,
+    fromUserName: db.users.find((u) => u.id === s.fromUserId)?.name || '—',
+    toUserId: s.toUserId ?? null,
+    toUserName: s.toUserId ? db.users.find((u) => u.id === s.toUserId)?.name || '—' : null,
+    role: s.role,
+    message: s.message ?? null,
+    status: s.status,
+    createdAt: s.createdAt,
+    resolvedAt: s.resolvedAt ?? null,
+    acceptedByUserId: s.acceptedByUserId ?? null,
+    acceptedByUserName: s.acceptedByUserId
+      ? db.users.find((u) => u.id === s.acceptedByUserId)?.name || '—'
+      : null,
+  }
+}
+
+function hydrateHub(h: HubInspection, db?: Db) {
+  return {
+    id: h.id,
+    templateId: h.templateId,
+    year: h.year,
+    title: h.title,
+    cadenceLabel: h.cadenceLabel,
+    windowStart: h.windowStart,
+    windowEnd: h.windowEnd,
+    intro: h.intro ?? null,
+    status: h.status,
+    notes: h.notes ?? null,
+    photoUrl: h.photoDataUrl || null,
+    completedByUserId: h.completedByUserId ?? null,
+    completedByName: h.completedByUserId
+      ? db?.users.find((u) => u.id === h.completedByUserId)?.name || null
+      : null,
+    completedAt: h.completedAt ?? null,
+    createdAt: h.createdAt,
+    items: h.items,
+    doneCount: h.items.filter((i) => i.status !== 'open').length,
+    issueCount: h.items.filter((i) => i.status === 'issue').length,
+    itemCount: h.items.length,
+    protocol: [],
+  }
+}
+
+function hydrateExtra(
+  db: Db,
+  t: Db['extraTasks'][number],
+  me: string,
+) {
+  const signups = Array.isArray(t.signups) ? t.signups : []
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description ?? null,
+    minRequired: t.minRequired,
+    status: t.status,
+    createdByUserId: t.createdByUserId,
+    createdByName: db.users.find((u) => u.id === t.createdByUserId)?.name || '—',
+    createdAt: t.createdAt,
+    signups: signups.map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      userName: db.users.find((u) => u.id === s.userId)?.name || '—',
+      signedUpAt: s.signedUpAt,
+    })),
+    signupCount: signups.length,
+    spotsLeft: Math.max(0, t.minRequired - signups.length),
+    iSignedUp: signups.some((s) => s.userId === me),
+  }
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('Kuvan luku epäonnistui'))
+    reader.readAsDataURL(file)
+  })
+}
