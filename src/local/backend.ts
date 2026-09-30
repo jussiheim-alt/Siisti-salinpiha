@@ -1,6 +1,6 @@
 import { CONSTRAINT_LABELS, TASK_CATALOG_V1 } from '../shared/catalog'
 
-const DB_KEY = 'siisti-piha-local-db-v1'
+const DB_KEY = 'siisti-piha-local-db-v2'
 const SESSION_KEY = 'siisti-piha-local-session'
 
 type Role = 'admin' | 'member'
@@ -106,8 +106,23 @@ type HubInspection = {
   }[]
 }
 
+type Invite = {
+  id: string
+  token: string
+  name: string
+  email: string
+  role: Role
+  constraints: string[]
+  createdByUserId: string
+  createdAt: string
+  expiresAt: string
+  acceptedAt?: string | null
+  revokedAt?: string | null
+}
+
 type Db = {
   users: User[]
+  invites: Invite[]
   pihavuorot: Pihavuoro[]
   notices: Notice[]
   swaps: SwapOffer[]
@@ -162,9 +177,14 @@ async function hashPassword(password: string) {
 
 function loadDb(): Db {
   const raw = localStorage.getItem(DB_KEY)
-  if (raw) return JSON.parse(raw) as Db
+  if (raw) {
+    const parsed = JSON.parse(raw) as Db
+    if (!parsed.invites) parsed.invites = []
+    return parsed
+  }
   return {
     users: [],
+    invites: [],
     pihavuorot: [],
     notices: [],
     swaps: [],
@@ -181,40 +201,39 @@ function saveDb(db: Db) {
 }
 
 async function ensureSeed(db: Db) {
+  if (!db.invites) db.invites = []
   if (db.users.length) return db
   const now = new Date().toISOString()
-  const adminHash = await hashPassword('admin123')
-  const demoHash = await hashPassword('demo123')
+  // Selaintila: vain oikeat ylläpitäjät. Salasana vaihdetaan tuotannossa env/kutsuilla.
+  const viteEnv = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env
+  const localPass = viteEnv?.VITE_LOCAL_ADMIN_PASSWORD || 'vaihda-tama-8'
+  const adminHash = await hashPassword(localPass)
   db.users = [
     {
       id: uid(),
-      name: 'Ylläpitäjä',
-      email: 'admin@siistipiha.local',
+      name: 'Jussi Heimonen',
+      email: 'jussiheim@gmail.com',
       passwordHash: adminHash,
       role: 'admin',
       active: true,
       constraints: [],
       createdAt: now,
     },
-    ...(
-      [
-        ['Aino Virtanen', 'aino@siistipiha.local', []],
-        ['Matti Korhonen', 'matti@siistipiha.local', ['no_heavy']],
-        ['Liisa Nieminen', 'liisa@siistipiha.local', []],
-        ['Juhani Heikkilä', 'juhani@siistipiha.local', ['no_lead']],
-        ['Sari Laine', 'sari@siistipiha.local', []],
-      ] as const
-    ).map(([name, email, constraints]) => ({
-      id: uid(),
-      name,
-      email,
-      passwordHash: demoHash,
-      role: 'member' as const,
-      active: true,
-      constraints: [...constraints],
-      createdAt: now,
-    })),
   ]
+  // Joni lisätään kutsulla tai kun VITE_JONI_EMAIL on asetettu buildissa
+  const joniEmail = String(viteEnv?.VITE_JONI_EMAIL || '').trim().toLowerCase()
+  if (joniEmail) {
+    db.users.push({
+      id: uid(),
+      name: 'Joni Moilanen',
+      email: joniEmail,
+      passwordHash: adminHash,
+      role: 'admin',
+      active: true,
+      constraints: [],
+      createdAt: now,
+    })
+  }
 
   const year = new Date().getFullYear()
   db.hub = [
@@ -251,6 +270,29 @@ async function ensureSeed(db: Db) {
   }
   saveDb(db)
   return db
+}
+
+function publicInvite(inv: Invite, inviteUrl?: string) {
+  const expired = new Date(inv.expiresAt) < new Date()
+  return {
+    id: inv.id,
+    name: inv.name,
+    email: inv.email,
+    role: inv.role,
+    constraints: inv.constraints,
+    createdAt: inv.createdAt,
+    expiresAt: inv.expiresAt,
+    acceptedAt: inv.acceptedAt ?? null,
+    revokedAt: inv.revokedAt ?? null,
+    inviteUrl: inviteUrl ?? null,
+    status: inv.revokedAt
+      ? 'revoked'
+      : inv.acceptedAt
+        ? 'accepted'
+        : expired
+          ? 'expired'
+          : 'pending',
+  }
 }
 
 function publicUser(u: User) {
@@ -459,6 +501,50 @@ export async function localApi<T = unknown>(
     return ok({ user: publicUser(user!) })
   }
 
+  const inviteTokenGet = pathname.match(/^\/api\/invites\/token\/([^/]+)$/)
+  if (inviteTokenGet && method === 'GET') {
+    const inv = db.invites.find((i) => i.token === inviteTokenGet[1])
+    if (!inv || inv.revokedAt) err('Kutsu ei ole voimassa')
+    if (inv!.acceptedAt) err('Kutsu on jo käytetty')
+    if (new Date(inv!.expiresAt) < new Date()) err('Kutsu on vanhentunut')
+    return ok({
+      invite: {
+        name: inv!.name,
+        email: inv!.email,
+        role: inv!.role,
+        constraints: inv!.constraints,
+        expiresAt: inv!.expiresAt,
+      },
+    })
+  }
+  const inviteTokenAccept = pathname.match(/^\/api\/invites\/token\/([^/]+)\/accept$/)
+  if (inviteTokenAccept && method === 'POST') {
+    const inv = db.invites.find((i) => i.token === inviteTokenAccept[1])
+    if (!inv || inv.revokedAt) err('Kutsu ei ole voimassa')
+    if (inv!.acceptedAt) err('Kutsu on jo käytetty')
+    if (new Date(inv!.expiresAt) < new Date()) err('Kutsu on vanhentunut')
+    const password = String(body.password || '')
+    if (password.length < 8) err('Salasanan oltava vähintään 8 merkkiä')
+    if (db.users.some((u) => u.email.toLowerCase() === inv!.email.toLowerCase())) {
+      err('Käyttäjä on jo olemassa')
+    }
+    const nu: User = {
+      id: uid(),
+      name: inv!.name,
+      email: inv!.email,
+      passwordHash: await hashPassword(password),
+      role: inv!.role,
+      active: true,
+      constraints: [...inv!.constraints],
+      createdAt: new Date().toISOString(),
+    }
+    inv!.acceptedAt = new Date().toISOString()
+    db.users.push(nu)
+    setSession(nu.id)
+    saveDb(db)
+    return ok({ token: `local.${nu.id}`, user: publicUser(nu) })
+  }
+
   if (!user && pathname.startsWith('/api/')) err('Istunto vanhentunut')
 
   if (pathname === '/api/users' && method === 'GET') {
@@ -470,7 +556,7 @@ export async function localApi<T = unknown>(
     const name = String(body.name || '').trim()
     const email = String(body.email || '').trim().toLowerCase()
     const password = String(body.password || '')
-    if (!name || !email || password.length < 6) err('Nimi, sähköposti ja salasana (min. 6) vaaditaan')
+    if (!name || !email || password.length < 8) err('Nimi, sähköposti ja salasana (min. 8) vaaditaan')
     if (db.users.some((u) => u.email.toLowerCase() === email)) err('Sähköposti on jo käytössä')
     const nu: User = {
       id: uid(),
@@ -491,6 +577,14 @@ export async function localApi<T = unknown>(
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
     const target = db.users.find((u) => u.id === userPatch[1])
     if (!target) err('Käyttäjää ei löydy')
+    const nextRole = body.role === 'admin' || body.role === 'member' ? body.role : target!.role
+    const nextActive = typeof body.active === 'boolean' ? body.active : target!.active
+    const wasAdmin = target!.role === 'admin' && target!.active
+    const staysAdmin = nextRole === 'admin' && nextActive
+    if (wasAdmin && !staysAdmin) {
+      const admins = db.users.filter((u) => u.role === 'admin' && u.active).length
+      if (admins <= 1) err('Viimeistä ylläpitäjää ei voi poistaa tai alentaa')
+    }
     if (body.name !== undefined) target!.name = String(body.name).trim()
     if (body.email !== undefined) target!.email = String(body.email).trim().toLowerCase()
     if (body.role === 'admin' || body.role === 'member') target!.role = body.role
@@ -498,9 +592,63 @@ export async function localApi<T = unknown>(
     if (Array.isArray(body.constraints)) target!.constraints = body.constraints as string[]
     if (body.constraintNote !== undefined) target!.constraintNote = String(body.constraintNote || '') || null
     if (body.snoozeUntil !== undefined) target!.snoozeUntil = body.snoozeUntil ? String(body.snoozeUntil) : null
-    if (body.password) target!.passwordHash = await hashPassword(String(body.password))
+    if (body.password) {
+      if (String(body.password).length < 8) err('Salasanan oltava vähintään 8 merkkiä')
+      target!.passwordHash = await hashPassword(String(body.password))
+    }
     saveDb(db)
     return ok({ user: publicUser(target!) })
+  }
+  if (pathname === '/api/invites' && method === 'GET') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const pending = db.invites.filter((i) => !i.acceptedAt && !i.revokedAt)
+    return ok({
+      invites: pending.map((i) =>
+        publicInvite(i, `${location.origin}/kutsu/${i.token}`),
+      ),
+    })
+  }
+  if (pathname === '/api/invites' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const name = String(body.name || '').trim()
+    const email = String(body.email || '').trim().toLowerCase()
+    if (!name || !email) err('Nimi ja sähköposti vaaditaan')
+    if (db.users.some((u) => u.email.toLowerCase() === email)) {
+      err('Käyttäjä on jo olemassa tällä sähköpostilla')
+    }
+    const open = db.invites.find(
+      (i) =>
+        i.email.toLowerCase() === email &&
+        !i.acceptedAt &&
+        !i.revokedAt &&
+        new Date(i.expiresAt) > new Date(),
+    )
+    if (open) err('Tälle sähköpostille on jo avoin kutsu')
+    const inv: Invite = {
+      id: uid(),
+      token: uid().replace(/-/g, '') + uid().replace(/-/g, ''),
+      name,
+      email,
+      role: body.role === 'admin' ? 'admin' : 'member',
+      constraints: Array.isArray(body.constraints) ? (body.constraints as string[]) : [],
+      createdByUserId: user!.id,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+    db.invites.unshift(inv)
+    saveDb(db)
+    return ok({
+      invite: publicInvite(inv, `${location.origin}/kutsu/${inv.token}`),
+    })
+  }
+  const inviteDel = pathname.match(/^\/api\/invites\/([^/]+)$/)
+  if (inviteDel && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const inv = db.invites.find((i) => i.id === inviteDel[1])
+    if (!inv) err('Kutsua ei löydy')
+    inv!.revokedAt = new Date().toISOString()
+    saveDb(db)
+    return ok({ ok: true })
   }
   if (pathname === '/api/directory' && method === 'GET') {
     return ok({ users: db.users.filter((u) => u.active).map((u) => ({ id: u.id, name: u.name })) })

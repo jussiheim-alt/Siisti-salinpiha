@@ -5,3 +5,16 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# SW + shell must revalidate so PWA home-screen installs pick up new builds
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache

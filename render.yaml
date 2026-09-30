@@ -1,0 +1,36 @@
+# Persistent Render deploy for Siisti piha (SQLite on disk).
+# Free tier has no persistent disk — use at least Starter.
+services:
+  - type: web
+    name: siisti-piha
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    disk:
+      name: siisti-piha-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        value: jussiheim@gmail.com
+      - key: ADMIN_NAME
+        value: Jussi Heimonen
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: JONI_EMAIL
+        sync: false
+      - key: JONI_NAME
+        value: Joni Moilanen
+      - key: JONI_PASSWORD
+        sync: false

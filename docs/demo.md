@@ -1,4 +1,5 @@
-https://longitude-livestock-robertson-organize.trycloudflare.com
+# Käyttö
 
-admin@siistipiha.local / admin123
-matti@siistipiha.local / demo123
+Tuotanto / Render: kirjaudu Jussi Heimosen tai Joni Moilasen tunnuksella (env-salasanat).
+
+Uudet käyttäjät: ylläpitäjä luo kutsun **Jäsenet**-sivulla ja lähettää linkin.

@@ -1,46 +1,91 @@
-# Siisti piha — Netlify Drop -julkaisu
+# Siisti piha — julkaisu
 
-Tämä paketti toimii kuten **Saldo**: staattinen sivusto Netlify Dropissa. Data tallentuu selaimen `localStorage`-tilaan (ei yhteistä palvelinkantaa).
+## Pysyvä käyttö Renderissä (suositus)
 
-## 1. Lataa zip
+Sovellus on Node-palvelin (Express + SQLite + staattinen frontend).  
+**Free-tierillä ei ole pysyvää levyä** — data häviää redeployssa.  
+Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 
-Käytä valmista `siisti-piha-netlify.zip`-tiedostoa (dist-sisältö juuressa).
+### Vaihtoehto A: Blueprint (`render.yaml`)
 
-## 2. Pudota Netlifyyn
+1. Pushaa repo GitHubiin
+2. Render Dashboard → **New** → **Blueprint**
+3. Valitse repo — `render.yaml` luo Web Servicen + 1 GB diskin (`/var/data`)
+4. Syötä kun Render kysyy:
+   - `ADMIN_PASSWORD` — Jussi Heimosen salasana (min. 8)
+   - `JONI_EMAIL` + `JONI_PASSWORD` — Joni Moilasen tunnus
+   - `APP_PUBLIC_URL` — esim. `https://siisti-piha.onrender.com` (kutsulinkkejä varten)
+5. Deploy → kirjaudu Jussin tai Jonin tunnuksella  
+   Kutsu muut **Jäsenet**-sivulta (kutsulinkki + käyttöoikeustaso).
 
-1. Avaa [app.netlify.com/drop](https://app.netlify.com/drop)
-2. Vedä zip-tiedosto alueelle (tai purettu `dist`-kansio)
-3. Odota deploy — saat osoitteen muodossa `https://….netlify.app`
+### Vaihtoehto B: manuaalinen Web Service
 
-## 3. Kirjaudu
+| Asetus | Arvo |
+|--------|------|
+| Runtime | Node |
+| Build | `npm install && npm run build` |
+| Start | `npm start` |
+| Plan | **Starter** (ei Free) |
+| Disk | mount `/var/data`, esim. 1 GB |
 
-| Rooli | Sähköposti | Salasana |
-|-------|------------|----------|
-| Ylläpitäjä | `admin@siistipiha.local` | `admin123` |
-| Jäsen | `aino@siistipiha.local` | `demo123` |
+**Environment**
 
-Muut demojäsenet: `matti@`, `liisa@`, `juhani@`, `sari@` + `siistipiha.local` / `demo123`.
+| Key | Value |
+|-----|--------|
+| `NODE_ENV` | `production` |
+| `DATA_DIR` | `/var/data` |
+| `JWT_SECRET` | pitkä satunnainen (Render Generate) |
+| `APP_PUBLIC_URL` | julkinen osoite (kutsulinkit) |
+| `ADMIN_EMAIL` | oletus `jussiheim@gmail.com` |
+| `ADMIN_PASSWORD` | Jussi Heimosen salasana |
+| `JONI_EMAIL` | Joni Moilasen sähköposti |
+| `JONI_PASSWORD` | Joni Moilasen salasana |
 
-## Huomioita
+Demokäyttäjiä ei enää seedata. Muut jäsenet kutsutaan sovelluksesta.
 
-- **Data on selainkohtainen.** Eri laitteet / incognito eivät jaa samaa kantaa.
-- Sää on stub (ei FMI-liveä Drop-tilassa). Push-ilmoitukset eivät toimi.
-- Tyhjennä data: selaimen sivustotiedot / localStorage-avain `siisti-piha-local-db-v1`.
+### Mitä levy säilyttää
 
-## Rakenna zip itse
+- SQLite: `$DATA_DIR/siisti-piha.sqlite`
+- Kuvat: `$DATA_DIR/uploads/`
+- VAPID-avaimet (push): `$DATA_DIR/vapid.json` (tai aseta `VAPID_*` env)
+
+### Huomioita
+
+- Render nukuttaa palvelun idlellä Starterissäkin joskus hinnoittelusta riippuen — tarkista nykyinen plan.
+- Varmuuskopioi ajoittain `siisti-piha.sqlite` (Render shell / disk backup).
+- Vaihda admin-salasana heti jos käytit väliaikaista.
+
+### PWA-päivitykset (kotivalikko)
+
+Kun pushaat uuden version ja Render deployaa, käyttäjien **ei tarvitse poistaa** sovellusta kotivalikosta.
+
+- Uusi service worker aktivoituu automaattisesti (`autoUpdate` + `skipWaiting`)
+- Sovellus tarkistaa päivitykset avattaessa / fokusuksessa ja lataa uuden buildin
+- Riittää että käyttäjä avaa sovelluksen uudelleen (tai pitää sen auki hetken verkossa)
+
+---
+
+## Netlify Drop (vain demoon, selainkohtainen data)
 
 ```bash
 npm install
 npm run package:netlify
 ```
 
-Tuloste: `siisti-piha-netlify.zip` projektijuureen.
+Pudota `siisti-piha-netlify.zip` → [app.netlify.com/drop](https://app.netlify.com/drop).
 
-## Node-palvelin (oma host)
+Data = `localStorage` (ei yhteistä kantaa laitteiden välillä). Ei sovi pysyvään yhteiskäyttöön.
 
-Jos tarvitset yhteisen SQLite-kannan ja oikean sään:
+---
+
+## Paikallinen Node
 
 ```bash
-SEED_DEMO=1 npm run build
-SEED_DEMO=1 npm start
+export JWT_SECRET='pitkä-satunnainen-salaisuus'
+export ADMIN_PASSWORD='vahva-salasana'
+export JONI_EMAIL='joni@esimerkki.fi'
+export JONI_PASSWORD='vahva-salasana'
+npm run build && npm start
 ```
+
+Avaa http://localhost:8787 — kutsu muut käyttäjät **Jäsenet**-sivulta.

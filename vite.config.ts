@@ -9,8 +9,9 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      // Uusi build → skipWaiting + reload (virtual:pwa-register src/pwa.ts)
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: false,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Siisti piha',
@@ -20,7 +21,8 @@ export default defineConfig({
         background_color: '#eef3ea',
         display: 'standalone',
         lang: 'fi',
-        start_url: '/?v=3',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
             src: '/favicon.svg',

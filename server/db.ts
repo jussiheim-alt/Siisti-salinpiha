@@ -1,17 +1,10 @@
 import Database from 'better-sqlite3'
-import bcrypt from 'bcryptjs'
-import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { TASK_CATALOG_V1 } from './catalog.ts'
+import { ensureFoundingAdmins } from './foundingAdmins.ts'
+import { dataDir } from './paths.ts'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, '..')
-const dataDir = path.join(root, 'data')
 const dbPath = path.join(dataDir, 'siisti-piha.sqlite')
-
-fs.mkdirSync(dataDir, { recursive: true })
-fs.mkdirSync(path.join(root, 'uploads'), { recursive: true })
 
 export const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
@@ -188,6 +181,20 @@ export function initDb() {
       body TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS invites (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin','member')),
+      constraints_json TEXT NOT NULL DEFAULT '[]',
+      created_by_user_id TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      accepted_at TEXT,
+      revoked_at TEXT
+    );
   `)
 
   const notifCols = db.prepare(`PRAGMA table_info(notifications)`).all() as { name: string }[]
@@ -195,35 +202,13 @@ export function initDb() {
     db.exec(`ALTER TABLE notifications ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'`)
   }
 
-  const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number }
-  const allowDemoSeed =
-    process.env.SEED_DEMO === '1' ||
-    (process.env.SEED_DEMO !== '0' && process.env.NODE_ENV !== 'production')
-  if (userCount.c === 0 && allowDemoSeed) {
-    const now = new Date().toISOString()
-    const hash = bcrypt.hashSync('admin123', 10)
-    db.prepare(
-      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, created_at)
-       VALUES (?, ?, ?, ?, 'admin', 1, '[]', ?)`,
-    ).run(crypto.randomUUID(), 'Ylläpitäjä', 'admin@siistipiha.local', hash, now)
+  ensureFoundingAdmins(db)
 
-    const hash2 = bcrypt.hashSync('demo123', 10)
-    const demos = [
-      ['Aino Virtanen', 'aino@siistipiha.local', '[]'],
-      ['Matti Korhonen', 'matti@siistipiha.local', '["no_heavy"]'],
-      ['Liisa Nieminen', 'liisa@siistipiha.local', '[]'],
-      ['Juhani Heikkilä', 'juhani@siistipiha.local', '["no_lead"]'],
-      ['Sari Laine', 'sari@siistipiha.local', '[]'],
-    ] as const
-    for (const [name, email, constraints] of demos) {
-      db.prepare(
-        `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, created_at)
-         VALUES (?, ?, ?, ?, 'member', 1, ?, ?)`,
-      ).run(crypto.randomUUID(), name, email, hash2, constraints, now)
-    }
-    console.log('Seedattu: admin@siistipiha.local / admin123  sekä demo-käyttäjiä (demo123)')
-  } else if (userCount.c === 0) {
-    console.warn('Tietokanta tyhjä — luo ensimmäinen ylläpitäjä manuaalisesti (SEED_DEMO=1 kehityksessä)')
+  const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number }
+  if (userCount.c === 0) {
+    console.warn(
+      'Tietokanta tyhjä — aseta ADMIN_PASSWORD (ja tarvittaessa JONI_EMAIL + JONI_PASSWORD)',
+    )
   }
 }
 

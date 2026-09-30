@@ -2,40 +2,35 @@
 
 Pihavuorot, tehtävät ja huomiot — Vääksy.
 
-## Netlify Drop (suositus demoon)
+## Pysyvä käyttö (Render, suositus)
 
 Katso **[JULKAISU.md](./JULKAISU.md)**. Lyhyesti:
 
-```bash
-npm install
-npm run package:netlify
-```
+1. Render → **New → Blueprint** (tai Web Service) → tämä repo
+2. Käytä **Starter**-suunnitelmaa + **persistent disk** (`/var/data`)
+3. Aseta `JWT_SECRET`, `ADMIN_PASSWORD`, `JONI_EMAIL`, `JONI_PASSWORD`, `APP_PUBLIC_URL`
 
-Pudota `siisti-piha-netlify.zip` osoitteeseen [app.netlify.com/drop](https://app.netlify.com/drop).
+Ylläpitäjät: **Jussi Heimonen** ja **Joni Moilanen**. Muut käyttäjät kutsutaan sovelluksesta (rooli + rajoitukset).
 
-| Rooli | Sähköposti | Salasana |
-|-------|------------|----------|
-| Ylläpitäjä | admin@siistipiha.local | admin123 |
-| Jäsen | aino@siistipiha.local | demo123 |
+Data (SQLite + kuvat) säilyy levyllä redeployjen yli.
 
-Data tallentuu selaimeen (`localStorage`).
-
-## Paikallinen Node-demo (SQLite + API)
+## Paikallinen kehitys
 
 ```bash
 npm install
-SEED_DEMO=1 npm run build
-SEED_DEMO=1 npm start
-```
-
-Avaa http://localhost:8787 — vaatii `SEED_DEMO=1` demokäyttäjille.
-
-## Kehitys
-
-```bash
-# Express + Vite (proxy)
-npm run dev
-
-# Pelkkä selaintila (kuten Netlify)
+npm run dev          # API + Vite
+# tai selaintila kuten Netlify Drop:
 npm run dev:local
 ```
+
+## Paikallinen Node (SQLite)
+
+```bash
+npm install
+export ADMIN_PASSWORD='vahva-salasana'
+export JONI_EMAIL='joni@esimerkki.fi'
+export JONI_PASSWORD='vahva-salasana'
+npm run build && npm start
+```
+
+Avaa http://localhost:8787
