@@ -12,10 +12,11 @@ Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 2. Render Dashboard → **New** → **Blueprint**
 3. Valitse repo — `render.yaml` luo Web Servicen + 1 GB diskin (`/var/data`)
 4. Syötä kun Render kysyy:
-   - `ADMIN_EMAIL` — oma sähköposti
-   - `ADMIN_PASSWORD` — vahva salasana
-5. Deploy → avaa `https://….onrender.com` ja kirjaudu adminilla  
-   Luo muut käyttäjät sovelluksen kautta (Users).
+   - `ADMIN_PASSWORD` — Jussi Heimosen salasana (min. 8)
+   - `JONI_EMAIL` + `JONI_PASSWORD` — Joni Moilasen tunnus
+   - `APP_PUBLIC_URL` — esim. `https://siisti-piha.onrender.com` (kutsulinkkejä varten)
+5. Deploy → kirjaudu Jussin tai Jonin tunnuksella  
+   Kutsu muut **Jäsenet**-sivulta (kutsulinkki + käyttöoikeustaso).
 
 ### Vaihtoehto B: manuaalinen Web Service
 
@@ -34,11 +35,13 @@ Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 | `NODE_ENV` | `production` |
 | `DATA_DIR` | `/var/data` |
 | `JWT_SECRET` | pitkä satunnainen (Render Generate) |
-| `ADMIN_EMAIL` | ensimmäisen ylläpitäjän sähköposti |
-| `ADMIN_PASSWORD` | vahva salasana |
-| `ADMIN_NAME` | valinnainen, oletus `Ylläpitäjä` |
+| `APP_PUBLIC_URL` | julkinen osoite (kutsulinkit) |
+| `ADMIN_EMAIL` | oletus `jussiheim@gmail.com` |
+| `ADMIN_PASSWORD` | Jussi Heimosen salasana |
+| `JONI_EMAIL` | Joni Moilasen sähköposti |
+| `JONI_PASSWORD` | Joni Moilasen salasana |
 
-Älä aseta `SEED_DEMO=1` tuotantoon.
+Demokäyttäjiä ei enää seedata. Muut jäsenet kutsutaan sovelluksesta.
 
 ### Mitä levy säilyttää
 
@@ -73,21 +76,16 @@ Pudota `siisti-piha-netlify.zip` → [app.netlify.com/drop](https://app.netlify.
 
 Data = `localStorage` (ei yhteistä kantaa laitteiden välillä). Ei sovi pysyvään yhteiskäyttöön.
 
-| Rooli | Sähköposti | Salasana |
-|-------|------------|----------|
-| Ylläpitäjä | `admin@siistipiha.local` | `admin123` |
-| Jäsen | `aino@siistipiha.local` | `demo123` |
-
 ---
 
 ## Paikallinen Node
 
 ```bash
 export JWT_SECRET='pitkä-satunnainen-salaisuus'
-# ensimmäinen käynnistys tuotantomoodissa:
-export ADMIN_EMAIL='sina@esimerkki.fi'
 export ADMIN_PASSWORD='vahva-salasana'
+export JONI_EMAIL='joni@esimerkki.fi'
+export JONI_PASSWORD='vahva-salasana'
 npm run build && npm start
 ```
 
-Tai demoseed: `SEED_DEMO=1 npm run build && SEED_DEMO=1 npm start` → http://localhost:8787
+Avaa http://localhost:8787 — kutsu muut käyttäjät **Jäsenet**-sivulta.

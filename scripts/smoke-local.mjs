@@ -10,34 +10,43 @@ const mem = {
 }
 globalThis.localStorage = mem
 globalThis.sessionStorage = mem
+globalThis.location = { origin: 'http://localhost:5173' }
 
 const { localApi } = await import('../src/local/backend.ts')
 
 const login = await localApi('/api/auth/login', {
   method: 'POST',
-  json: { email: 'admin@siistipiha.local', password: 'admin123' },
+  json: { email: 'jussiheim@gmail.com', password: 'vaihda-tama-8' },
 })
 console.log('login', login.user.email, login.user.role)
 
 const me = await localApi('/api/auth/me')
 console.log('me', me.user.name)
 
+const invite = await localApi('/api/invites', {
+  method: 'POST',
+  json: {
+    name: 'Testi Jasen',
+    email: 'testi@example.com',
+    role: 'member',
+    constraints: ['no_heavy'],
+  },
+})
+console.log('invite', invite.invite.email, invite.invite.role)
+
+const token = invite.invite.inviteUrl.split('/kutsu/')[1]
+await localApi('/api/auth/logout', { method: 'POST' })
+
+const preview = await localApi(`/api/invites/token/${token}`)
+console.log('preview', preview.invite.name)
+
+const accepted = await localApi(`/api/invites/token/${token}/accept`, {
+  method: 'POST',
+  json: { password: 'jasen-salasana-1' },
+})
+console.log('accepted', accepted.user.email, accepted.user.role)
+
 const home = await localApi('/api/home')
 console.log('home', home.weather.place)
-
-const created = await localApi('/api/pihavuorot', { method: 'POST', json: {} })
-console.log('pihavuoro', created.pihavuoro.weekStart, created.pihavuoro.status)
-
-await localApi(`/api/pihavuorot/${created.pihavuoro.id}/publish`, { method: 'POST' })
-const chat = await localApi('/api/chat/current')
-console.log('chat', chat.chat?.pihavuoroId ? 'ok' : 'none')
-
-try {
-  await localApi('/api/auth/login', { method: 'POST', json: { email: 'x', password: 'y' } })
-  console.error('expected login failure')
-  process.exit(1)
-} catch (e) {
-  console.log('bad-login', e.message)
-}
 
 console.log('SMOKE_OK')

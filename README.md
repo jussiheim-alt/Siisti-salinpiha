@@ -8,7 +8,9 @@ Katso **[JULKAISU.md](./JULKAISU.md)**. Lyhyesti:
 
 1. Render → **New → Blueprint** (tai Web Service) → tämä repo
 2. Käytä **Starter**-suunnitelmaa + **persistent disk** (`/var/data`)
-3. Aseta `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (ei `SEED_DEMO`)
+3. Aseta `JWT_SECRET`, `ADMIN_PASSWORD`, `JONI_EMAIL`, `JONI_PASSWORD`, `APP_PUBLIC_URL`
+
+Ylläpitäjät: **Jussi Heimonen** ja **Joni Moilanen**. Muut käyttäjät kutsutaan sovelluksesta (rooli + rajoitukset).
 
 Data (SQLite + kuvat) säilyy levyllä redeployjen yli.
 
@@ -21,17 +23,14 @@ npm run dev          # API + Vite
 npm run dev:local
 ```
 
-## Paikallinen Node-demo (SQLite)
+## Paikallinen Node (SQLite)
 
 ```bash
 npm install
-SEED_DEMO=1 npm run build
-SEED_DEMO=1 npm start
+export ADMIN_PASSWORD='vahva-salasana'
+export JONI_EMAIL='joni@esimerkki.fi'
+export JONI_PASSWORD='vahva-salasana'
+npm run build && npm start
 ```
 
 Avaa http://localhost:8787
-
-| Rooli | Sähköposti | Salasana |
-|-------|------------|----------|
-| Ylläpitäjä | admin@siistipiha.local | admin123 |
-| Jäsen | aino@siistipiha.local | demo123 |

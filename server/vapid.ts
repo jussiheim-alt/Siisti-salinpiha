@@ -26,7 +26,7 @@ function loadKeys(): VapidKeys {
 export const vapidKeys = loadKeys()
 
 webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:admin@siistipiha.local',
+  process.env.VAPID_SUBJECT || 'mailto:jussiheim@gmail.com',
   vapidKeys.publicKey,
   vapidKeys.privateKey,
 )

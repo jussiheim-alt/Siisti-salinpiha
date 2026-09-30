@@ -2,9 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 
-const showDemoHint =
-  import.meta.env.DEV || import.meta.env.VITE_DATA_MODE === 'local'
-
 export function LoginPage() {
   const { user, login, loading } = useAuth()
   const navigate = useNavigate()
@@ -60,9 +57,7 @@ export function LoginPage() {
             {busy ? 'Kirjaudutaan…' : 'Kirjaudu'}
           </button>
         </form>
-        {showDemoHint && (
-          <p className="hint">Kehitys: admin@siistipiha.local / admin123</p>
-        )}
+        <p className="hint">Uusi käyttäjä? Pyydä ylläpitäjältä kutsulinkki.</p>
       </div>
     </div>
   )

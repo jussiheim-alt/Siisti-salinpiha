@@ -9,6 +9,7 @@ import { ExtraTasksPage } from './pages/ExtraTasksPage'
 import { HomePage } from './pages/HomePage'
 import { HubDetailPage } from './pages/HubDetailPage'
 import { HubPage } from './pages/HubPage'
+import { InviteAcceptPage } from './pages/InviteAcceptPage'
 import { LoginPage } from './pages/LoginPage'
 import { NoticesPage } from './pages/NoticesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
@@ -161,6 +162,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/kirjaudu" element={<LoginPage />} />
+        <Route path="/kutsu/:token" element={<InviteAcceptPage />} />
         <Route element={<Shell />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/kalenteri" element={<CalendarPage />} />

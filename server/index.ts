@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { startOfWeek, format, parseISO, addDays } from 'date-fns'
 import {
   CONSTRAINT_LABELS,
@@ -358,6 +359,45 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ user: publicUser(row) })
 })
 
+function publicAppUrl(req: express.Request) {
+  const fromEnv = process.env.APP_PUBLIC_URL?.trim().replace(/\/$/, '')
+  if (fromEnv) return fromEnv
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0]
+  const host = req.get('host')
+  return `${proto}://${host}`
+}
+
+function activeAdminCount() {
+  return (
+    db.prepare(`SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND active = 1`).get() as {
+      c: number
+    }
+  ).c
+}
+
+function publicInvite(row: Record<string, unknown>, inviteUrl?: string) {
+  const expired = new Date(String(row.expires_at)) < new Date()
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    constraints: parseConstraints(String(row.constraints_json ?? '[]')),
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    acceptedAt: row.accepted_at ?? null,
+    revokedAt: row.revoked_at ?? null,
+    inviteUrl: inviteUrl ?? null,
+    status: row.revoked_at
+      ? 'revoked'
+      : row.accepted_at
+        ? 'accepted'
+        : expired
+          ? 'expired'
+          : 'pending',
+  }
+}
+
 // ——— Users ———
 app.get('/api/users', authMiddleware, requireAdmin, (_req, res) => {
   const rows = db.prepare('SELECT * FROM users ORDER BY name').all() as Record<string, unknown>[]
@@ -383,6 +423,9 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
   }
   if (!name?.trim() || !email?.trim() || !password) {
     return res.status(400).json({ error: 'Nimi, sähköposti ja salasana vaaditaan' })
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Salasanan oltava vähintään 8 merkkiä' })
   }
   const id = crypto.randomUUID()
   try {
@@ -417,6 +460,11 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
   const email = body.email != null ? String(body.email).toLowerCase() : String(row.email)
   const role = body.role === 'admin' || body.role === 'member' ? body.role : row.role
   const active = body.active != null ? (body.active ? 1 : 0) : row.active
+  const wasAdmin = row.role === 'admin' && Number(row.active) === 1
+  const staysAdmin = role === 'admin' && Number(active) === 1
+  if (wasAdmin && !staysAdmin && activeAdminCount() <= 1) {
+    return res.status(400).json({ error: 'Viimeistä ylläpitäjää ei voi poistaa tai alentaa' })
+  }
   const constraints = body.constraints != null ? JSON.stringify(body.constraints) : row.constraints_json
   const constraintNote =
     body.constraintNote !== undefined ? (body.constraintNote as string | null) : row.constraint_note
@@ -426,6 +474,9 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
     `UPDATE users SET name=?, email=?, role=?, active=?, constraints_json=?, constraint_note=?, snooze_until=? WHERE id=?`,
   ).run(name, email, role, active, constraints, constraintNote, snoozeUntil || null, req.params.id)
   if (body.password) {
+    if (String(body.password).length < 8) {
+      return res.status(400).json({ error: 'Salasanan oltava vähintään 8 merkkiä' })
+    }
     db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(
       bcrypt.hashSync(String(body.password), 10),
       req.params.id,
@@ -436,6 +487,145 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
     unknown
   >
   res.json({ user: publicUser(updated) })
+})
+
+// ——— Invites ———
+app.get('/api/invites', authMiddleware, requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT * FROM invites WHERE accepted_at IS NULL AND revoked_at IS NULL ORDER BY created_at DESC`,
+    )
+    .all() as Record<string, unknown>[]
+  const base = publicAppUrl(req)
+  res.json({
+    invites: rows.map((r) => publicInvite(r, `${base}/kutsu/${r.token}`)),
+  })
+})
+
+app.post('/api/invites', authMiddleware, requireAdmin, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const { name, email, role, constraints } = req.body as {
+    name?: string
+    email?: string
+    role?: 'admin' | 'member'
+    constraints?: string[]
+  }
+  if (!name?.trim() || !email?.trim()) {
+    return res.status(400).json({ error: 'Nimi ja sähköposti vaaditaan' })
+  }
+  const normalizedEmail = email.trim().toLowerCase()
+  const existingUser = db
+    .prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE')
+    .get(normalizedEmail)
+  if (existingUser) return res.status(400).json({ error: 'Käyttäjä on jo olemassa tällä sähköpostilla' })
+
+  const pending = db
+    .prepare(
+      `SELECT id FROM invites
+       WHERE email = ? COLLATE NOCASE AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
+    )
+    .get(normalizedEmail, new Date().toISOString())
+  if (pending) return res.status(400).json({ error: 'Tälle sähköpostille on jo avoin kutsu' })
+
+  const id = crypto.randomUUID()
+  const token = randomBytes(24).toString('hex')
+  const now = new Date()
+  const expires = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+  db.prepare(
+    `INSERT INTO invites (id, token, name, email, role, constraints_json, created_by_user_id, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    token,
+    name.trim(),
+    normalizedEmail,
+    role === 'admin' ? 'admin' : 'member',
+    JSON.stringify(Array.isArray(constraints) ? constraints : []),
+    user.id,
+    now.toISOString(),
+    expires.toISOString(),
+  )
+  const row = db.prepare('SELECT * FROM invites WHERE id = ?').get(id) as Record<string, unknown>
+  const inviteUrl = `${publicAppUrl(req)}/kutsu/${token}`
+  res.status(201).json({ invite: publicInvite(row, inviteUrl) })
+})
+
+app.delete('/api/invites/:id', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM invites WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Kutsua ei löydy' })
+  db.prepare(`UPDATE invites SET revoked_at = ? WHERE id = ?`).run(
+    new Date().toISOString(),
+    req.params.id,
+  )
+  res.json({ ok: true })
+})
+
+app.get('/api/invites/token/:token', (req, res) => {
+  const row = db.prepare('SELECT * FROM invites WHERE token = ?').get(req.params.token) as
+    | Record<string, unknown>
+    | undefined
+  if (!row || row.revoked_at) return res.status(404).json({ error: 'Kutsu ei ole voimassa' })
+  if (row.accepted_at) return res.status(400).json({ error: 'Kutsu on jo käytetty' })
+  if (new Date(String(row.expires_at)) < new Date()) {
+    return res.status(400).json({ error: 'Kutsu on vanhentunut' })
+  }
+  res.json({
+    invite: {
+      name: row.name,
+      email: row.email,
+      role: row.role,
+      constraints: parseConstraints(String(row.constraints_json ?? '[]')),
+      expiresAt: row.expires_at,
+    },
+  })
+})
+
+app.post('/api/invites/token/:token/accept', (req, res) => {
+  const row = db.prepare('SELECT * FROM invites WHERE token = ?').get(req.params.token) as
+    | Record<string, unknown>
+    | undefined
+  if (!row || row.revoked_at) return res.status(404).json({ error: 'Kutsu ei ole voimassa' })
+  if (row.accepted_at) return res.status(400).json({ error: 'Kutsu on jo käytetty' })
+  if (new Date(String(row.expires_at)) < new Date()) {
+    return res.status(400).json({ error: 'Kutsu on vanhentunut' })
+  }
+  const { password } = req.body as { password?: string }
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'Salasanan oltava vähintään 8 merkkiä' })
+  }
+  const email = String(row.email).toLowerCase()
+  const existing = db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').get(email)
+  if (existing) return res.status(400).json({ error: 'Käyttäjä on jo olemassa' })
+
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, created_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+  ).run(
+    id,
+    String(row.name),
+    email,
+    bcrypt.hashSync(password, 10),
+    row.role === 'admin' ? 'admin' : 'member',
+    String(row.constraints_json ?? '[]'),
+    now,
+  )
+  db.prepare(`UPDATE invites SET accepted_at = ? WHERE id = ?`).run(now, row.id)
+
+  const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Record<string, unknown>
+  const user = publicUser(userRow) as AuthUser & Record<string, unknown>
+  const jwt = signToken(user as AuthUser)
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https'
+  res.cookie('token', jwt, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  })
+  res.status(201).json({ token: jwt, user })
 })
 
 app.get('/api/catalog', authMiddleware, (_req, res) => {
