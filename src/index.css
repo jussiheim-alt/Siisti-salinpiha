@@ -1258,6 +1258,8 @@ select:focus {
   .page-hero.home-hero {
     border-radius: 1.35rem;
     margin-top: 0.35rem;
+    min-height: 300px;
+    background-position: center 42%;
   }
 }
 
