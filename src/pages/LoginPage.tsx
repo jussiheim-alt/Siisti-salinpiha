@@ -30,8 +30,8 @@ export function LoginPage() {
     <div className="login-shell">
       <div className="login-panel">
         <p className="brand-mark">Siisti salin piha</p>
-        <h1>Kirjaudu sisään</h1>
-        <p className="lede">Hallitse pihavuoroja, tehtäviä ja huomioita yhdessä paikassa.</p>
+        <h1>Kirjaudu</h1>
+        <p className="lede">Pihavuorot, tehtävät ja huomiot samassa näkymässä.</p>
         <form onSubmit={onSubmit} className="stack">
           <label>
             Sähköposti
