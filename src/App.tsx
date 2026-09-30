@@ -105,9 +105,12 @@ function Shell() {
   const cols = user.role === 'admin' ? 7 : 6
 
   return (
-    <div className="app-shell">
+    <div className="app-shell app-shell-bottom-nav">
+      <main className="app-main">
+        <Outlet />
+      </main>
       <nav
-        className="tabbar"
+        className="tabbar tabbar-bottom"
         aria-label="Päänavigaatio"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
@@ -149,9 +152,6 @@ function Shell() {
           Ulos
         </button>
       </nav>
-      <main className="app-main">
-        <Outlet />
-      </main>
       <ShiftChatFab />
     </div>
   )

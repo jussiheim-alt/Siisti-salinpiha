@@ -1,23 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* Cool Nordic utility — fresh, not brochure-cream */
-  --moss: #0f3d2e;
-  --moss-deep: #0a2920;
-  --lichen: #c5ddd2;
-  --mist: #eef4f1;
-  --birch: #f7faf8;
-  --resin: #0f766e;
-  --ink: #10241c;
-  --muted: #5d7268;
-  --line: rgba(16, 36, 28, 0.1);
+  --moss: #123d2f;
+  --moss-deep: #0b241c;
+  --lichen: #cfe0d7;
+  --mist: #edf2ef;
+  --birch: #f5f8f6;
+  --resin: #1f7a5c;
+  --ink: #12231c;
+  --muted: #667a70;
+  --line: rgba(18, 35, 28, 0.09);
   --danger: #b42318;
   --panel: #ffffff;
-  --radius: 1rem;
-  --radius-sm: 0.7rem;
+  --radius: 1.15rem;
+  --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --shadow-soft: 0 1px 2px rgba(16, 36, 28, 0.04), 0 8px 24px rgba(16, 36, 28, 0.05);
-  font-family: Sora, system-ui, sans-serif;
+  --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
+  --nav-h: 4.35rem;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
   line-height: 1.5;
@@ -47,9 +47,8 @@ body,
 body {
   background-color: var(--mist);
   background-image:
-    radial-gradient(ellipse 70% 45% at 100% -5%, rgba(15, 118, 110, 0.12), transparent 55%),
-    radial-gradient(ellipse 55% 40% at 0% 15%, rgba(15, 61, 46, 0.1), transparent 50%),
-    linear-gradient(180deg, #f4f8f6 0%, #eef4f1 48%, #e6efe9 100%);
+    radial-gradient(ellipse 90% 50% at 50% -20%, rgba(31, 122, 92, 0.14), transparent 55%),
+    linear-gradient(180deg, #f3f7f5 0%, #edf2ef 55%, #e7eeea 100%);
   background-attachment: scroll;
   width: 100%;
   overflow-x: clip;
@@ -95,12 +94,10 @@ a {
 @keyframes brand-in {
   from {
     opacity: 0;
-    letter-spacing: -0.08em;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
-    letter-spacing: -0.04em;
     transform: translateY(0);
   }
 }
@@ -108,7 +105,7 @@ a {
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -119,48 +116,56 @@ a {
 .app-shell {
   min-height: 100dvh;
   display: block;
-  padding-top: calc(3.5rem + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+}
+
+.app-shell-bottom-nav {
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
 }
 
 .app-main {
-  --page-pad-x: clamp(1rem, 4.5vw, 1.35rem);
-  padding: 0.85rem var(--page-pad-x) 1.5rem;
+  --page-pad-x: clamp(1rem, 4.5vw, 1.4rem);
+  padding: 0.75rem var(--page-pad-x) 1.5rem;
   max-width: min(720px, 100%);
   margin: 0 auto;
   width: 100%;
-  animation: fade-up 0.45s var(--ease) both;
   overflow-x: clip;
   box-sizing: border-box;
 }
 
 .tabbar {
   position: fixed;
-  top: 0;
   left: 0;
   right: 0;
   z-index: 40;
   display: grid;
-  gap: 0.1rem;
+  gap: 0.08rem;
   margin: 0 auto;
   width: 100%;
   max-width: 100%;
-  padding: calc(0.28rem + env(safe-area-inset-top)) 0.4rem 0.35rem;
-  background: rgba(247, 250, 248, 0.78);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  border-bottom: 1px solid rgba(16, 36, 28, 0.07);
   box-sizing: border-box;
   overflow-x: clip;
+}
+
+.tabbar-bottom {
+  top: auto;
+  bottom: 0;
+  padding: 0.4rem 0.35rem calc(0.4rem + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-top: 1px solid rgba(18, 35, 28, 0.08);
+  box-shadow: 0 -8px 28px rgba(11, 36, 28, 0.05);
 }
 
 .tabbar a,
 .tab-logout {
   display: grid;
   justify-items: center;
-  gap: 0.12rem;
+  gap: 0.18rem;
   text-align: center;
-  padding: 0.35rem 0.1rem 0.28rem;
-  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.08rem 0.3rem;
+  border-radius: 0.85rem;
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -173,22 +178,22 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 0.18s var(--ease), background 0.18s var(--ease);
+  transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.18s var(--ease);
 }
 
 .tabbar svg {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.2rem;
+  height: 1.2rem;
   stroke: currentColor;
   fill: none;
-  stroke-width: 1.75;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .tabbar a.active {
   color: var(--moss);
-  background: rgba(15, 61, 46, 0.08);
+  background: rgba(18, 61, 47, 0.08);
 }
 
 .tab-icon-wrap {
@@ -226,30 +231,30 @@ a {
 }
 
 .brand-mark {
-  font-family: Syne, sans-serif;
-  font-size: clamp(1.9rem, 6.8vw, 2.85rem);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: clamp(2rem, 7.2vw, 2.9rem);
   font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 0.98;
-  margin: 0 0 0.55rem;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  margin: 0 0 0.7rem;
   color: var(--moss-deep);
   overflow-wrap: anywhere;
-  max-width: 100%;
-  animation: brand-in 0.65s var(--ease) both;
+  max-width: 12ch;
+  animation: brand-in 0.7s var(--ease) both;
 }
 
 .page-hero {
   position: relative;
-  margin: 0 0 1rem;
+  margin: 0 0 1.1rem;
   padding: 0.15rem 0 0.3rem;
 }
 
 .page-hero.home-hero {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  min-height: 0;
-  padding: 1.15rem 0 1.25rem;
+  justify-content: flex-end;
+  min-height: min(52vw, 280px);
+  padding: 1.5rem 0 1.45rem;
 }
 
 .page-hero.home-hero::before {
@@ -262,43 +267,58 @@ a {
   max-width: none;
   height: auto;
   z-index: -1;
-  border-radius: 0 0 1.35rem 1.35rem;
+  border-radius: 0 0 1.6rem 1.6rem;
   background:
-    radial-gradient(ellipse 70% 55% at 85% 15%, rgba(15, 118, 110, 0.35), transparent 55%),
-    linear-gradient(155deg, #0a2920 0%, #0f3d2e 42%, #145c45 100%);
+    radial-gradient(ellipse 80% 70% at 90% 10%, rgba(61, 140, 110, 0.45), transparent 50%),
+    linear-gradient(160deg, #0b241c 0%, #123d2f 48%, #1a5640 100%);
   pointer-events: none;
 }
 
+.page-hero.home-hero::after {
+  content: '';
+  position: absolute;
+  inset: -0.75rem calc(-1 * var(--page-pad-x, 1rem)) 0;
+  z-index: -1;
+  border-radius: 0 0 1.6rem 1.6rem;
+  background:
+    linear-gradient(180deg, transparent 40%, rgba(11, 36, 28, 0.35) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath fill='none' stroke='white' stroke-opacity='0.06' stroke-width='1' d='M0 60h120M60 0v120'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 1;
+}
+
 .page-hero.home-hero .brand-mark {
-  color: #f3faf7;
-  animation: brand-in 0.7s var(--ease) 0.04s both;
+  color: #f7fcf9;
+  max-width: 11ch;
+  animation: brand-in 0.75s var(--ease) both;
 }
 
 .page-hero.home-hero h1,
 .page-hero.home-hero .lede {
-  color: #e7f3ed;
-  animation: fade-up 0.55s var(--ease) 0.1s both;
+  color: #e8f4ee;
+  animation: fade-up 0.6s var(--ease) 0.08s both;
 }
 
 .page-hero.home-hero .lede {
-  color: rgba(231, 243, 237, 0.78);
-  max-width: 30ch;
+  color: rgba(232, 244, 238, 0.78);
+  max-width: 28ch;
   margin-bottom: 0;
+  font-size: 0.98rem;
 }
 
 .page-hero.home-hero .hero-cta {
-  margin-top: 0.9rem;
-  animation: fade-up 0.55s var(--ease) 0.18s both;
+  margin-top: 1.05rem;
+  animation: fade-up 0.6s var(--ease) 0.16s both;
 }
 
 .page-hero h1,
 .login-panel h1,
 .section-title {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   font-weight: 700;
-  letter-spacing: -0.03em;
-  font-size: clamp(1.4rem, 4.5vw, 1.8rem);
-  margin: 0 0 0.3rem;
+  letter-spacing: -0.035em;
+  font-size: clamp(1.45rem, 4.6vw, 1.85rem);
+  margin: 0 0 0.35rem;
 }
 
 .page-hero.compact {
@@ -306,12 +326,14 @@ a {
 }
 
 .page-hero.compact .brand-mark {
-  font-size: 1.05rem;
-  letter-spacing: -0.03em;
-  margin-bottom: 0.3rem;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.35rem;
   color: var(--moss);
   animation: none;
   font-weight: 700;
+  max-width: none;
+  text-transform: none;
 }
 
 .lede {
@@ -324,8 +346,77 @@ a {
 
 .home-stack {
   display: grid;
-  gap: 0.7rem;
-  margin-top: 0.1rem;
+  gap: 0.85rem;
+  margin-top: 0.15rem;
+}
+
+.surface-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(18, 35, 28, 0.07);
+  border-radius: calc(var(--radius) + 0.1rem);
+  padding: 1rem 1.05rem;
+  box-shadow: var(--shadow-soft);
+  animation: fade-up 0.55s var(--ease) both;
+  min-width: 0;
+}
+
+.surface-card .weather-strip,
+.surface-card .notif-strip,
+.surface-card.home-shift {
+  border-top: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.quick-grid .kicker {
+  margin: 0 0 0.7rem;
+}
+
+.quick-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.quick-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #fbfcfb 0%, #f4f8f6 100%);
+  border: 1px solid rgba(18, 35, 28, 0.07);
+  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.quick-link:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--moss) 25%, var(--line));
+}
+
+.quick-link-text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.quick-link-text strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.quick-link-text span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.quick-link-action {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--moss);
+  letter-spacing: 0.02em;
 }
 
 .weather-strip {
@@ -366,7 +457,7 @@ a {
 }
 
 .weather-temp {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 1.85rem;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -397,13 +488,13 @@ a {
 
 .weather-days li {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.2rem;
   justify-items: start;
   min-width: 0;
-  padding: 0.45rem 0.35rem;
-  border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--birch) 78%, white);
-  border: 1px solid var(--line);
+  padding: 0.65rem 0.55rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f8f5 100%);
+  border: 1px solid rgba(18, 35, 28, 0.07);
 }
 
 .weather-day-label {
@@ -421,7 +512,7 @@ a {
 }
 
 .weather-day-temp {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   font-weight: 700;
   font-size: 0.98rem;
   letter-spacing: -0.02em;
@@ -601,7 +692,7 @@ a {
 }
 
 .notif-list strong {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -624,6 +715,12 @@ a {
   padding-top: 0.75rem;
 }
 
+.surface-card.home-shift {
+  background:
+    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(31, 122, 92, 0.1), transparent 50%),
+    #ffffff;
+}
+
 .home-shift .kicker {
   font-size: 0.7rem;
   font-weight: 700;
@@ -634,7 +731,7 @@ a {
 }
 
 .home-shift .week-line {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -690,7 +787,7 @@ a {
 }
 
 .notice-strip strong {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 1.05rem;
   letter-spacing: -0.02em;
 }
@@ -730,7 +827,7 @@ a {
 .panel h2,
 .task h3,
 .section-title {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   margin: 0 0 0.65rem;
   font-size: 1.28rem;
   letter-spacing: -0.02em;
@@ -802,9 +899,11 @@ select:focus {
 }
 
 .btn.primary.on-dark {
-  background: #f3faf7;
-  border-color: #f3faf7;
+  background: #ffffff;
+  border-color: #ffffff;
   color: var(--moss-deep);
+  font-weight: 700;
+  min-width: 12rem;
 }
 
 .btn.ghost {
@@ -1218,24 +1317,26 @@ select:focus {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 70% 45% at 80% 0%, rgba(15, 118, 110, 0.28), transparent 55%),
-    linear-gradient(165deg, #072820 0%, #0f3d2e 48%, #145c45 100%);
+    radial-gradient(ellipse 80% 50% at 85% 0%, rgba(61, 140, 110, 0.35), transparent 55%),
+    linear-gradient(165deg, #0b241c 0%, #123d2f 50%, #1a5640 100%);
 }
 
 .login-panel {
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
-  padding: 1.75rem 1.25rem 1.5rem;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 1.9rem 1.35rem 1.6rem;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
   animation: fade-up 0.55s var(--ease) both;
   box-sizing: border-box;
   min-width: 0;
 }
 
 .login-panel .brand-mark {
-  animation: brand-in 0.65s var(--ease) both;
+  max-width: 12ch;
+  animation: brand-in 0.7s var(--ease) both;
 }
 
 .checks {
@@ -1415,17 +1516,17 @@ select:focus {
 .chat-fab {
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  bottom: calc(var(--nav-h) + 0.75rem + env(safe-area-inset-bottom));
   z-index: 45;
-  width: 3.35rem;
-  height: 3.35rem;
+  width: 3.4rem;
+  height: 3.4rem;
   border: 0;
-  border-radius: 1rem;
+  border-radius: 1.05rem;
   background: var(--moss);
   color: #f3faf7;
   display: grid;
   place-items: center;
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 12px 28px rgba(11, 36, 28, 0.22);
   cursor: pointer;
   transition: transform 0.2s var(--ease), background 0.2s var(--ease);
 }
@@ -1517,7 +1618,7 @@ select:focus {
 }
 
 .chat-sheet-head strong {
-  font-family: Syne, sans-serif;
+  font-family: "Plus Jakarta Sans", sans-serif;
   font-size: 1.05rem;
   letter-spacing: -0.02em;
 }

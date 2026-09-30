@@ -5,6 +5,28 @@ import { useAuth } from '../auth'
 import { NotificationStrip } from '../components/NotificationStrip'
 import { WeatherStrip } from '../components/WeatherStrip'
 
+function QuickLink({
+  title,
+  body,
+  to,
+  action = 'Avaa',
+}: {
+  title: string
+  body: string
+  to: string
+  action?: string
+}) {
+  return (
+    <Link className="quick-link" to={to}>
+      <span className="quick-link-text">
+        <strong>{title}</strong>
+        <span>{body}</span>
+      </span>
+      <span className="quick-link-action">{action}</span>
+    </Link>
+  )
+}
+
 export function HomePage() {
   const { user } = useAuth()
   const [next, setNext] = useState<Pihavuoro | null>(null)
@@ -51,7 +73,7 @@ export function HomePage() {
   const firstName = user?.name.split(' ')[0]
 
   return (
-    <div className="page">
+    <div className="page home-page">
       <header className="page-hero home-hero">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>{next ? 'Seuraava vuorosi odottaa' : `Hei, ${firstName}`}</h1>
@@ -80,12 +102,18 @@ export function HomePage() {
       {error && <p className="error">{error}</p>}
 
       <div className="home-stack">
-        <NotificationStrip items={notifications} unreadCount={unreadNotifications} />
+        <div className="surface-card" style={{ animationDelay: '0.05s' }}>
+          <NotificationStrip items={notifications} unreadCount={unreadNotifications} />
+        </div>
 
-        {weather && <WeatherStrip weather={weather} />}
+        {weather && (
+          <div className="surface-card" style={{ animationDelay: '0.1s' }}>
+            <WeatherStrip weather={weather} />
+          </div>
+        )}
 
         {next && (
-          <section className="home-shift">
+          <section className="surface-card home-shift" style={{ animationDelay: '0.14s' }}>
             <p className="kicker">Pihavuoro</p>
             <p className="week-line">
               {next.weekStart} – {next.weekEnd}
@@ -109,85 +137,61 @@ export function HomePage() {
             )}
             {myAssignment && (
               <p className="muted" style={{ marginTop: '0.65rem' }}>
-                Vuorokeskustelu aukeaa chat-painikkeesta oikeassa alakulmassa.
+                Vuorokeskustelu aukeaa chat-painikkeesta.
               </p>
             )}
           </section>
         )}
 
-        <section className="notice-strip">
-          <div>
-            <strong>Esteviikot</strong>
-            <p>
-              {blockedCount === 0
-                ? 'Ei merkittyjä esteitä seuraaville viikoille'
-                : `${blockedCount} estettyä viikkoa merkitty`}
-            </p>
+        <section className="surface-card quick-grid" style={{ animationDelay: '0.18s' }}>
+          <p className="kicker">Pikavalinnat</p>
+          <div className="quick-list">
+            <QuickLink
+              title="Esteviikot"
+              body={
+                blockedCount === 0
+                  ? 'Ei merkittyjä esteitä'
+                  : `${blockedCount} estettyä viikkoa`
+              }
+              to="/esteet"
+              action="Muokkaa"
+            />
+            <QuickLink
+              title="Vuoronvaihdot"
+              body={
+                swapsAvailable === 0 && myOpenSwaps === 0
+                  ? 'Ei avoimia vaihtoja'
+                  : [
+                      swapsAvailable ? `${swapsAvailable} tarjolla` : null,
+                      myOpenSwaps ? `${myOpenSwaps} omaa` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+              }
+              to="/vaihdot"
+            />
+            <QuickLink
+              title="Hub-huolto"
+              body={
+                hub
+                  ? hub.openCount === 0
+                    ? 'Kaikki tarkastukset tehty'
+                    : `${hub.openCount} avointa · ${hub.dueCount} ajankohtaista`
+                  : 'Vuositarkastukset'
+              }
+              to="/huolto"
+            />
+            <QuickLink
+              title="Apukutsut"
+              body={openExtras === 0 ? 'Ei avoimia apukutsuja' : `${openExtras} avointa`}
+              to="/apukutsut"
+            />
+            <QuickLink
+              title="Huomiot"
+              body={openNotices === 0 ? 'Ei avoimia huomioita' : `${openNotices} avointa`}
+              to="/huomiot"
+            />
           </div>
-          <Link className="btn ghost small" to="/esteet">
-            Muokkaa
-          </Link>
-        </section>
-
-        <section className="notice-strip">
-          <div>
-            <strong>Vuoronvaihdot</strong>
-            <p>
-              {swapsAvailable === 0 && myOpenSwaps === 0
-                ? 'Ei avoimia vaihtoja'
-                : [
-                    swapsAvailable ? `${swapsAvailable} tarjolla` : null,
-                    myOpenSwaps ? `${myOpenSwaps} omaa tarjousta` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-            </p>
-          </div>
-          <Link className="btn ghost small" to="/vaihdot">
-            Avaa
-          </Link>
-        </section>
-
-        <section className="notice-strip">
-          <div>
-            <strong>Hub-huolto</strong>
-            <p>
-              {hub
-                ? hub.openCount === 0
-                  ? 'Kaikki vuositarkastukset tehty'
-                  : `${hub.openCount} avointa · ${hub.dueCount} ajankohtaista`
-                : 'Vuositarkastukset'}
-            </p>
-          </div>
-          <Link className="btn ghost small" to="/huolto">
-            Avaa
-          </Link>
-        </section>
-
-        <section className="notice-strip">
-          <div>
-            <strong>Apukutsut</strong>
-            <p>
-              {openExtras === 0 ? 'Ei avoimia apukutsuja' : `${openExtras} avointa apukutsua`}
-            </p>
-          </div>
-          <Link className="btn ghost small" to="/apukutsut">
-            Avaa
-          </Link>
-        </section>
-
-        <section className="notice-strip">
-          <div>
-            <strong>Huomiot</strong>
-            <p>
-              {openNotices === 0
-                ? 'Ei avoimia huomioita'
-                : `${openNotices} avointa huomioita`}
-            </p>
-          </div>
-          <Link className="btn ghost small" to="/huomiot">
-            Avaa
-          </Link>
         </section>
       </div>
     </div>
