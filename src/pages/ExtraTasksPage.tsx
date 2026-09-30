@@ -103,18 +103,37 @@ export function ExtraTasksPage() {
       {error && <p className="error">{error}</p>}
 
       {pushSupported && (
-        <section className="notice-strip">
-          <div>
-            <strong>Push-ilmoitukset</strong>
-            <p>
-              {pushOn
-                ? 'Päällä — uudet apukutsut tulevat myös sovelluksen ulkopuolelle'
-                : 'Pois — ota käyttöön, jotta et missaa kutsuja'}
-            </p>
-            {pushMsg && <p className="hint">{pushMsg}</p>}
+        <section className={`surface-card push-card ${pushOn ? 'is-on' : ''}`}>
+          <div className="push-card-main">
+            <span className="push-card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3.5c-2.8 0-5 2.1-5 4.8v2.2c0 .7-.2 1.4-.6 2L5.2 14a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6l-1.2-1.5c-.4-.6-.6-1.3-.6-2V8.3c0-2.7-2.2-4.8-5-4.8Z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M10 17.2a2 2 0 0 0 4 0"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <div className="push-card-copy">
+              <p className="kicker">Push-ilmoitukset</p>
+              <strong>{pushOn ? 'Päällä' : 'Pois päältä'}</strong>
+              <p>
+                {pushOn
+                  ? 'Uudet apukutsut tulevat myös sovelluksen ulkopuolelle.'
+                  : 'Ota käyttöön, jotta et missaa kutsuja.'}
+              </p>
+              {pushMsg && <p className="hint">{pushMsg}</p>}
+            </div>
           </div>
           <button
-            className="btn ghost small"
+            className={`btn small ${pushOn ? '' : 'primary'}`}
             type="button"
             disabled={pushBusy}
             onClick={() => void togglePush()}
@@ -125,11 +144,35 @@ export function ExtraTasksPage() {
       )}
 
       {!pushSupported && (
-        <p className="hint">
-          {import.meta.env.VITE_DATA_MODE === 'local'
-            ? 'Push-ilmoitukset eivät ole käytössä tässä demossa — uudet kutsut näkyvät Ilmo-välilehdellä.'
-            : 'Push-ilmoitukset vaativat modernin selaimen. iPhonella: Lisää Koti-valikkoon, avaa siitä ja salli ilmoitukset.'}
-        </p>
+        <section className="surface-card push-card is-muted">
+          <div className="push-card-main">
+            <span className="push-card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3.5c-2.8 0-5 2.1-5 4.8v2.2c0 .7-.2 1.4-.6 2L5.2 14a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6l-1.2-1.5c-.4-.6-.6-1.3-.6-2V8.3c0-2.7-2.2-4.8-5-4.8Z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M10 17.2a2 2 0 0 0 4 0"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <div className="push-card-copy">
+              <p className="kicker">Push-ilmoitukset</p>
+              <strong>Ei käytössä tällä laitteella</strong>
+              <p>
+                {import.meta.env.VITE_DATA_MODE === 'local'
+                  ? 'Demossa uudet kutsut näkyvät Ilmo-välilehdellä.'
+                  : 'Vaativat modernin selaimen. iPhonella: Lisää Koti-valikkoon, avaa siitä ja salli ilmoitukset.'}
+              </p>
+            </div>
+          </div>
+        </section>
       )}
 
       {canCreate && (

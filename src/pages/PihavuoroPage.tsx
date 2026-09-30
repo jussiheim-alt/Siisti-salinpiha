@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api, type Pihavuoro, type ShiftMessage, type SwapOffer, type User } from '../api'
+import {
+  api,
+  type Pihavuoro,
+  type SwapOffer,
+  type TaskTemplate,
+  type User,
+} from '../api'
 import { useAuth } from '../auth'
 
 export function PihavuoroPage() {
@@ -8,6 +14,10 @@ export function PihavuoroPage() {
   const { user } = useAuth()
   const [p, setP] = useState<Pihavuoro | null>(null)
   const [users, setUsers] = useState<User[]>([])
+  const [catalog, setCatalog] = useState<TaskTemplate[]>([])
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
+  const [editingTasks, setEditingTasks] = useState(false)
+  const [savingTasks, setSavingTasks] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -18,10 +28,6 @@ export function PihavuoroPage() {
   const [swaps, setSwaps] = useState<SwapOffer[]>([])
   const [swapMessage, setSwapMessage] = useState('')
   const [swapTarget, setSwapTarget] = useState('')
-  const [messages, setMessages] = useState<ShiftMessage[]>([])
-  const [chatBody, setChatBody] = useState('')
-  const [chatError, setChatError] = useState('')
-  const [sendingChat, setSendingChat] = useState(false)
 
   async function load() {
     const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}`)
@@ -30,6 +36,9 @@ export function PihavuoroPage() {
     setLeadId(lead?.userId || '')
     setHelperIds(
       data.pihavuoro.assignments.filter((a) => a.role === 'helper').map((a) => a.userId),
+    )
+    setSelectedTemplateIds(
+      data.pihavuoro.tasks.map((t) => t.templateId).filter((x): x is string => Boolean(x)),
     )
   }
 
@@ -55,6 +64,9 @@ export function PihavuoroPage() {
     if (user?.role !== 'admin') return
     api<{ users: User[] }>('/api/users')
       .then((d) => setUsers(d.users.filter((u) => u.active)))
+      .catch(() => undefined)
+    api<{ templates: TaskTemplate[] }>('/api/catalog')
+      .then((d) => setCatalog(Array.isArray(d.templates) ? d.templates : []))
       .catch(() => undefined)
   }, [user?.role])
 
@@ -126,6 +138,47 @@ export function PihavuoroPage() {
       setP(data.pihavuoro)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Julkaisu epäonnistui')
+    }
+  }
+
+  const seasonCatalog = useMemo(() => {
+    if (!p) return []
+    return catalog
+      .filter((t) => t.season === p.season || t.season === 'all')
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+  }, [catalog, p])
+
+  function toggleTemplate(templateId: string) {
+    setSelectedTemplateIds((prev) => {
+      if (prev.includes(templateId)) return prev.filter((x) => x !== templateId)
+      return [...prev, templateId]
+    })
+  }
+
+  async function saveWeekTasks() {
+    if (!id || !p) return
+    if (selectedTemplateIds.length === 0) {
+      setError('Valitse ainakin yksi huoltotehtävä')
+      return
+    }
+    setSavingTasks(true)
+    setError('')
+    setInfo('')
+    try {
+      const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}/tasks`, {
+        method: 'PUT',
+        json: { templateIds: selectedTemplateIds },
+      })
+      setP(data.pihavuoro)
+      setSelectedTemplateIds(
+        data.pihavuoro.tasks.map((t) => t.templateId).filter((x): x is string => Boolean(x)),
+      )
+      setEditingTasks(false)
+      setInfo('Viikon huoltotehtävät tallennettu.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Tehtävien tallennus epäonnistui')
+    } finally {
+      setSavingTasks(false)
     }
   }
 
@@ -510,6 +563,74 @@ export function PihavuoroPage() {
         </section>
       )}
 
+      {isAdmin && (
+        <section className="panel week-task-picker">
+          <div className="week-card-top">
+            <h2>Huoltotehtävät tälle viikolle</h2>
+            <button
+              className="btn small"
+              type="button"
+              onClick={() => {
+                if (editingTasks) {
+                  setSelectedTemplateIds(
+                    p.tasks.map((t) => t.templateId).filter((x): x is string => Boolean(x)),
+                  )
+                }
+                setEditingTasks((v) => !v)
+              }}
+            >
+              {editingTasks ? 'Peru' : 'Valitse'}
+            </button>
+          </div>
+          {!editingTasks ? (
+            <p className="hint" style={{ margin: 0 }}>
+              Valitse katalogista vain ne tehtävät, jotka kuuluvat tälle viikolle. Jäsenet kuittaavat
+              kortit tehdyksi tai ei tarvetta.
+            </p>
+          ) : (
+            <>
+              <p className="hint">
+                Viikoittaiset on valmiiksi merkitty. Lisää tarvittaessa tilanteen mukaiset työt.
+              </p>
+              <ul className="template-pick-list">
+                {seasonCatalog.map((t) => {
+                  const checked = selectedTemplateIds.includes(t.id)
+                  return (
+                    <li key={t.id}>
+                      <label className={`template-pick ${checked ? 'is-on' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleTemplate(t.id)}
+                        />
+                        <span className="template-pick-body">
+                          <strong>{t.title}</strong>
+                          <span>
+                            {t.cadence === 'every_week' ? 'Joka viikko' : 'Tarpeen mukaan'}
+                            {' · '}
+                            {t.effort === 'heavy' ? 'raskas' : 'kevyt'}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="row-actions">
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={savingTasks || selectedTemplateIds.length === 0}
+                  onClick={() => void saveWeekTasks()}
+                >
+                  {savingTasks ? 'Tallennetaan…' : 'Tallenna viikon tehtävät'}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
       <section className="panel">
         <h2>Tehtävät ({openCount} auki)</h2>
         <div className="task-list">
@@ -518,10 +639,10 @@ export function PihavuoroPage() {
               Boolean(myAssignment) &&
               (isLead || t.assigneeUserId === user?.id || !t.assigneeUserId || isAdmin)
             return (
-              <article key={t.id} className={`task ${t.status}`}>
+              <article key={t.id} className={`task task-card ${t.status}`}>
                 <div className="task-head">
                   <h3>{t.title}</h3>
-                  <span className="pill">
+                  <span className={`pill status-${t.status === 'open' ? 'published' : t.status === 'done' ? 'done' : 'draft'}`}>
                     {t.status === 'open' ? 'Avoin' : t.status === 'done' ? 'Tehty' : 'Ei tarvetta'}
                   </span>
                 </div>
@@ -554,26 +675,29 @@ export function PihavuoroPage() {
                   </label>
                 )}
                 {t.status === 'open' && canOwn && (
-                  <div className="row-actions">
+                  <div className="row-actions task-ack">
                     <button
                       className="btn primary small"
                       disabled={busyId === t.id}
                       onClick={() => void complete(t.id, 'done')}
                     >
-                      Kuittaa tehdyksi
+                      Tehty
                     </button>
                     <button
                       className="btn small"
                       disabled={busyId === t.id}
                       onClick={() => void complete(t.id, 'skipped')}
                     >
-                      Ei tarvetta
+                      Ei tehty
                     </button>
                   </div>
                 )}
               </article>
             )
           })}
+          {!p.tasks.length && (
+            <p className="muted">Ei huoltotehtäviä tälle viikolle vielä.</p>
+          )}
         </div>
       </section>
     </div>

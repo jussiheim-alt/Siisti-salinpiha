@@ -191,8 +191,31 @@ function hydratePihavuoro(row: Record<string, unknown>) {
   }
 }
 
-function createTasksForPihavuoro(pihavuoroId: string, season: 'talvi' | 'sulankausi', assignments: { userId: string; role: string }[]) {
-  const templates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+function defaultTemplateIdsForSeason(season: 'talvi' | 'sulankausi'): string[] {
+  return TASK_CATALOG_V1.filter(
+    (t) => (t.season === season || t.season === 'all') && t.cadence === 'every_week',
+  ).map((t) => t.id)
+}
+
+function resolveTemplatesForSeason(
+  season: 'talvi' | 'sulankausi',
+  templateIds?: string[] | null,
+) {
+  const seasonTemplates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+  if (!templateIds || templateIds.length === 0) {
+    return seasonTemplates.filter((t) => t.cadence === 'every_week')
+  }
+  const wanted = new Set(templateIds)
+  return seasonTemplates.filter((t) => wanted.has(t.id)).sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+function createTasksForPihavuoro(
+  pihavuoroId: string,
+  season: 'talvi' | 'sulankausi',
+  assignments: { userId: string; role: string }[],
+  templateIds?: string[] | null,
+) {
+  const templates = resolveTemplatesForSeason(season, templateIds)
   const lead = assignments.find((a) => a.role === 'lead')
   const helpers = assignments.filter((a) => a.role === 'helper')
   const insert = db.prepare(
@@ -869,7 +892,10 @@ app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
       { userId: leadId!, role: 'lead' },
       ...helperIds.map((userId) => ({ userId, role: 'helper' })),
     ]
-    createTasksForPihavuoro(id, season, assignments)
+    const templateIds = Array.isArray(req.body.templateIds)
+      ? (req.body.templateIds as unknown[]).map(String)
+      : defaultTemplateIdsForSeason(season)
+    createTasksForPihavuoro(id, season, assignments, templateIds)
   })
   tx()
 
@@ -898,6 +924,18 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
     if (!leadId || !helperIds || helperIds.length < 3 || helperIds.length > 5) {
       return res.status(400).json({ error: 'Kokoonpano: 1 vastuu + 3–5 avustajaa' })
     }
+    const existingTemplateIds = (
+      db
+        .prepare('SELECT DISTINCT template_id FROM shift_tasks WHERE pihavuoro_id = ?')
+        .all(req.params.id) as { template_id: string }[]
+    )
+      .map((r) => r.template_id)
+      .filter(Boolean)
+    const templateIds = Array.isArray(req.body.templateIds)
+      ? (req.body.templateIds as unknown[]).map(String)
+      : existingTemplateIds.length
+        ? existingTemplateIds
+        : defaultTemplateIdsForSeason(season as 'talvi' | 'sulankausi')
     const tx = db.transaction(() => {
       db.prepare('DELETE FROM assignments WHERE pihavuoro_id = ?').run(req.params.id)
       db.prepare('DELETE FROM shift_tasks WHERE pihavuoro_id = ?').run(req.params.id)
@@ -909,13 +947,133 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
           `INSERT INTO assignments (id, pihavuoro_id, user_id, role) VALUES (?, ?, ?, 'helper')`,
         ).run(crypto.randomUUID(), req.params.id, hid)
       }
-      createTasksForPihavuoro(String(req.params.id), season as 'talvi' | 'sulankausi', [
-        { userId: leadId, role: 'lead' },
-        ...helperIds.map((userId) => ({ userId, role: 'helper' })),
-      ])
+      createTasksForPihavuoro(
+        String(req.params.id),
+        season as 'talvi' | 'sulankausi',
+        [
+          { userId: leadId, role: 'lead' },
+          ...helperIds.map((userId) => ({ userId, role: 'helper' })),
+        ],
+        templateIds,
+      )
     })
     tx()
   }
+
+  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ pihavuoro: hydratePihavuoro(updated) })
+})
+
+/** Admin: sync which catalog tasks belong to this week (preserves done/skipped when possible). */
+app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  if (!Array.isArray(req.body.templateIds)) {
+    return res.status(400).json({ error: 'templateIds vaaditaan' })
+  }
+  const season = row.season as 'talvi' | 'sulankausi'
+  const templateIds = (req.body.templateIds as unknown[]).map(String)
+  const templates = resolveTemplatesForSeason(season, templateIds)
+  if (!templates.length) {
+    return res.status(400).json({ error: 'Valitse ainakin yksi huoltotehtävä' })
+  }
+
+  const assignments = (
+    db
+      .prepare('SELECT user_id as userId, role FROM assignments WHERE pihavuoro_id = ?')
+      .all(req.params.id) as { userId: string; role: string }[]
+  )
+
+  const existing = db
+    .prepare(
+      `SELECT id, template_id, status, skip_reason, done_by_user_id, done_at, assignee_user_id
+       FROM shift_tasks WHERE pihavuoro_id = ?`,
+    )
+    .all(req.params.id) as {
+    id: string
+    template_id: string
+    status: string
+    skip_reason: string | null
+    done_by_user_id: string | null
+    done_at: string | null
+    assignee_user_id: string | null
+  }[]
+
+  const keepByTemplate = new Map(existing.map((t) => [t.template_id, t]))
+  const wanted = new Set(templates.map((t) => t.id))
+
+  const lead = assignments.find((a) => a.role === 'lead')
+  const helpers = assignments.filter((a) => a.role === 'helper')
+  const insert = db.prepare(
+    `INSERT INTO shift_tasks (id, pihavuoro_id, template_id, title, instructions, effort, assignee_user_id, status, sort_order, skip_reason, done_by_user_id, done_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+
+  const tx = db.transaction(() => {
+    for (const old of existing) {
+      if (!wanted.has(old.template_id)) {
+        db.prepare('DELETE FROM shift_tasks WHERE id = ?').run(old.id)
+      }
+    }
+
+    let helperCursor = 0
+    let allCursor = 0
+    for (const t of templates) {
+      const prev = keepByTemplate.get(t.id)
+      if (prev) {
+        db.prepare('UPDATE shift_tasks SET title=?, instructions=?, effort=?, sort_order=? WHERE id=?').run(
+          t.title,
+          t.instructions,
+          t.effort,
+          t.sortOrder,
+          prev.id,
+        )
+        continue
+      }
+
+      let assignee: string | null = null
+      if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
+      else if (t.defaultAssignee === 'helpers' || t.defaultAssignee === 'all') {
+        const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
+        const eligible = pool.filter((h) => {
+          const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(h.userId) as
+            | { constraints_json: string }
+            | undefined
+          const c = parseConstraints(u?.constraints_json ?? '[]')
+          if (t.effort === 'heavy' && c.includes('no_heavy')) return false
+          return true
+        })
+        if (eligible.length) {
+          const cursor = t.defaultAssignee === 'all' ? allCursor : helperCursor
+          assignee = eligible[cursor % eligible.length]!.userId
+          if (t.defaultAssignee === 'all') allCursor += 1
+          else helperCursor += 1
+        } else {
+          assignee = lead?.userId ?? helpers[0]?.userId ?? null
+        }
+      }
+      insert.run(
+        crypto.randomUUID(),
+        req.params.id,
+        t.id,
+        t.title,
+        t.instructions,
+        t.effort,
+        assignee,
+        'open',
+        t.sortOrder,
+        null,
+        null,
+        null,
+      )
+    }
+  })
+  tx()
 
   const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as Record<
     string,

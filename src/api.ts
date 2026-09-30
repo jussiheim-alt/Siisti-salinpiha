@@ -99,6 +99,17 @@ export type ShiftTask = {
   doneAt?: string | null
 }
 
+export type TaskTemplate = {
+  id: string
+  title: string
+  instructions: string
+  season: 'talvi' | 'sulankausi' | 'all'
+  cadence: 'every_week' | 'as_needed'
+  defaultAssignee: 'lead' | 'helpers' | 'all'
+  effort: 'light' | 'heavy'
+  sortOrder: number
+}
+
 export type Pihavuoro = {
   id: string
   weekStart: string
