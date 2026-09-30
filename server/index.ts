@@ -1983,11 +1983,30 @@ app.post('/api/hub/:id/photo', authMiddleware, upload.single('photo'), (req, res
   res.json({ inspection: insp })
 })
 
-// Production static
+// Production static — hashed assets long-cache; SW/HTML always revalidate (PWA updates)
 const dist = path.join(root, 'dist')
 if (fs.existsSync(dist)) {
-  app.use(express.static(dist))
+  app.use(
+    express.static(dist, {
+      setHeaders(res, filePath) {
+        const base = path.basename(filePath)
+        if (
+          base === 'sw.js' ||
+          base === 'index.html' ||
+          base === 'manifest.webmanifest' ||
+          base.endsWith('.webmanifest')
+        ) {
+          res.setHeader('Cache-Control', 'no-cache')
+          return
+        }
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        }
+      },
+    }),
+  )
   app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache')
     res.sendFile(path.join(dist, 'index.html'))
   })
 }

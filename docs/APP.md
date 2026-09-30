@@ -42,4 +42,4 @@ npm run build && npm start   # palvelee dist + API :8787
 - Katalogi v1 + kuittaukset
 - Huomiot + kuva (+ ilmoitus), apukutsut, sää/CAP, ilmoituskeskus
 - Hub-vuositarkastukset (muokkaus: admin / viikon lead)
-- PWA
+- PWA (autoUpdate: uusi deploy päivittyy kotivalikon sovellukseen ilman uudelleenasennusta)

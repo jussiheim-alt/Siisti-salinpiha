@@ -52,6 +52,14 @@ Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 - Varmuuskopioi ajoittain `siisti-piha.sqlite` (Render shell / disk backup).
 - Vaihda admin-salasana heti jos käytit väliaikaista.
 
+### PWA-päivitykset (kotivalikko)
+
+Kun pushaat uuden version ja Render deployaa, käyttäjien **ei tarvitse poistaa** sovellusta kotivalikosta.
+
+- Uusi service worker aktivoituu automaattisesti (`autoUpdate` + `skipWaiting`)
+- Sovellus tarkistaa päivitykset avattaessa / fokusuksessa ja lataa uuden buildin
+- Riittää että käyttäjä avaa sovelluksen uudelleen (tai pitää sen auki hetken verkossa)
+
 ---
 
 ## Netlify Drop (vain demoon, selainkohtainen data)
