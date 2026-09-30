@@ -200,14 +200,49 @@ function saveDb(db: Db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db))
 }
 
+async function ensureDemoMembers(db: Db, passwordHash: string) {
+  const demoMembers = [
+    'Anna Korhonen',
+    'Mikko Virtanen',
+    'Liisa Mäkinen',
+    'Pekka Nieminen',
+    'Sari Laine',
+  ]
+  const now = new Date().toISOString()
+  let added = false
+  for (const name of demoMembers) {
+    if (db.users.some((u) => u.name === name)) continue
+    const slug = name
+      .toLowerCase()
+      .replace(/ä/g, 'a')
+      .replace(/ö/g, 'o')
+      .replace(/\s+/g, '.')
+    db.users.push({
+      id: uid(),
+      name,
+      email: `${slug}@example.com`,
+      passwordHash,
+      role: 'member',
+      active: true,
+      constraints: [],
+      createdAt: now,
+    })
+    added = true
+  }
+  if (added) saveDb(db)
+}
+
 async function ensureSeed(db: Db) {
   if (!db.invites) db.invites = []
-  if (db.users.length) return db
-  const now = new Date().toISOString()
-  // Selaintila: vain oikeat ylläpitäjät. Salasana vaihdetaan tuotannossa env/kutsuilla.
   const viteEnv = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env
   const localPass = viteEnv?.VITE_LOCAL_ADMIN_PASSWORD || 'vaihda-tama-8'
   const adminHash = await hashPassword(localPass)
+  if (db.users.length) {
+    await ensureDemoMembers(db, adminHash)
+    return db
+  }
+  const now = new Date().toISOString()
+  // Selaintila: vain oikeat ylläpitäjät. Salasana vaihdetaan tuotannossa env/kutsuilla.
   db.users = [
     {
       id: uid(),
@@ -234,6 +269,7 @@ async function ensureSeed(db: Db) {
       createdAt: now,
     })
   }
+  await ensureDemoMembers(db, adminHash)
 
   const year = new Date().getFullYear()
   db.hub = [
