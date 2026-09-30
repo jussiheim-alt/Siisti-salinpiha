@@ -61,7 +61,7 @@ export function InviteAcceptPage() {
   return (
     <div className="login-shell">
       <div className="login-panel">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Liity mukaan</h1>
         {invite ? (
           <>

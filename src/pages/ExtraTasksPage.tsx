@@ -95,7 +95,7 @@ export function ExtraTasksPage() {
   return (
     <div className="page">
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Apukutsut</h1>
         <p className="lede">Yllättävä tarve — ilmoittaudu, kun minimi täyttyy tehtävä aktivoituu.</p>
       </header>

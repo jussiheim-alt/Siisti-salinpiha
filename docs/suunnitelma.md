@@ -1,4 +1,4 @@
-# Siisti piha — lukittu kokonaisuussuunnitelma
+# Siisti salin piha — lukittu kokonaisuussuunnitelma
 
 **Lukittu:** 2026-09-27  
 Toteutus näillä rajauksilla. Muutokset = uusi versio / erillinen päätös.
@@ -9,7 +9,7 @@ Toteutus näillä rajauksilla. Muutokset = uusi versio / erillinen päätös.
 
 | | |
 |--|--|
-| Sovellus | **Siisti piha** |
+| Sovellus | **Siisti salin piha** |
 | Vuoro | **Pihavuoro** (ma–su) |
 | Käyttäjät | ≥2 ylläpitäjää, ~20 jäsentä |
 | Kokoonpano | 1 vastuuhenkilö + 3–5 avustajaa |

@@ -1,4 +1,4 @@
-# Siisti piha — julkaisu
+# Siisti salin piha — julkaisu
 
 ## Pysyvä käyttö Renderissä (suositus)
 

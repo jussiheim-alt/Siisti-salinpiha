@@ -261,7 +261,7 @@ async function ensureSeed(db: Db) {
     db.notifications.push({
       id: uid(),
       userId: u.id,
-      title: 'Tervetuloa Siisti pihaan',
+      title: 'Tervetuloa Siisti salin pihaan',
       body: 'Täältä näet ilmoitukset vuorosta, huomioista ja apukutsuista.',
       link: '/',
       kind: 'general',

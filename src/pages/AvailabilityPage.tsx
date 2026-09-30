@@ -95,7 +95,7 @@ export function AvailabilityPage() {
         ← Etusivu
       </Link>
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Esteviikot</h1>
         <p className="lede">
           Merkitse viikot, jolloin et voi olla Pihavuorossa. Suositus ohittaa nämä viikot.
