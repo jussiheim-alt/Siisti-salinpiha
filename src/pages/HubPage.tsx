@@ -42,7 +42,7 @@ export function HubPage() {
   return (
     <div className="page">
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Hub-huolto</h1>
         <p className="lede">
           Vuosittaiset tarkastukset

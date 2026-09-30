@@ -14,8 +14,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Siisti piha',
-        short_name: 'Siisti piha',
+        name: 'Siisti salin piha',
+        short_name: 'Salin piha',
         description: 'Pihavuorot ja pihanhoito',
         theme_color: '#1a3c2e',
         background_color: '#eef3ea',

@@ -68,7 +68,7 @@ export function NotificationsPage() {
   return (
     <div className="page">
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Ilmoitukset</h1>
         <p className="lede">
           {unreadCount === 0

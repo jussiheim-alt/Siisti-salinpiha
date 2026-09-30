@@ -1,4 +1,4 @@
-# Siisti piha
+# Siisti salin piha
 
 Pihavuorot, tehtävät ja huomiot — Vääksy.
 

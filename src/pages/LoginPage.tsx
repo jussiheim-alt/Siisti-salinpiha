@@ -29,7 +29,7 @@ export function LoginPage() {
   return (
     <div className="login-shell">
       <div className="login-panel">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Tervetuloa</h1>
         <p className="lede">Pihavuorot, tehtävät ja huomiot samassa paikassa.</p>
         <form onSubmit={onSubmit} className="stack">

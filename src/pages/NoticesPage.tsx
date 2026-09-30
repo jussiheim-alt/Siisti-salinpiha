@@ -58,7 +58,7 @@ export function NoticesPage() {
   return (
     <div className="page">
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Huomiot</h1>
         <p className="lede">Ilmoita viat ja havainnot — kuva mukaan.</p>
       </header>

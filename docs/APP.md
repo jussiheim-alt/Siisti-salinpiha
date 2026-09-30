@@ -1,4 +1,4 @@
-# Siisti piha
+# Siisti salin piha
 
 Pihavuorojen hallinta: viikkovuorot, tehtävät, kuittaukset, huomiot ja käytettävyysrajoitukset.
 

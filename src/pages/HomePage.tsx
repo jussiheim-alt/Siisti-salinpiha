@@ -53,7 +53,7 @@ export function HomePage() {
   return (
     <div className="page">
       <header className="page-hero home-hero">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>{next ? 'Seuraava vuorosi odottaa' : `Hei, ${firstName}`}</h1>
         <p className="lede">
           {next

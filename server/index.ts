@@ -2202,6 +2202,6 @@ if (fs.existsSync(dist)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Siisti piha API http://localhost:${PORT}`)
+  console.log(`Siisti salin piha API http://localhost:${PORT}`)
   startWeatherAlertScheduler()
 })

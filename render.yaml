@@ -1,4 +1,4 @@
-# Persistent Render deploy for Siisti piha (SQLite on disk).
+# Persistent Render deploy for Siisti salin piha (SQLite on disk).
 # Free tier has no persistent disk — use at least Starter.
 services:
   - type: web
