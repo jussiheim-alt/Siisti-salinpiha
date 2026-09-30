@@ -16,9 +16,14 @@ npm run build && npm start   # palvelee dist + API :8787
 
 | Muuttuja | Tuotanto | Kuvaus |
 |----------|----------|--------|
-| `JWT_SECRET` | suositeltu | Istunnot; jos puuttuu, luodaan `data/jwt-secret.txt` |
-| `SEED_DEMO` | `0` / pois | `1` = luo demokäyttäjät tyhjään kantaan |
-| `PORT` | valinnainen | Oletus `8787` |
+| `JWT_SECRET` | pakollinen | Istunnot; jos puuttuu, luodaan `$DATA_DIR/jwt-secret.txt` |
+| `DATA_DIR` | Render: `/var/data` | SQLite + VAPID; oletus `./data` |
+| `UPLOADS_DIR` | valinnainen | Kuvat; oletus `$DATA_DIR/uploads` tai `./uploads` |
+| `ADMIN_EMAIL` | suositeltu | Luo ensimmäinen admin tyhjään kantaan |
+| `ADMIN_PASSWORD` | suositeltu | Adminin salasana (vain bootstrap) |
+| `ADMIN_NAME` | valinnainen | Oletus `Ylläpitäjä` |
+| `SEED_DEMO` | pois | `1` = demokäyttäjät (älä tuotantoon) |
+| `PORT` | valinnainen | Oletus `8787` (Render asettaa) |
 | `NODE_ENV` | `production` | |
 
 ## Demotunnukset (vain kehitys / SEED_DEMO=1)

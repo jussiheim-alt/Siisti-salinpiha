@@ -2,25 +2,26 @@
 
 Pihavuorot, tehtävät ja huomiot — Vääksy.
 
-## Netlify Drop (suositus demoon)
+## Pysyvä käyttö (Render, suositus)
 
 Katso **[JULKAISU.md](./JULKAISU.md)**. Lyhyesti:
 
+1. Render → **New → Blueprint** (tai Web Service) → tämä repo
+2. Käytä **Starter**-suunnitelmaa + **persistent disk** (`/var/data`)
+3. Aseta `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (ei `SEED_DEMO`)
+
+Data (SQLite + kuvat) säilyy levyllä redeployjen yli.
+
+## Paikallinen kehitys
+
 ```bash
 npm install
-npm run package:netlify
+npm run dev          # API + Vite
+# tai selaintila kuten Netlify Drop:
+npm run dev:local
 ```
 
-Pudota `siisti-piha-netlify.zip` osoitteeseen [app.netlify.com/drop](https://app.netlify.com/drop).
-
-| Rooli | Sähköposti | Salasana |
-|-------|------------|----------|
-| Ylläpitäjä | admin@siistipiha.local | admin123 |
-| Jäsen | aino@siistipiha.local | demo123 |
-
-Data tallentuu selaimeen (`localStorage`).
-
-## Paikallinen Node-demo (SQLite + API)
+## Paikallinen Node-demo (SQLite)
 
 ```bash
 npm install
@@ -28,14 +29,9 @@ SEED_DEMO=1 npm run build
 SEED_DEMO=1 npm start
 ```
 
-Avaa http://localhost:8787 — vaatii `SEED_DEMO=1` demokäyttäjille.
+Avaa http://localhost:8787
 
-## Kehitys
-
-```bash
-# Express + Vite (proxy)
-npm run dev
-
-# Pelkkä selaintila (kuten Netlify)
-npm run dev:local
-```
+| Rooli | Sähköposti | Salasana |
+|-------|------------|----------|
+| Ylläpitäjä | admin@siistipiha.local | admin123 |
+| Jäsen | aino@siistipiha.local | demo123 |

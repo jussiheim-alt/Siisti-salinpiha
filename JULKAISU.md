@@ -1,46 +1,85 @@
-# Siisti piha — Netlify Drop -julkaisu
+# Siisti piha — julkaisu
 
-Tämä paketti toimii kuten **Saldo**: staattinen sivusto Netlify Dropissa. Data tallentuu selaimen `localStorage`-tilaan (ei yhteistä palvelinkantaa).
+## Pysyvä käyttö Renderissä (suositus)
 
-## 1. Lataa zip
+Sovellus on Node-palvelin (Express + SQLite + staattinen frontend).  
+**Free-tierillä ei ole pysyvää levyä** — data häviää redeployssa.  
+Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 
-Käytä valmista `siisti-piha-netlify.zip`-tiedostoa (dist-sisältö juuressa).
+### Vaihtoehto A: Blueprint (`render.yaml`)
 
-## 2. Pudota Netlifyyn
+1. Pushaa repo GitHubiin
+2. Render Dashboard → **New** → **Blueprint**
+3. Valitse repo — `render.yaml` luo Web Servicen + 1 GB diskin (`/var/data`)
+4. Syötä kun Render kysyy:
+   - `ADMIN_EMAIL` — oma sähköposti
+   - `ADMIN_PASSWORD` — vahva salasana
+5. Deploy → avaa `https://….onrender.com` ja kirjaudu adminilla  
+   Luo muut käyttäjät sovelluksen kautta (Users).
 
-1. Avaa [app.netlify.com/drop](https://app.netlify.com/drop)
-2. Vedä zip-tiedosto alueelle (tai purettu `dist`-kansio)
-3. Odota deploy — saat osoitteen muodossa `https://….netlify.app`
+### Vaihtoehto B: manuaalinen Web Service
 
-## 3. Kirjaudu
+| Asetus | Arvo |
+|--------|------|
+| Runtime | Node |
+| Build | `npm install && npm run build` |
+| Start | `npm start` |
+| Plan | **Starter** (ei Free) |
+| Disk | mount `/var/data`, esim. 1 GB |
 
-| Rooli | Sähköposti | Salasana |
-|-------|------------|----------|
-| Ylläpitäjä | `admin@siistipiha.local` | `admin123` |
-| Jäsen | `aino@siistipiha.local` | `demo123` |
+**Environment**
 
-Muut demojäsenet: `matti@`, `liisa@`, `juhani@`, `sari@` + `siistipiha.local` / `demo123`.
+| Key | Value |
+|-----|--------|
+| `NODE_ENV` | `production` |
+| `DATA_DIR` | `/var/data` |
+| `JWT_SECRET` | pitkä satunnainen (Render Generate) |
+| `ADMIN_EMAIL` | ensimmäisen ylläpitäjän sähköposti |
+| `ADMIN_PASSWORD` | vahva salasana |
+| `ADMIN_NAME` | valinnainen, oletus `Ylläpitäjä` |
 
-## Huomioita
+Älä aseta `SEED_DEMO=1` tuotantoon.
 
-- **Data on selainkohtainen.** Eri laitteet / incognito eivät jaa samaa kantaa.
-- Sää on stub (ei FMI-liveä Drop-tilassa). Push-ilmoitukset eivät toimi.
-- Tyhjennä data: selaimen sivustotiedot / localStorage-avain `siisti-piha-local-db-v1`.
+### Mitä levy säilyttää
 
-## Rakenna zip itse
+- SQLite: `$DATA_DIR/siisti-piha.sqlite`
+- Kuvat: `$DATA_DIR/uploads/`
+- VAPID-avaimet (push): `$DATA_DIR/vapid.json` (tai aseta `VAPID_*` env)
+
+### Huomioita
+
+- Render nukuttaa palvelun idlellä Starterissäkin joskus hinnoittelusta riippuen — tarkista nykyinen plan.
+- Varmuuskopioi ajoittain `siisti-piha.sqlite` (Render shell / disk backup).
+- Vaihda admin-salasana heti jos käytit väliaikaista.
+
+---
+
+## Netlify Drop (vain demoon, selainkohtainen data)
 
 ```bash
 npm install
 npm run package:netlify
 ```
 
-Tuloste: `siisti-piha-netlify.zip` projektijuureen.
+Pudota `siisti-piha-netlify.zip` → [app.netlify.com/drop](https://app.netlify.com/drop).
 
-## Node-palvelin (oma host)
+Data = `localStorage` (ei yhteistä kantaa laitteiden välillä). Ei sovi pysyvään yhteiskäyttöön.
 
-Jos tarvitset yhteisen SQLite-kannan ja oikean sään:
+| Rooli | Sähköposti | Salasana |
+|-------|------------|----------|
+| Ylläpitäjä | `admin@siistipiha.local` | `admin123` |
+| Jäsen | `aino@siistipiha.local` | `demo123` |
+
+---
+
+## Paikallinen Node
 
 ```bash
-SEED_DEMO=1 npm run build
-SEED_DEMO=1 npm start
+export JWT_SECRET='pitkä-satunnainen-salaisuus'
+# ensimmäinen käynnistys tuotantomoodissa:
+export ADMIN_EMAIL='sina@esimerkki.fi'
+export ADMIN_PASSWORD='vahva-salasana'
+npm run build && npm start
 ```
+
+Tai demoseed: `SEED_DEMO=1 npm run build && SEED_DEMO=1 npm start` → http://localhost:8787

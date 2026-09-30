@@ -1,17 +1,10 @@
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
-import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { TASK_CATALOG_V1 } from './catalog.ts'
+import { dataDir } from './paths.ts'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, '..')
-const dataDir = path.join(root, 'data')
 const dbPath = path.join(dataDir, 'siisti-piha.sqlite')
-
-fs.mkdirSync(dataDir, { recursive: true })
-fs.mkdirSync(path.join(root, 'uploads'), { recursive: true })
 
 export const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
@@ -196,10 +189,26 @@ export function initDb() {
   }
 
   const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number }
+  if (userCount.c > 0) return
+
+  const adminEmail = process.env.ADMIN_EMAIL?.trim()
+  const adminPassword = process.env.ADMIN_PASSWORD
+  if (adminEmail && adminPassword) {
+    const now = new Date().toISOString()
+    const hash = bcrypt.hashSync(adminPassword, 10)
+    const name = process.env.ADMIN_NAME?.trim() || 'Ylläpitäjä'
+    db.prepare(
+      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, created_at)
+       VALUES (?, ?, ?, ?, 'admin', 1, '[]', ?)`,
+    ).run(crypto.randomUUID(), name, adminEmail.toLowerCase(), hash, now)
+    console.log(`Luotu ensimmäinen ylläpitäjä: ${adminEmail.toLowerCase()}`)
+    return
+  }
+
   const allowDemoSeed =
     process.env.SEED_DEMO === '1' ||
     (process.env.SEED_DEMO !== '0' && process.env.NODE_ENV !== 'production')
-  if (userCount.c === 0 && allowDemoSeed) {
+  if (allowDemoSeed) {
     const now = new Date().toISOString()
     const hash = bcrypt.hashSync('admin123', 10)
     db.prepare(
@@ -222,9 +231,12 @@ export function initDb() {
       ).run(crypto.randomUUID(), name, email, hash2, constraints, now)
     }
     console.log('Seedattu: admin@siistipiha.local / admin123  sekä demo-käyttäjiä (demo123)')
-  } else if (userCount.c === 0) {
-    console.warn('Tietokanta tyhjä — luo ensimmäinen ylläpitäjä manuaalisesti (SEED_DEMO=1 kehityksessä)')
+    return
   }
+
+  console.warn(
+    'Tietokanta tyhjä — aseta ADMIN_EMAIL + ADMIN_PASSWORD (tai SEED_DEMO=1 demoon)',
+  )
 }
 
 export function parseConstraints(json: string): string[] {

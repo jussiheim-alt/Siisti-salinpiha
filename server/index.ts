@@ -6,7 +6,6 @@ import bcrypt from 'bcryptjs'
 import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { startOfWeek, format, parseISO, addDays } from 'date-fns'
 import {
   CONSTRAINT_LABELS,
@@ -25,14 +24,13 @@ import {
   updateHubInspection,
   updateHubItem,
 } from './hub.ts'
+import { dataDir, root, uploadsDir } from './paths.ts'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, '..')
 const PORT = Number(process.env.PORT || 8787)
 
 function loadJwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET
-  const secretPath = path.join(root, 'data', 'jwt-secret.txt')
+  const secretPath = path.join(dataDir, 'jwt-secret.txt')
   if (fs.existsSync(secretPath)) {
     const existing = fs.readFileSync(secretPath, 'utf8').trim()
     if (existing) return existing
@@ -40,7 +38,7 @@ function loadJwtSecret() {
   const generated = crypto.randomUUID() + crypto.randomUUID()
   fs.mkdirSync(path.dirname(secretPath), { recursive: true })
   fs.writeFileSync(secretPath, generated, { mode: 0o600 })
-  console.warn('JWT_SECRET puuttui — luotiin data/jwt-secret.txt (aseta JWT_SECRET tuotannossa)')
+  console.warn('JWT_SECRET puuttui — luotiin jwt-secret.txt DATA_DIR:iin (aseta JWT_SECRET tuotannossa)')
   return generated
 }
 
@@ -53,11 +51,11 @@ app.set('trust proxy', 1)
 app.use(cors({ origin: true, credentials: true }))
 app.use(express.json({ limit: '2mb' }))
 app.use(cookieParser())
-app.use('/uploads', express.static(path.join(root, 'uploads')))
+app.use('/uploads', express.static(uploadsDir))
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, path.join(root, 'uploads')),
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname) || '.jpg'
       cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`)
