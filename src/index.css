@@ -253,16 +253,29 @@ a {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: min(52vw, 280px);
-  /* Full-bleed dark band — background on the element (not z-index:-1) */
+  min-height: min(62vw, 340px);
+  /* Full-bleed yard photo — overlay keeps brand/CTA readable */
   margin: 0 calc(-1 * var(--page-pad-x, 1rem)) 1.15rem;
-  padding: 1.55rem var(--page-pad-x, 1rem) 1.5rem;
+  padding: 1.7rem var(--page-pad-x, 1rem) 1.55rem;
   border-radius: 0 0 1.6rem 1.6rem;
   color: #f7fcf9;
-  background:
-    radial-gradient(ellipse 80% 70% at 90% 10%, rgba(61, 140, 110, 0.45), transparent 50%),
-    linear-gradient(160deg, #0b241c 0%, #123d2f 48%, #1a5640 100%);
+  background-color: #0b241c;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(8, 22, 17, 0.22) 0%,
+      rgba(8, 22, 17, 0.42) 42%,
+      rgba(8, 22, 17, 0.82) 100%
+    ),
+    image-set(
+      url('/images/salin-piha-hero.webp') type('image/webp'),
+      url('/images/salin-piha-hero.jpg') type('image/jpeg')
+    );
+  background-size: cover;
+  background-position: center 46%;
+  background-repeat: no-repeat;
   overflow: hidden;
+  box-shadow: 0 18px 40px rgba(11, 36, 28, 0.14);
 }
 
 .page-hero.home-hero::after {
@@ -270,9 +283,12 @@ a {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    linear-gradient(180deg, transparent 35%, rgba(11, 36, 28, 0.28) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath fill='none' stroke='white' stroke-opacity='0.06' stroke-width='1' d='M0 60h120M60 0v120'/%3E%3C/svg%3E");
+  background: linear-gradient(
+    115deg,
+    rgba(11, 36, 28, 0.18) 0%,
+    transparent 48%,
+    rgba(31, 122, 92, 0.12) 100%
+  );
   pointer-events: none;
 }
 
@@ -451,13 +467,20 @@ a {
   min-width: 0;
 }
 
-.weather-glyph {
-  font-size: 2rem;
-  line-height: 1;
-  color: var(--moss);
-  width: 2.25rem;
-  text-align: center;
+.weather-glyph,
+.weather-icon-wrap {
+  color: var(--resin);
+  width: 2.6rem;
+  height: 2.6rem;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 0.85rem;
+  background: linear-gradient(160deg, rgba(31, 122, 92, 0.12), rgba(31, 122, 92, 0.04));
+}
+
+.weather-icon-wrap svg {
+  display: block;
 }
 
 .weather-now-text {
@@ -513,10 +536,16 @@ a {
   color: var(--muted);
 }
 
-.weather-day-glyph {
-  color: var(--moss);
-  font-size: 1.05rem;
+.weather-day-glyph,
+.weather-day-icon {
+  color: var(--resin);
   line-height: 1;
+  display: grid;
+  place-items: start;
+}
+
+.weather-day-icon svg {
+  display: block;
 }
 
 .weather-day-temp {
@@ -624,6 +653,24 @@ a {
   gap: 0.75rem;
 }
 
+.notif-strip-title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.notif-bell {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.8rem;
+  display: grid;
+  place-items: center;
+  color: var(--resin);
+  background: linear-gradient(160deg, rgba(31, 122, 92, 0.14), rgba(31, 122, 92, 0.05));
+  flex-shrink: 0;
+}
+
 .notif-strip .kicker {
   font-size: 0.7rem;
   font-weight: 700;
@@ -631,6 +678,77 @@ a {
   text-transform: uppercase;
   color: var(--moss);
   margin: 0;
+}
+
+.notif-strip-sub {
+  margin: 0.12rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.push-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+  padding: 1rem 1.05rem;
+}
+
+.push-card.is-on {
+  background:
+    linear-gradient(135deg, rgba(31, 122, 92, 0.1), rgba(255, 255, 255, 0.92) 55%),
+    rgba(255, 255, 255, 0.94);
+  border-color: color-mix(in srgb, var(--resin) 28%, rgba(18, 35, 28, 0.07));
+}
+
+.push-card.is-muted {
+  opacity: 0.96;
+}
+
+.push-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.push-card-icon {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.8rem;
+  display: grid;
+  place-items: center;
+  color: var(--resin);
+  background: linear-gradient(160deg, rgba(31, 122, 92, 0.14), rgba(31, 122, 92, 0.05));
+  flex-shrink: 0;
+}
+
+.push-card-copy {
+  min-width: 0;
+}
+
+.push-card-copy .kicker {
+  margin: 0 0 0.15rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+
+.push-card-copy strong {
+  display: block;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.push-card-copy p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .notif-preview {
@@ -1290,9 +1408,79 @@ select:focus {
   box-shadow: var(--shadow-soft);
 }
 
+.task-card.done {
+  background: linear-gradient(180deg, rgba(31, 122, 92, 0.08), rgba(255, 255, 255, 0.94));
+  border-color: color-mix(in srgb, var(--resin) 28%, rgba(18, 35, 28, 0.07));
+  opacity: 1;
+}
+
+.task-card.skipped {
+  background: linear-gradient(180deg, rgba(102, 122, 112, 0.08), rgba(255, 255, 255, 0.94));
+  opacity: 0.88;
+}
+
 .task.done,
 .task.skipped {
   opacity: 0.68;
+}
+
+.task-card.done,
+.task-card.skipped {
+  opacity: 1;
+}
+
+.task-ack .btn {
+  min-width: 5.5rem;
+}
+
+.template-pick-list {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.template-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(18, 35, 28, 0.08);
+  background: linear-gradient(180deg, #fbfcfb 0%, #f4f8f6 100%);
+  cursor: pointer;
+}
+
+.template-pick.is-on {
+  border-color: color-mix(in srgb, var(--resin) 40%, rgba(18, 35, 28, 0.07));
+  background: linear-gradient(180deg, rgba(31, 122, 92, 0.1), #f7fbf9 70%);
+  box-shadow: inset 3px 0 0 var(--resin);
+}
+
+.template-pick input {
+  margin-top: 0.2rem;
+}
+
+.template-pick-body {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.template-pick-body strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.template-pick-body span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.week-task-picker h2 {
+  margin-bottom: 0.35rem;
 }
 
 .meta {

@@ -1,4 +1,5 @@
 import type { WeatherPayload } from '../api'
+import { WeatherIcon } from './WeatherIcon'
 
 function formatTemp(t: number | null | undefined) {
   if (t == null || Number.isNaN(t)) return '–'
@@ -10,19 +11,6 @@ function formatWind(ms: number | null | undefined) {
   return `${Math.round(ms)} m/s`
 }
 
-/** Compact FMI WeatherSymbol3 → glyph for the home strip */
-function weatherGlyph(symbol: number | null | undefined): string {
-  if (symbol == null) return '·'
-  const s = Math.round(symbol)
-  if (s === 1) return '○'
-  if (s === 2) return '◑'
-  if (s === 3) return '●'
-  if ((s >= 41 && s <= 43) || (s >= 71 && s <= 73)) return '*'
-  if ((s >= 31 && s <= 33) || (s >= 61 && s <= 63)) return '✶'
-  if ((s >= 21 && s <= 23) || (s >= 51 && s <= 53) || (s >= 81 && s <= 92)) return '≋'
-  return '·'
-}
-
 export function WeatherStrip({ weather }: { weather: WeatherPayload }) {
   const wind = formatWind(weather.current.windMs)
   const warnings = weather.warnings || []
@@ -32,8 +20,8 @@ export function WeatherStrip({ weather }: { weather: WeatherPayload }) {
       <div className="weather-now">
         <p className="kicker">Sää · {weather.place}</p>
         <div className="weather-now-row">
-          <span className="weather-glyph" aria-hidden="true">
-            {weatherGlyph(weather.current.symbol)}
+          <span className="weather-icon-wrap" aria-hidden="true">
+            <WeatherIcon symbol={weather.current.symbol} size={40} />
           </span>
           <div className="weather-now-text">
             <p className="weather-temp">{formatTemp(weather.current.temperature)}</p>
@@ -47,8 +35,8 @@ export function WeatherStrip({ weather }: { weather: WeatherPayload }) {
         {weather.days.map((d) => (
           <li key={d.date}>
             <span className="weather-day-label">{d.label}</span>
-            <span className="weather-day-glyph" aria-hidden="true">
-              {weatherGlyph(d.symbol)}
+            <span className="weather-day-icon" aria-hidden="true">
+              <WeatherIcon symbol={d.symbol} size={22} />
             </span>
             <span className="weather-day-temp">
               {formatTemp(d.tempMax)}

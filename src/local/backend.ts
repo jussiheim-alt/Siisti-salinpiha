@@ -200,14 +200,49 @@ function saveDb(db: Db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db))
 }
 
+async function ensureDemoMembers(db: Db, passwordHash: string) {
+  const demoMembers = [
+    'Anna Korhonen',
+    'Mikko Virtanen',
+    'Liisa Mäkinen',
+    'Pekka Nieminen',
+    'Sari Laine',
+  ]
+  const now = new Date().toISOString()
+  let added = false
+  for (const name of demoMembers) {
+    if (db.users.some((u) => u.name === name)) continue
+    const slug = name
+      .toLowerCase()
+      .replace(/ä/g, 'a')
+      .replace(/ö/g, 'o')
+      .replace(/\s+/g, '.')
+    db.users.push({
+      id: uid(),
+      name,
+      email: `${slug}@example.com`,
+      passwordHash,
+      role: 'member',
+      active: true,
+      constraints: [],
+      createdAt: now,
+    })
+    added = true
+  }
+  if (added) saveDb(db)
+}
+
 async function ensureSeed(db: Db) {
   if (!db.invites) db.invites = []
-  if (db.users.length) return db
-  const now = new Date().toISOString()
-  // Selaintila: vain oikeat ylläpitäjät. Salasana vaihdetaan tuotannossa env/kutsuilla.
   const viteEnv = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env
   const localPass = viteEnv?.VITE_LOCAL_ADMIN_PASSWORD || 'vaihda-tama-8'
   const adminHash = await hashPassword(localPass)
+  if (db.users.length) {
+    await ensureDemoMembers(db, adminHash)
+    return db
+  }
+  const now = new Date().toISOString()
+  // Selaintila: vain oikeat ylläpitäjät. Salasana vaihdetaan tuotannossa env/kutsuilla.
   db.users = [
     {
       id: uid(),
@@ -234,6 +269,7 @@ async function ensureSeed(db: Db) {
       createdAt: now,
     })
   }
+  await ensureDemoMembers(db, adminHash)
 
   const year = new Date().getFullYear()
   db.hub = [
@@ -355,8 +391,31 @@ function hydratePihavuoro(db: Db, p: Pihavuoro) {
   }
 }
 
-function createTasks(season: 'talvi' | 'sulankausi', assignments: Assignment[], db: Db): ShiftTask[] {
-  const templates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+function defaultTemplateIdsForSeason(season: 'talvi' | 'sulankausi'): string[] {
+  return TASK_CATALOG_V1.filter(
+    (t) => (t.season === season || t.season === 'all') && t.cadence === 'every_week',
+  ).map((t) => t.id)
+}
+
+function resolveTemplatesForSeason(
+  season: 'talvi' | 'sulankausi',
+  templateIds?: string[] | null,
+) {
+  const seasonTemplates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+  if (!templateIds || templateIds.length === 0) {
+    return seasonTemplates.filter((t) => t.cadence === 'every_week')
+  }
+  const wanted = new Set(templateIds)
+  return seasonTemplates.filter((t) => wanted.has(t.id)).sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+function createTasks(
+  season: 'talvi' | 'sulankausi',
+  assignments: Assignment[],
+  db: Db,
+  templateIds?: string[] | null,
+): ShiftTask[] {
+  const templates = resolveTemplatesForSeason(season, templateIds)
   const lead = assignments.find((a) => a.role === 'lead')
   const helpers = assignments.filter((a) => a.role === 'helper')
   let helperCursor = 0
@@ -443,11 +502,17 @@ function stubWeather() {
     },
     days: [0, 1, 2].map((i) => {
       const date = addDays(today(), i)
+      const symbols = [
+        { symbol: 1, symbolLabel: 'Selkeää' },
+        { symbol: 2, symbolLabel: 'Puolipilvistä' },
+        { symbol: 3, symbolLabel: 'Pilvistä' },
+      ] as const
+      const day = symbols[i]!
       return {
         date,
         label: i === 0 ? 'Tänään' : i === 1 ? 'Huomenna' : date.slice(5),
-        symbol: 1,
-        symbolLabel: 'Selkeää',
+        symbol: day.symbol,
+        symbolLabel: day.symbolLabel,
         tempMin: 5,
         tempMax: 12,
         precipMm: 0,
@@ -799,7 +864,14 @@ export async function localApi<T = unknown>(
       season,
       createdAt: new Date().toISOString(),
       assignments,
-      tasks: createTasks(season, assignments, db),
+      tasks: createTasks(
+        season,
+        assignments,
+        db,
+        Array.isArray(body.templateIds)
+          ? (body.templateIds as unknown[]).map(String)
+          : defaultTemplateIdsForSeason(season),
+      ),
     }
     db.pihavuorot.push(p)
     saveDb(db)
@@ -882,9 +954,68 @@ export async function localApi<T = unknown>(
           { id: uid(), userId: leadId, role: 'lead' },
           ...helperIds.map((hid) => ({ id: uid(), userId: hid, role: 'helper' as const })),
         ]
+        const existingIds = p.tasks.map((t) => t.templateId).filter(Boolean) as string[]
+        const templateIds = Array.isArray(body.templateIds)
+          ? (body.templateIds as unknown[]).map(String)
+          : existingIds.length
+            ? existingIds
+            : defaultTemplateIdsForSeason(p.season)
         p.assignments = assignments
-        p.tasks = createTasks(p.season, assignments, db)
+        p.tasks = createTasks(p.season, assignments, db, templateIds)
       }
+      saveDb(db)
+      return ok({ pihavuoro: hydratePihavuoro(db, p) })
+    }
+    if (rest === '/tasks' && method === 'PUT' && p) {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      if (!Array.isArray(body.templateIds)) err('templateIds vaaditaan')
+      const templateIds = (body.templateIds as unknown[]).map(String)
+      const templates = resolveTemplatesForSeason(p.season, templateIds)
+      if (!templates.length) err('Valitse ainakin yksi huoltotehtävä')
+      const keep = new Map(p.tasks.filter((t) => t.templateId).map((t) => [t.templateId!, t]))
+      const next: ShiftTask[] = []
+      let helperCursor = 0
+      let allCursor = 0
+      const lead = p.assignments.find((a) => a.role === 'lead')
+      const helpers = p.assignments.filter((a) => a.role === 'helper')
+      for (const t of templates) {
+        const prev = keep.get(t.id)
+        if (prev) {
+          next.push({
+            ...prev,
+            title: t.title,
+            instructions: t.instructions,
+            effort: t.effort,
+            sortOrder: t.sortOrder,
+          })
+          continue
+        }
+        let assignee: string | null = null
+        if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
+        else {
+          const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
+          const eligible = pool.filter((h) => {
+            const u = db.users.find((x) => x.id === h.userId)
+            if (t.effort === 'heavy' && u?.constraints.includes('no_heavy')) return false
+            return true
+          })
+          if (eligible.length) {
+            const cursor = t.defaultAssignee === 'all' ? allCursor++ : helperCursor++
+            assignee = eligible[cursor % eligible.length]!.userId
+          }
+        }
+        next.push({
+          id: uid(),
+          templateId: t.id,
+          title: t.title,
+          instructions: t.instructions,
+          effort: t.effort,
+          assigneeUserId: assignee,
+          status: 'open',
+          sortOrder: t.sortOrder,
+        })
+      }
+      p.tasks = next
       saveDb(db)
       return ok({ pihavuoro: hydratePihavuoro(db, p) })
     }
