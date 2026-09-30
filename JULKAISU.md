@@ -23,7 +23,7 @@ Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 | Asetus | Arvo |
 |--------|------|
 | Runtime | Node |
-| Build | `npm install && npm run build` |
+| Build | `npm install --include=dev && npm run build` |
 | Start | `npm start` |
 | Plan | **Starter** (ei Free) |
 | Disk | mount `/var/data`, esim. 1 GB |
