@@ -54,7 +54,7 @@ export function SwapsPage() {
         ← Etusivu
       </Link>
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Vuoronvaihdot</h1>
         <p className="lede">
           Tarjoa oma paikkasi tai ota toisen vuoro, jos et ole jo samalla viikolla.

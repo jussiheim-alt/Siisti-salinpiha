@@ -116,7 +116,7 @@ export function UsersPage() {
   return (
     <div className="page">
       <header className="page-hero compact">
-        <p className="brand-mark">Siisti piha</p>
+        <p className="brand-mark">Siisti salin piha</p>
         <h1>Jäsenet</h1>
         <p className="lede">Kutsu käyttäjiä ja määritä käyttöoikeudet.</p>
       </header>

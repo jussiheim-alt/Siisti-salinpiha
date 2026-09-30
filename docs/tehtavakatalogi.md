@@ -1,7 +1,7 @@
-# Siisti piha — tehtäväkatalogi v1 (LUKITTU)
+# Siisti salin piha — tehtäväkatalogi v1 (LUKITTU)
 
 **Status:** lukittu 2026-09-27  
-**Sovellus:** Siisti piha · **Vuoro:** Pihavuoro  
+**Sovellus:** Siisti salin piha · **Vuoro:** Pihavuoro  
 Tätä katalogia käytetään MVP:ssä. Muutokset vain erikseen päätettyinä versioina (v1.1…).
 
 ---
@@ -78,4 +78,4 @@ Säilytetään lähteenä: ulko-/sisävarasto, kiveys, asfaltti, viheralueet (1�
 
 ## Seuraava vaihe projektissa
 
-Katalogi lukittu → voidaan siirtyä **Siisti piha -sovelluksen toteutukseen** (auth, käyttäjät, Pihavuorot, kuittaukset) käyttäen tätä v1-listaa.
+Katalogi lukittu → voidaan siirtyä **Siisti salin piha -sovelluksen toteutukseen** (auth, käyttäjät, Pihavuorot, kuittaukset) käyttäen tätä v1-listaa.

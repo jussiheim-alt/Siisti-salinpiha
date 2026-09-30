@@ -25,7 +25,7 @@ self.addEventListener('push', (event) => {
   } catch {
     payload = { body: event.data?.text() }
   }
-  const title = payload.title || 'Siisti piha'
+  const title = payload.title || 'Siisti salin piha'
   const options: NotificationOptions = {
     body: payload.body || 'Uusi ilmoitus',
     icon: '/favicon.svg',
