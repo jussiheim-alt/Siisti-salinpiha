@@ -253,16 +253,29 @@ a {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: min(52vw, 280px);
-  /* Full-bleed dark band — background on the element (not z-index:-1) */
+  min-height: min(62vw, 340px);
+  /* Full-bleed yard photo — overlay keeps brand/CTA readable */
   margin: 0 calc(-1 * var(--page-pad-x, 1rem)) 1.15rem;
-  padding: 1.55rem var(--page-pad-x, 1rem) 1.5rem;
+  padding: 1.7rem var(--page-pad-x, 1rem) 1.55rem;
   border-radius: 0 0 1.6rem 1.6rem;
   color: #f7fcf9;
-  background:
-    radial-gradient(ellipse 80% 70% at 90% 10%, rgba(61, 140, 110, 0.45), transparent 50%),
-    linear-gradient(160deg, #0b241c 0%, #123d2f 48%, #1a5640 100%);
+  background-color: #0b241c;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(8, 22, 17, 0.22) 0%,
+      rgba(8, 22, 17, 0.42) 42%,
+      rgba(8, 22, 17, 0.82) 100%
+    ),
+    image-set(
+      url('/images/salin-piha-hero.webp') type('image/webp'),
+      url('/images/salin-piha-hero.jpg') type('image/jpeg')
+    );
+  background-size: cover;
+  background-position: center 46%;
+  background-repeat: no-repeat;
   overflow: hidden;
+  box-shadow: 0 18px 40px rgba(11, 36, 28, 0.14);
 }
 
 .page-hero.home-hero::after {
@@ -270,9 +283,12 @@ a {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    linear-gradient(180deg, transparent 35%, rgba(11, 36, 28, 0.28) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath fill='none' stroke='white' stroke-opacity='0.06' stroke-width='1' d='M0 60h120M60 0v120'/%3E%3C/svg%3E");
+  background: linear-gradient(
+    115deg,
+    rgba(11, 36, 28, 0.18) 0%,
+    transparent 48%,
+    rgba(31, 122, 92, 0.12) 100%
+  );
   pointer-events: none;
 }
 
