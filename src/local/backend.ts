@@ -3,6 +3,13 @@ import { CONSTRAINT_LABELS, TASK_CATALOG_V1 } from '../shared/catalog'
 const DB_KEY = 'siisti-piha-local-db-v2'
 const SESSION_KEY = 'siisti-piha-local-session'
 
+const HUB_ISSUE_PROTOCOL = [
+  'Kirjaa havainnot huomautuksiin. Lisää kuva liitteisiin, jos siitä on apua.',
+  'Kerro huoltokoordinaattorille / valtakunnansalikomitean koordinaattorille.',
+  'Jos mahdollista, tee korjaukset saatujen ohjeiden mukaan.',
+  'Kirjaa tehdyt korjaukset huomautuksiin.',
+]
+
 type Role = 'admin' | 'member'
 type User = {
   id: string
@@ -1652,7 +1659,7 @@ function hydrateHub(h: HubInspection, db?: Db) {
     doneCount: h.items.filter((i) => i.status !== 'open').length,
     issueCount: h.items.filter((i) => i.status === 'issue').length,
     itemCount: h.items.length,
-    protocol: [],
+    protocol: HUB_ISSUE_PROTOCOL,
   }
 }
 
