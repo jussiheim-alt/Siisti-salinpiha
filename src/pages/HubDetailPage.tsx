@@ -136,27 +136,40 @@ export function HubDetailPage() {
       )}
 
       <section className="surface-card hub-checks">
-        <p className="kicker">Tarkistuslista</p>
-        <h2>Tarkistuskohdat</h2>
+        <div className="hub-checks-head">
+          <div>
+            <p className="kicker">Tarkistuslista</p>
+            <h2>Tarkistuskohdat</h2>
+          </div>
+          <p className="hub-checks-count">
+            {doneCount}/{insp.items.length}
+          </p>
+        </div>
         <ul className="hub-items">
           {insp.items.map((item, index) => (
             <li key={item.id} className={`hub-item status-${item.status}`}>
-              <div className="hub-item-top">
+              <div className="hub-item-main">
                 <span className="hub-item-index" aria-hidden="true">
                   {index + 1}
                 </span>
                 <div className="hub-item-copy">
                   <p>{item.label}</p>
-                  <span className={`hub-item-badge status-${item.status}`}>
-                    {itemStatusLabel(item.status)}
-                  </span>
+                  {item.status !== 'open' && (
+                    <span className={`hub-item-badge status-${item.status}`}>
+                      {itemStatusLabel(item.status)}
+                    </span>
+                  )}
                 </div>
               </div>
               {canEdit ? (
-                <div className="hub-item-actions">
+                <div
+                  className="hub-seg"
+                  role="group"
+                  aria-label={`Merkintä: ${item.label}`}
+                >
                   <button
                     type="button"
-                    className={`btn small hub-ok ${item.status === 'ok' ? 'is-active' : ''}`}
+                    className={`hub-seg-btn hub-ok ${item.status === 'ok' ? 'is-active' : ''}`}
                     disabled={busy}
                     onClick={() =>
                       void setItemStatus(item.id, item.status === 'ok' ? 'open' : 'ok')
@@ -166,7 +179,7 @@ export function HubDetailPage() {
                   </button>
                   <button
                     type="button"
-                    className={`btn small hub-issue ${item.status === 'issue' ? 'is-active' : ''}`}
+                    className={`hub-seg-btn hub-issue ${item.status === 'issue' ? 'is-active' : ''}`}
                     disabled={busy}
                     onClick={() =>
                       void setItemStatus(item.id, item.status === 'issue' ? 'open' : 'issue')
@@ -175,7 +188,9 @@ export function HubDetailPage() {
                     Puute
                   </button>
                 </div>
-              ) : null}
+              ) : (
+                item.status === 'open' && <p className="meta hub-item-open">Avoin</p>
+              )}
             </li>
           ))}
         </ul>
