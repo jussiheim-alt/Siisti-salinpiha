@@ -2,6 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type HubInspection } from '../api'
 
+function itemStatusLabel(status: HubInspection['items'][number]['status']) {
+  if (status === 'ok') return 'OK'
+  if (status === 'issue') return 'Puute'
+  return 'Avoin'
+}
+
 export function HubDetailPage() {
   const { id } = useParams()
   const [insp, setInsp] = useState<HubInspection | null>(null)
@@ -92,8 +98,11 @@ export function HubDetailPage() {
   if (!insp && !error) return <div className="boot">Ladataan…</div>
   if (!insp) return <p className="error">{error}</p>
 
+  const doneCount = insp.items.filter((i) => i.status !== 'open').length
+  const issueCount = insp.items.filter((i) => i.status === 'issue').length
+
   return (
-    <div className="page">
+    <div className="page hub-detail-page">
       <Link className="back" to="/huolto">
         ← Hub-huolto
       </Link>
@@ -103,6 +112,15 @@ export function HubDetailPage() {
         <p className="lede">
           {insp.cadenceLabel} · {insp.windowStart} – {insp.windowEnd}
         </p>
+        <div className="hub-progress-meta">
+          <span>
+            {doneCount}/{insp.items.length} merkitty
+          </span>
+          {issueCount > 0 && <span className="hub-progress-issues">{issueCount} puutetta</span>}
+          <span className={`pill status-${insp.status}`}>
+            {insp.status === 'done' ? 'Valmis' : insp.status === 'in_progress' ? 'Kesken' : 'Avoin'}
+          </span>
+        </div>
       </header>
 
       {error && <p className="error">{error}</p>}
@@ -110,53 +128,76 @@ export function HubDetailPage() {
         <p className="hint">Vain ylläpitäjä tai viikon vastuuhenkilö voi merkitä tarkastuksia.</p>
       )}
 
-      {insp.intro && <p className="hint">{insp.intro}</p>}
+      {insp.intro && (
+        <section className="surface-card hub-intro">
+          <p className="kicker">Tausta</p>
+          <p>{insp.intro}</p>
+        </section>
+      )}
 
-      <section className="panel">
+      <section className="surface-card hub-checks">
+        <p className="kicker">Tarkistuslista</p>
         <h2>Tarkistuskohdat</h2>
         <ul className="hub-items">
-          {insp.items.map((item) => (
+          {insp.items.map((item, index) => (
             <li key={item.id} className={`hub-item status-${item.status}`}>
-              <p>{item.label}</p>
+              <div className="hub-item-top">
+                <span className="hub-item-index" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div className="hub-item-copy">
+                  <p>{item.label}</p>
+                  <span className={`hub-item-badge status-${item.status}`}>
+                    {itemStatusLabel(item.status)}
+                  </span>
+                </div>
+              </div>
               {canEdit ? (
-                <div className="row-actions">
+                <div className="hub-item-actions">
                   <button
                     type="button"
-                    className={`btn small ${item.status === 'ok' ? 'primary' : 'ghost'}`}
+                    className={`btn small hub-ok ${item.status === 'ok' ? 'is-active' : ''}`}
                     disabled={busy}
-                    onClick={() => void setItemStatus(item.id, 'ok')}
+                    onClick={() =>
+                      void setItemStatus(item.id, item.status === 'ok' ? 'open' : 'ok')
+                    }
                   >
                     OK
                   </button>
                   <button
                     type="button"
-                    className={`btn small ${item.status === 'issue' ? 'primary' : 'ghost'}`}
+                    className={`btn small hub-issue ${item.status === 'issue' ? 'is-active' : ''}`}
                     disabled={busy}
-                    onClick={() => void setItemStatus(item.id, 'issue')}
+                    onClick={() =>
+                      void setItemStatus(item.id, item.status === 'issue' ? 'open' : 'issue')
+                    }
                   >
                     Puute
                   </button>
                 </div>
-              ) : (
-                <p className="meta">
-                  {item.status === 'ok' ? 'OK' : item.status === 'issue' ? 'Puute' : 'Avoin'}
-                </p>
-              )}
+              ) : null}
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="panel">
+      <section className="surface-card hub-protocol-card">
+        <p className="kicker">Ohje</p>
         <h2>Jos huomaat puutteita</h2>
         <ol className="hub-protocol">
-          {insp.protocol.map((step) => (
-            <li key={step}>{step}</li>
+          {insp.protocol.map((step, index) => (
+            <li key={step}>
+              <span className="hub-protocol-num" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span>{step}</span>
+            </li>
           ))}
         </ol>
       </section>
 
-      <form className="panel stack" onSubmit={(e) => void saveNotes(e)}>
+      <form className="surface-card hub-notes stack" onSubmit={(e) => void saveNotes(e)}>
+        <p className="kicker">Kirjaus</p>
         <h2>Huomautukset</h2>
         <label>
           Muistiinpanot
@@ -165,10 +206,11 @@ export function HubDetailPage() {
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
             disabled={!canEdit}
+            placeholder="Kirjaa havainnot ja tehdyt korjaukset…"
           />
         </label>
         {canEdit && (
-          <label>
+          <label className="hub-photo-label">
             Liite (kuva)
             <input
               type="file"
@@ -181,7 +223,7 @@ export function HubDetailPage() {
           </label>
         )}
         {insp.photoUrl && (
-          <img className="notice-photo" src={insp.photoUrl} alt="Tarkastuksen liite" />
+          <img className="notice-photo hub-photo" src={insp.photoUrl} alt="Tarkastuksen liite" />
         )}
         {canEdit && (
           <div className="row-actions">
@@ -190,7 +232,7 @@ export function HubDetailPage() {
             </button>
             {insp.status !== 'done' && (
               <button
-                className="btn ghost"
+                className="btn"
                 type="button"
                 disabled={busy}
                 onClick={() => void complete()}
@@ -201,7 +243,7 @@ export function HubDetailPage() {
           </div>
         )}
         {insp.status === 'done' && (
-          <p className="meta">
+          <p className="meta hub-done-meta">
             Valmis
             {insp.completedByName ? ` · ${insp.completedByName}` : ''}
             {insp.completedAt ? ` · ${insp.completedAt.slice(0, 10)}` : ''}
