@@ -469,14 +469,13 @@ a {
 
 .weather-glyph,
 .weather-icon-wrap {
-  color: var(--resin);
   width: 2.6rem;
   height: 2.6rem;
   flex-shrink: 0;
   display: grid;
   place-items: center;
   border-radius: 0.85rem;
-  background: linear-gradient(160deg, rgba(31, 122, 92, 0.12), rgba(31, 122, 92, 0.04));
+  background: linear-gradient(160deg, rgba(229, 165, 27, 0.14), rgba(139, 158, 174, 0.1));
 }
 
 .weather-icon-wrap svg {
@@ -538,7 +537,6 @@ a {
 
 .weather-day-glyph,
 .weather-day-icon {
-  color: var(--resin);
   line-height: 1;
   display: grid;
   place-items: start;
