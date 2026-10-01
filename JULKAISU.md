@@ -59,6 +59,8 @@ Demokäyttäjiä ei enää seedata. Muut jäsenet kutsutaan sovelluksesta.
 
 Kun pushaat uuden version ja Render deployaa, käyttäjien **ei tarvitse poistaa** sovellusta kotivalikosta.
 
+Varmista deploy: avaa `https://<oma-url>/api/meta/app` — `commit` pitäisi vastata GitHubin `main`-viimeisintä committia ja `uiVersion` näkyä. Jos vanha UI jää näkyviin iPhonella, sulje PWA kokonaan (app switcher) ja avaa uudelleen, tai vedä alas päivittääksesi.
+
 - Uusi service worker aktivoituu automaattisesti (`autoUpdate` + `skipWaiting`)
 - Sovellus tarkistaa päivitykset avattaessa / fokusuksessa ja lataa uuden buildin
 - Riittää että käyttäjä avaa sovelluksen uudelleen (tai pitää sen auki hetken verkossa)

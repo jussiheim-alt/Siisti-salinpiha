@@ -729,6 +729,10 @@ export async function localApi<T = unknown>(
     return ok({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
   }
 
+  if (pathname === '/api/meta/app' && method === 'GET') {
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'hub-checklist-light-2026-10' })
+  }
+
   if (pathname === '/api/home' && method === 'GET') {
     const weekStart = mondayOf()
     const next = db.pihavuorot

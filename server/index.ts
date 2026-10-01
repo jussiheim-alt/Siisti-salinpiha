@@ -655,6 +655,21 @@ app.get('/api/catalog', authMiddleware, (_req, res) => {
   res.json({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
 })
 
+/** Julkinen build-tieto — varmista että Render deploy on uusin (ei välimuistia). */
+app.get('/api/meta/app', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store')
+  const commit =
+    process.env.RENDER_GIT_COMMIT ||
+    process.env.GIT_COMMIT ||
+    process.env.SOURCE_VERSION ||
+    null
+  res.json({
+    commit: commit ? String(commit).slice(0, 7) : null,
+    commitFull: commit ? String(commit) : null,
+    uiVersion: 'hub-checklist-light-2026-10',
+  })
+})
+
 // ——— Esteviikot (saatavuus) ———
 app.get('/api/availability', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
