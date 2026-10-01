@@ -148,19 +148,10 @@ export function HubDetailPage() {
         <ul className="hub-items">
           {insp.items.map((item, index) => (
             <li key={item.id} className={`hub-item status-${item.status}`}>
-              <div className="hub-item-main">
-                <span className="hub-item-index" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <div className="hub-item-copy">
-                  <p>{item.label}</p>
-                  {item.status !== 'open' && (
-                    <span className={`hub-item-badge status-${item.status}`}>
-                      {itemStatusLabel(item.status)}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <span className="hub-item-index" aria-hidden="true">
+                {index + 1}
+              </span>
+              <p className="hub-item-label">{item.label}</p>
               {canEdit ? (
                 <div
                   className="hub-seg"
@@ -171,6 +162,7 @@ export function HubDetailPage() {
                     type="button"
                     className={`hub-seg-btn hub-ok ${item.status === 'ok' ? 'is-active' : ''}`}
                     disabled={busy}
+                    aria-pressed={item.status === 'ok'}
                     onClick={() =>
                       void setItemStatus(item.id, item.status === 'ok' ? 'open' : 'ok')
                     }
@@ -181,6 +173,7 @@ export function HubDetailPage() {
                     type="button"
                     className={`hub-seg-btn hub-issue ${item.status === 'issue' ? 'is-active' : ''}`}
                     disabled={busy}
+                    aria-pressed={item.status === 'issue'}
                     onClick={() =>
                       void setItemStatus(item.id, item.status === 'issue' ? 'open' : 'issue')
                     }
@@ -189,7 +182,9 @@ export function HubDetailPage() {
                   </button>
                 </div>
               ) : (
-                item.status === 'open' && <p className="meta hub-item-open">Avoin</p>
+                <span className={`hub-item-state status-${item.status}`}>
+                  {itemStatusLabel(item.status)}
+                </span>
               )}
             </li>
           ))}
