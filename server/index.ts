@@ -18,6 +18,10 @@ import { getWeather } from './weather.ts'
 import { getCapWarnings } from './capWarnings.ts'
 import { notifyUsers, runWeatherAlertCheck, startWeatherAlertScheduler } from './weatherAlerts.ts'
 import {
+  addHubItem,
+  createHubInspection,
+  deleteHubInspection,
+  deleteHubItem,
   getHubInspection,
   hubOpenSummary,
   listHubInspections,
@@ -666,7 +670,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'hub-checklist-light-2026-10',
+    uiVersion: 'hub-admin-edit-2026-10',
   })
 })
 
@@ -2276,28 +2280,76 @@ app.post('/api/hub/seed', authMiddleware, requireAdmin, (req, res) => {
   res.json({ inspections: seedHubYear(year) })
 })
 
+app.post('/api/hub', authMiddleware, requireAdmin, (req, res) => {
+  const items = Array.isArray(req.body?.items)
+    ? (req.body.items as unknown[]).map(String)
+    : typeof req.body?.itemsText === 'string'
+      ? String(req.body.itemsText)
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+      : []
+  const insp = createHubInspection({
+    title: String(req.body?.title || ''),
+    cadenceLabel: req.body?.cadenceLabel ? String(req.body.cadenceLabel) : undefined,
+    windowStart: String(req.body?.windowStart || ''),
+    windowEnd: String(req.body?.windowEnd || ''),
+    intro: req.body?.intro !== undefined ? String(req.body.intro || '') || null : null,
+    year: req.body?.year ? Number(req.body.year) : undefined,
+    items,
+  })
+  if (!insp) return res.status(400).json({ error: 'Tarkista otsikko ja päivämäärät' })
+  res.status(201).json({ inspection: insp })
+})
+
 app.get('/api/hub/:id', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const insp = getHubInspection(String(req.params.id))
   if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
-  res.json({ inspection: insp, canEdit: canEditHub(user) })
+  res.json({
+    inspection: insp,
+    canEdit: canEditHub(user),
+    canManage: user.role === 'admin',
+  })
 })
 
 function canEditHub(user: AuthUser) {
   return user.role === 'admin' || isCurrentWeekLead(user.id)
 }
 
+app.post('/api/hub/:id/items', authMiddleware, requireAdmin, (req, res) => {
+  const label = String(req.body?.label || '')
+  const insp = addHubItem(String(req.params.id), label)
+  if (!insp) return res.status(400).json({ error: 'Kohtaa ei voitu lisätä' })
+  res.status(201).json({ inspection: insp })
+})
+
+app.delete('/api/hub/:id/items/:itemId', authMiddleware, requireAdmin, (req, res) => {
+  const insp = deleteHubItem(String(req.params.id), String(req.params.itemId))
+  if (!insp) return res.status(404).json({ error: 'Kohtaa ei löydy' })
+  res.json({ inspection: insp })
+})
+
 app.patch('/api/hub/:id/items/:itemId', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  if (!canEditHub(user)) {
-    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
-  }
   const status = req.body?.status as 'open' | 'ok' | 'issue' | undefined
   const note = req.body?.note as string | null | undefined
+  const label = req.body?.label !== undefined ? String(req.body.label) : undefined
+  const wantsMeta = label !== undefined
+  if (wantsMeta && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Vain ylläpitäjä voi muokata kohtia' })
+  }
+  if (!wantsMeta && !canEditHub(user)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  }
   if (status && !['open', 'ok', 'issue'].includes(status)) {
     return res.status(400).json({ error: 'Virheellinen tila' })
   }
-  const insp = updateHubItem(String(req.params.id), String(req.params.itemId), { status, note })
+  const insp = updateHubItem(String(req.params.id), String(req.params.itemId), {
+    status,
+    note,
+    label,
+  })
   if (!insp) return res.status(404).json({ error: 'Kohtaa ei löydy' })
 
   if (status === 'issue') {
@@ -2316,13 +2368,37 @@ app.patch('/api/hub/:id/items/:itemId', authMiddleware, (req, res) => {
   res.json({ inspection: insp })
 })
 
+app.delete('/api/hub/:id', authMiddleware, requireAdmin, (req, res) => {
+  const ok = deleteHubInspection(String(req.params.id))
+  if (!ok) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  res.json({ ok: true })
+})
+
 app.patch('/api/hub/:id', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  if (!canEditHub(user)) {
-    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
-  }
   const notes = req.body?.notes as string | null | undefined
   const status = req.body?.status as 'open' | 'in_progress' | 'done' | undefined
+  const title = req.body?.title !== undefined ? String(req.body.title) : undefined
+  const cadenceLabel =
+    req.body?.cadenceLabel !== undefined ? String(req.body.cadenceLabel) : undefined
+  const windowStart =
+    req.body?.windowStart !== undefined ? String(req.body.windowStart) : undefined
+  const windowEnd = req.body?.windowEnd !== undefined ? String(req.body.windowEnd) : undefined
+  const intro =
+    req.body?.intro !== undefined ? (String(req.body.intro || '') || null) : undefined
+  const wantsMeta =
+    title !== undefined ||
+    cadenceLabel !== undefined ||
+    windowStart !== undefined ||
+    windowEnd !== undefined ||
+    intro !== undefined
+
+  if (wantsMeta && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Vain ylläpitäjä voi muokata tarkastusta' })
+  }
+  if (!wantsMeta && !canEditHub(user)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  }
   if (status && !['open', 'in_progress', 'done'].includes(status)) {
     return res.status(400).json({ error: 'Virheellinen tila' })
   }
@@ -2330,6 +2406,11 @@ app.patch('/api/hub/:id', authMiddleware, (req, res) => {
     notes,
     status,
     completedByUserId: status === 'done' ? user.id : undefined,
+    title,
+    cadenceLabel,
+    windowStart,
+    windowEnd,
+    intro,
   })
   if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
   res.json({ inspection: insp })

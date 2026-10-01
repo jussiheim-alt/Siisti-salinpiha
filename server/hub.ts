@@ -136,7 +136,12 @@ export function getHubInspection(id: string) {
 export function updateHubItem(
   inspectionId: string,
   itemId: string,
-  patch: { status?: 'open' | 'ok' | 'issue'; note?: string | null },
+  patch: {
+    status?: 'open' | 'ok' | 'issue'
+    note?: string | null
+    label?: string
+    sortOrder?: number
+  },
 ) {
   const item = db
     .prepare(`SELECT * FROM hub_inspection_items WHERE id = ? AND inspection_id = ?`)
@@ -145,20 +150,108 @@ export function updateHubItem(
 
   const status = patch.status ?? String(item.status)
   const note = patch.note !== undefined ? patch.note : (item.note as string | null)
-  db.prepare(`UPDATE hub_inspection_items SET status = ?, note = ? WHERE id = ?`).run(
-    status,
-    note,
-    itemId,
-  )
+  const label =
+    patch.label !== undefined ? String(patch.label).trim() : String(item.label)
+  if (!label) return null
+  const sortOrder =
+    patch.sortOrder !== undefined ? Number(patch.sortOrder) : Number(item.sort_order)
+
+  db.prepare(
+    `UPDATE hub_inspection_items SET status = ?, note = ?, label = ?, sort_order = ? WHERE id = ?`,
+  ).run(status, note, label, sortOrder, itemId)
 
   const insp = db.prepare(`SELECT status FROM hub_inspections WHERE id = ?`).get(inspectionId) as {
     status: string
   }
-  if (insp.status === 'open') {
+  if (insp.status === 'open' && patch.status && patch.status !== 'open') {
     db.prepare(`UPDATE hub_inspections SET status = 'in_progress' WHERE id = ?`).run(inspectionId)
   }
 
   return getHubInspection(inspectionId)
+}
+
+export function addHubItem(inspectionId: string, label: string) {
+  const insp = db.prepare(`SELECT id FROM hub_inspections WHERE id = ?`).get(inspectionId) as
+    | { id: string }
+    | undefined
+  if (!insp) return null
+  const text = label.trim()
+  if (!text) return null
+
+  const maxRow = db
+    .prepare(
+      `SELECT COALESCE(MAX(sort_order), 0) AS m FROM hub_inspection_items WHERE inspection_id = ?`,
+    )
+    .get(inspectionId) as { m: number }
+  const id = crypto.randomUUID()
+  db.prepare(
+    `INSERT INTO hub_inspection_items
+      (id, inspection_id, template_item_id, label, sort_order, status)
+     VALUES (?, ?, ?, ?, ?, 'open')`,
+  ).run(id, inspectionId, `custom-${id}`, text, Number(maxRow.m) + 10)
+
+  return getHubInspection(inspectionId)
+}
+
+export function deleteHubItem(inspectionId: string, itemId: string) {
+  const item = db
+    .prepare(`SELECT id FROM hub_inspection_items WHERE id = ? AND inspection_id = ?`)
+    .get(itemId, inspectionId) as { id: string } | undefined
+  if (!item) return null
+  db.prepare(`DELETE FROM hub_inspection_items WHERE id = ?`).run(itemId)
+  return getHubInspection(inspectionId)
+}
+
+export function createHubInspection(input: {
+  title: string
+  cadenceLabel?: string
+  windowStart: string
+  windowEnd: string
+  intro?: string | null
+  year?: number
+  items?: string[]
+}) {
+  const title = input.title.trim()
+  if (!title) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.windowStart) || !/^\d{4}-\d{2}-\d{2}$/.test(input.windowEnd)) {
+    return null
+  }
+  const year = input.year || Number(input.windowStart.slice(0, 4)) || helsinkiYear()
+  const id = crypto.randomUUID()
+  const templateId = `custom-${id}`
+  const now = new Date().toISOString()
+  const cadenceLabel = (input.cadenceLabel || 'Tarpeen mukaan').trim() || 'Tarpeen mukaan'
+  const intro = input.intro?.trim() || null
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO hub_inspections
+        (id, template_id, year, title, cadence_label, window_start, window_end, intro, status, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?)`,
+    ).run(id, templateId, year, title, cadenceLabel, input.windowStart, input.windowEnd, intro, now)
+
+    const labels = (input.items || []).map((l) => l.trim()).filter(Boolean)
+    labels.forEach((label, idx) => {
+      const itemId = crypto.randomUUID()
+      db.prepare(
+        `INSERT INTO hub_inspection_items
+          (id, inspection_id, template_item_id, label, sort_order, status)
+         VALUES (?, ?, ?, ?, ?, 'open')`,
+      ).run(itemId, id, `custom-${itemId}`, label, (idx + 1) * 10)
+    })
+  })
+  tx()
+  return getHubInspection(id)
+}
+
+export function deleteHubInspection(id: string) {
+  const row = db.prepare(`SELECT id FROM hub_inspections WHERE id = ?`).get(id) as
+    | { id: string }
+    | undefined
+  if (!row) return false
+  db.prepare(`DELETE FROM hub_inspection_items WHERE inspection_id = ?`).run(id)
+  db.prepare(`DELETE FROM hub_inspections WHERE id = ?`).run(id)
+  return true
 }
 
 export function updateHubInspection(
@@ -168,6 +261,11 @@ export function updateHubInspection(
     photoPath?: string | null
     status?: 'open' | 'in_progress' | 'done'
     completedByUserId?: string | null
+    title?: string
+    cadenceLabel?: string
+    windowStart?: string
+    windowEnd?: string
+    intro?: string | null
   },
 ) {
   const row = db.prepare(`SELECT * FROM hub_inspections WHERE id = ?`).get(id) as
@@ -177,6 +275,17 @@ export function updateHubInspection(
 
   const notes = patch.notes !== undefined ? patch.notes : row.notes
   const photoPath = patch.photoPath !== undefined ? patch.photoPath : row.photo_path
+  const title =
+    patch.title !== undefined ? String(patch.title).trim() || String(row.title) : String(row.title)
+  const cadenceLabel =
+    patch.cadenceLabel !== undefined
+      ? String(patch.cadenceLabel).trim() || String(row.cadence_label)
+      : String(row.cadence_label)
+  const windowStart =
+    patch.windowStart !== undefined ? String(patch.windowStart) : String(row.window_start)
+  const windowEnd =
+    patch.windowEnd !== undefined ? String(patch.windowEnd) : String(row.window_end)
+  const intro = patch.intro !== undefined ? patch.intro : row.intro
   let status = patch.status ?? String(row.status)
   let completedBy = row.completed_by_user_id
   let completedAt = row.completed_at
@@ -185,16 +294,29 @@ export function updateHubInspection(
     completedBy = patch.completedByUserId ?? row.completed_by_user_id
     completedAt = new Date().toISOString()
   }
-  if (status !== 'done') {
+  if (status !== 'done' && patch.status) {
     completedBy = null
     completedAt = null
   }
 
   db.prepare(
     `UPDATE hub_inspections
-     SET notes = ?, photo_path = ?, status = ?, completed_by_user_id = ?, completed_at = ?
+     SET notes = ?, photo_path = ?, status = ?, completed_by_user_id = ?, completed_at = ?,
+         title = ?, cadence_label = ?, window_start = ?, window_end = ?, intro = ?
      WHERE id = ?`,
-  ).run(notes, photoPath, status, completedBy, completedAt, id)
+  ).run(
+    notes,
+    photoPath,
+    status,
+    completedBy,
+    completedAt,
+    title,
+    cadenceLabel,
+    windowStart,
+    windowEnd,
+    intro,
+    id,
+  )
 
   return getHubInspection(id)
 }
