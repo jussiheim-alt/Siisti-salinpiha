@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, type HubInspection } from '../api'
+import { useAuth } from '../auth'
 
 function itemStatusLabel(status: HubInspection['items'][number]['status']) {
   if (status === 'ok') return 'OK'
@@ -10,17 +11,39 @@ function itemStatusLabel(status: HubInspection['items'][number]['status']) {
 
 export function HubDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { user } = useAuth()
   const [insp, setInsp] = useState<HubInspection | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [canManage, setCanManage] = useState(false)
+  const [managing, setManaging] = useState(false)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [newItemLabel, setNewItemLabel] = useState('')
+  const [editTitle, setEditTitle] = useState('')
+  const [editCadence, setEditCadence] = useState('')
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [editIntro, setEditIntro] = useState('')
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [editingItemLabel, setEditingItemLabel] = useState('')
 
   async function load() {
-    const data = await api<{ inspection: HubInspection; canEdit: boolean }>(`/api/hub/${id}`)
+    const data = await api<{
+      inspection: HubInspection
+      canEdit: boolean
+      canManage?: boolean
+    }>(`/api/hub/${id}`)
     setInsp(data.inspection)
     setCanEdit(Boolean(data.canEdit))
+    setCanManage(Boolean(data.canManage ?? user?.role === 'admin'))
     setNotes(data.inspection.notes || '')
+    setEditTitle(data.inspection.title)
+    setEditCadence(data.inspection.cadenceLabel)
+    setEditStart(data.inspection.windowStart)
+    setEditEnd(data.inspection.windowEnd)
+    setEditIntro(data.inspection.intro || '')
   }
 
   useEffect(() => {
@@ -95,6 +118,96 @@ export function HubDetailPage() {
     }
   }
 
+  async function saveInspectionMeta(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api<{ inspection: HubInspection }>(`/api/hub/${id}`, {
+        method: 'PATCH',
+        json: {
+          title: editTitle,
+          cadenceLabel: editCadence,
+          windowStart: editStart,
+          windowEnd: editEnd,
+          intro: editIntro,
+        },
+      })
+      setInsp(data.inspection)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Tallennus epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function addItem(e: FormEvent) {
+    e.preventDefault()
+    if (!newItemLabel.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api<{ inspection: HubInspection }>(`/api/hub/${id}/items`, {
+        method: 'POST',
+        json: { label: newItemLabel.trim() },
+      })
+      setInsp(data.inspection)
+      setNewItemLabel('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lisäys epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveItemLabel(itemId: string) {
+    if (!editingItemLabel.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api<{ inspection: HubInspection }>(`/api/hub/${id}/items/${itemId}`, {
+        method: 'PATCH',
+        json: { label: editingItemLabel.trim() },
+      })
+      setInsp(data.inspection)
+      setEditingItemId(null)
+      setEditingItemLabel('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Muokkaus epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeItem(itemId: string) {
+    if (!window.confirm('Poistetaanko tämä tarkistuskohta?')) return
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api<{ inspection: HubInspection }>(`/api/hub/${id}/items/${itemId}`, {
+        method: 'DELETE',
+      })
+      setInsp(data.inspection)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Poisto epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeInspection() {
+    if (!window.confirm('Poistetaanko koko tarkastuskortti? Tätä ei voi perua.')) return
+    setBusy(true)
+    setError('')
+    try {
+      await api(`/api/hub/${id}`, { method: 'DELETE' })
+      navigate('/huolto')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Poisto epäonnistui')
+      setBusy(false)
+    }
+  }
+
   if (!insp && !error) return <div className="boot">Ladataan…</div>
   if (!insp) return <p className="error">{error}</p>
 
@@ -121,6 +234,17 @@ export function HubDetailPage() {
             {insp.status === 'done' ? 'Valmis' : insp.status === 'in_progress' ? 'Kesken' : 'Avoin'}
           </span>
         </div>
+        {canManage && (
+          <div className="row-actions" style={{ marginTop: '0.75rem' }}>
+            <button
+              className="btn small"
+              type="button"
+              onClick={() => setManaging((v) => !v)}
+            >
+              {managing ? 'Valmis muokkaus' : 'Muokkaa korttia'}
+            </button>
+          </div>
+        )}
       </header>
 
       {error && <p className="error">{error}</p>}
@@ -128,7 +252,68 @@ export function HubDetailPage() {
         <p className="hint">Vain ylläpitäjä tai viikon vastuuhenkilö voi merkitä tarkastuksia.</p>
       )}
 
-      {insp.intro && (
+      {managing && canManage && (
+        <form className="surface-card hub-manage stack" onSubmit={(e) => void saveInspectionMeta(e)}>
+          <p className="kicker">Ylläpito</p>
+          <h2>Muokkaa tarkastusta</h2>
+          <label>
+            Otsikko
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+          </label>
+          <label>
+            Jakso / rytmi
+            <input
+              value={editCadence}
+              onChange={(e) => setEditCadence(e.target.value)}
+              placeholder="Kerran vuodessa"
+            />
+          </label>
+          <div className="hub-date-row">
+            <label>
+              Alkaa
+              <input
+                type="date"
+                value={editStart}
+                onChange={(e) => setEditStart(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Päättyy
+              <input
+                type="date"
+                value={editEnd}
+                onChange={(e) => setEditEnd(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+          <label>
+            Taustateksti
+            <textarea
+              rows={2}
+              value={editIntro}
+              onChange={(e) => setEditIntro(e.target.value)}
+              placeholder="Valinnainen ohje tarkastukseen"
+            />
+          </label>
+          <div className="row-actions">
+            <button className="btn primary" type="submit" disabled={busy}>
+              Tallenna tiedot
+            </button>
+            <button
+              className="btn small"
+              type="button"
+              disabled={busy}
+              onClick={() => void removeInspection()}
+            >
+              Poista kortti
+            </button>
+          </div>
+        </form>
+      )}
+
+      {insp.intro && !managing && (
         <section className="surface-card hub-intro">
           <p className="kicker">Tausta</p>
           <p>{insp.intro}</p>
@@ -146,49 +331,127 @@ export function HubDetailPage() {
           </p>
         </div>
         <ul className="hub-items">
-          {insp.items.map((item, index) => (
+          {insp.items.map((item) => (
             <li key={item.id} className={`hub-item status-${item.status}`}>
-              <span className="hub-item-index" aria-hidden="true">
-                {index + 1}
-              </span>
-              <p className="hub-item-label">{item.label}</p>
-              {canEdit ? (
-                <div
-                  className="hub-seg"
-                  role="group"
-                  aria-label={`Merkintä: ${item.label}`}
-                >
-                  <button
-                    type="button"
-                    className={`hub-seg-btn hub-ok ${item.status === 'ok' ? 'is-active' : ''}`}
-                    disabled={busy}
-                    aria-pressed={item.status === 'ok'}
-                    onClick={() =>
-                      void setItemStatus(item.id, item.status === 'ok' ? 'open' : 'ok')
-                    }
-                  >
-                    OK
-                  </button>
-                  <button
-                    type="button"
-                    className={`hub-seg-btn hub-issue ${item.status === 'issue' ? 'is-active' : ''}`}
-                    disabled={busy}
-                    aria-pressed={item.status === 'issue'}
-                    onClick={() =>
-                      void setItemStatus(item.id, item.status === 'issue' ? 'open' : 'issue')
-                    }
-                  >
-                    Puute
-                  </button>
+              {managing && canManage ? (
+                <div className="hub-item-manage">
+                  {editingItemId === item.id ? (
+                    <form
+                      className="hub-item-edit"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        void saveItemLabel(item.id)
+                      }}
+                    >
+                      <input
+                        value={editingItemLabel}
+                        onChange={(e) => setEditingItemLabel(e.target.value)}
+                        autoFocus
+                      />
+                      <button className="btn primary small" type="submit" disabled={busy}>
+                        Tallenna
+                      </button>
+                      <button
+                        className="btn small"
+                        type="button"
+                        onClick={() => {
+                          setEditingItemId(null)
+                          setEditingItemLabel('')
+                        }}
+                      >
+                        Peru
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <p className="hub-item-label">{item.label}</p>
+                      <div className="hub-item-manage-actions">
+                        <button
+                          className="btn ghost small"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setEditingItemId(item.id)
+                            setEditingItemLabel(item.label)
+                          }}
+                        >
+                          Muokkaa
+                        </button>
+                        <button
+                          className="btn ghost small"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void removeItem(item.id)}
+                        >
+                          Poista
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
-                <span className={`hub-item-state status-${item.status}`}>
-                  {itemStatusLabel(item.status)}
-                </span>
+                <>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      className={`hub-check ${item.status}`}
+                      disabled={busy}
+                      aria-label={
+                        item.status === 'ok'
+                          ? 'Merkitty OK — napsauta avataksesi'
+                          : 'Merkitse OK'
+                      }
+                      aria-pressed={item.status === 'ok'}
+                      onClick={() =>
+                        void setItemStatus(item.id, item.status === 'ok' ? 'open' : 'ok')
+                      }
+                    >
+                      {item.status === 'ok' ? '✓' : item.status === 'issue' ? '!' : ''}
+                    </button>
+                  ) : (
+                    <span className={`hub-check readonly ${item.status}`} aria-hidden="true">
+                      {item.status === 'ok' ? '✓' : item.status === 'issue' ? '!' : ''}
+                    </span>
+                  )}
+                  <p className="hub-item-label">{item.label}</p>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      className={`hub-issue-link ${item.status === 'issue' ? 'is-active' : ''}`}
+                      disabled={busy}
+                      aria-pressed={item.status === 'issue'}
+                      onClick={() =>
+                        void setItemStatus(item.id, item.status === 'issue' ? 'open' : 'issue')
+                      }
+                    >
+                      Puute
+                    </button>
+                  ) : (
+                    <span className={`hub-item-state status-${item.status}`}>
+                      {itemStatusLabel(item.status)}
+                    </span>
+                  )}
+                </>
               )}
             </li>
           ))}
         </ul>
+
+        {managing && canManage && (
+          <form className="hub-add-item" onSubmit={(e) => void addItem(e)}>
+            <label>
+              Uusi tarkistuskohta
+              <input
+                value={newItemLabel}
+                onChange={(e) => setNewItemLabel(e.target.value)}
+                placeholder="Esim. Tarkista valaisimet"
+              />
+            </label>
+            <button className="btn primary small" type="submit" disabled={busy || !newItemLabel.trim()}>
+              Lisää kohta
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="surface-card hub-protocol-card">

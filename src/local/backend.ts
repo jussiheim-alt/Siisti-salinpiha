@@ -730,7 +730,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'hub-checklist-light-2026-10' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'hub-admin-edit-2026-10' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
@@ -1403,7 +1403,52 @@ export async function localApi<T = unknown>(
           0,
         ),
       },
+      canEdit: user!.role === 'admin',
     })
+  }
+  if (pathname === '/api/hub' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const title = String(body.title || '').trim()
+    const windowStart = String(body.windowStart || '')
+    const windowEnd = String(body.windowEnd || '')
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(windowStart) || !/^\d{4}-\d{2}-\d{2}$/.test(windowEnd)) {
+      err('Tarkista otsikko ja päivämäärät')
+    }
+    const labels = Array.isArray(body.items)
+      ? (body.items as unknown[]).map(String)
+      : typeof body.itemsText === 'string'
+        ? String(body.itemsText)
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+        : []
+    const id = uid()
+    const now = new Date().toISOString()
+    const insp: HubInspection = {
+      id,
+      templateId: `custom-${id}`,
+      year: Number(windowStart.slice(0, 4)) || new Date().getFullYear(),
+      title,
+      cadenceLabel: String(body.cadenceLabel || 'Tarpeen mukaan').trim() || 'Tarpeen mukaan',
+      windowStart,
+      windowEnd,
+      intro: body.intro !== undefined ? String(body.intro || '') || null : null,
+      status: 'open',
+      createdAt: now,
+      items: labels.map((label, idx) => {
+        const itemId = uid()
+        return {
+          id: itemId,
+          templateItemId: `custom-${itemId}`,
+          label: String(label).trim(),
+          sortOrder: (idx + 1) * 10,
+          status: 'open' as const,
+        }
+      }),
+    }
+    db.hub.push(insp)
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp, db) })
   }
   if (pathname === '/api/hub/seed' && method === 'POST') {
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
@@ -1436,20 +1481,56 @@ export async function localApi<T = unknown>(
       inspections: db.hub.map((h) => hydrateHub(h, db)),
     })
   }
+  const hubItemsCollection = pathname.match(/^\/api\/hub\/([^/]+)\/items$/)
+  if (hubItemsCollection && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const insp = db.hub.find((h) => h.id === hubItemsCollection[1])
+    if (!insp) err('Ei löydy')
+    const label = String(body.label || '').trim()
+    if (!label) err('Kohtaa ei voitu lisätä')
+    const itemId = uid()
+    const maxSort = Math.max(0, ...insp!.items.map((i) => i.sortOrder))
+    insp!.items.push({
+      id: itemId,
+      templateItemId: `custom-${itemId}`,
+      label,
+      sortOrder: maxSort + 10,
+      status: 'open',
+    })
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp!, db) })
+  }
   const hubItem = pathname.match(/^\/api\/hub\/([^/]+)\/items\/([^/]+)$/)
   if (hubItem && method === 'PATCH') {
     const insp = db.hub.find((h) => h.id === hubItem[1])
     if (!insp) err('Ei löydy')
-    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
     const item = insp!.items.find((i) => i.id === hubItem[2])
     if (!item) err('Kohtaa ei löydy')
+    if (body.label !== undefined) {
+      if (user!.role !== 'admin') err('Vain ylläpitäjä voi muokata kohtia')
+      const next = String(body.label || '').trim()
+      if (!next) err('Kohtaa ei voitu lisätä')
+      item!.label = next
+    } else if (user!.role !== 'admin') {
+      err('Vain ylläpitäjälle')
+    }
     if (body.status === 'ok' || body.status === 'issue' || body.status === 'open') {
       item!.status = body.status
+      if (insp!.status === 'open' && body.status !== 'open') insp!.status = 'in_progress'
     }
     if (body.note !== undefined) item!.note = String(body.note || '') || null
-    if (insp!.status === 'open') insp!.status = 'in_progress'
     saveDb(db)
-    return ok({ inspection: hydrateHub(insp!) })
+    return ok({ inspection: hydrateHub(insp!, db) })
+  }
+  if (hubItem && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const insp = db.hub.find((h) => h.id === hubItem[1])
+    if (!insp) err('Ei löydy')
+    const before = insp!.items.length
+    insp!.items = insp!.items.filter((i) => i.id !== hubItem[2])
+    if (insp!.items.length === before) err('Kohtaa ei löydy')
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp!, db) })
   }
   const hubPhoto = pathname.match(/^\/api\/hub\/([^/]+)\/photo$/)
   if (hubPhoto && method === 'POST') {
@@ -1466,18 +1547,40 @@ export async function localApi<T = unknown>(
   if (hubMatch && method === 'GET') {
     const insp = db.hub.find((h) => h.id === hubMatch[1])
     if (!insp) err('Ei löydy')
-    return ok({ inspection: hydrateHub(insp!), canEdit: user!.role === 'admin' })
+    return ok({
+      inspection: hydrateHub(insp!),
+      canEdit: user!.role === 'admin',
+      canManage: user!.role === 'admin',
+    })
+  }
+  if (hubMatch && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const before = db.hub.length
+    db.hub = db.hub.filter((h) => h.id !== hubMatch[1])
+    if (db.hub.length === before) err('Ei löydy')
+    saveDb(db)
+    return ok({ ok: true })
   }
   if (hubMatch && method === 'PATCH') {
     const insp = db.hub.find((h) => h.id === hubMatch[1])
     if (!insp) err('Ei löydy')
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
     if (body.notes !== undefined) insp!.notes = String(body.notes || '') || null
+    if (body.title !== undefined) insp!.title = String(body.title || '').trim() || insp!.title
+    if (body.cadenceLabel !== undefined) {
+      insp!.cadenceLabel = String(body.cadenceLabel || '').trim() || insp!.cadenceLabel
+    }
+    if (body.windowStart !== undefined) insp!.windowStart = String(body.windowStart)
+    if (body.windowEnd !== undefined) insp!.windowEnd = String(body.windowEnd)
+    if (body.intro !== undefined) insp!.intro = String(body.intro || '') || null
     if (body.status === 'done' || body.status === 'open' || body.status === 'in_progress') {
       insp!.status = body.status
       if (body.status === 'done') {
         insp!.completedByUserId = user!.id
         insp!.completedAt = new Date().toISOString()
+      } else {
+        insp!.completedByUserId = null
+        insp!.completedAt = null
       }
     }
     saveDb(db)

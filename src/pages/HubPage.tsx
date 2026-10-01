@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, type HubInspection, type HubSummary } from '../api'
 import { useAuth } from '../auth'
 
@@ -9,12 +9,26 @@ function statusLabel(s: HubInspection['status']) {
   return 'Avoin'
 }
 
+function defaultWindow() {
+  const year = new Date().getFullYear()
+  return { start: `${year}-04-01`, end: `${year}-10-31` }
+}
+
 export function HubPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [items, setItems] = useState<HubInspection[]>([])
   const [summary, setSummary] = useState<HubSummary | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const win = defaultWindow()
+  const [title, setTitle] = useState('')
+  const [cadenceLabel, setCadenceLabel] = useState('Kerran vuodessa')
+  const [windowStart, setWindowStart] = useState(win.start)
+  const [windowEnd, setWindowEnd] = useState(win.end)
+  const [intro, setIntro] = useState('')
+  const [itemsText, setItemsText] = useState('')
 
   async function load() {
     const data = await api<{ summary: HubSummary; inspections: HubInspection[] }>('/api/hub')
@@ -39,6 +53,34 @@ export function HubPage() {
     }
   }
 
+  async function createInspection(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api<{ inspection: HubInspection }>('/api/hub', {
+        method: 'POST',
+        json: {
+          title,
+          cadenceLabel,
+          windowStart,
+          windowEnd,
+          intro,
+          itemsText,
+        },
+      })
+      setCreating(false)
+      setTitle('')
+      setIntro('')
+      setItemsText('')
+      navigate(`/huolto/${data.inspection.id}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Luonti epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="page hub-list-page">
       <header className="page-hero compact">
@@ -52,18 +94,93 @@ export function HubPage() {
             : ''}
         </p>
         {user?.role === 'admin' && (
-          <button
-            className="btn ghost small"
-            type="button"
-            disabled={busy}
-            onClick={() => void seed()}
-          >
-            Luo / täydennä vuoden lista
-          </button>
+          <div className="row-actions" style={{ marginTop: '0.65rem' }}>
+            <button
+              className="btn primary small"
+              type="button"
+              disabled={busy}
+              onClick={() => setCreating((v) => !v)}
+            >
+              {creating ? 'Sulje lomake' : 'Lisää tarkastuskortti'}
+            </button>
+            <button
+              className="btn ghost small"
+              type="button"
+              disabled={busy}
+              onClick={() => void seed()}
+            >
+              Täydennä oletuslista
+            </button>
+          </div>
         )}
       </header>
 
       {error && <p className="error">{error}</p>}
+
+      {creating && user?.role === 'admin' && (
+        <form className="surface-card hub-create stack" onSubmit={(e) => void createInspection(e)}>
+          <p className="kicker">Uusi kortti</p>
+          <h2>Lisää tarkastus</h2>
+          <label>
+            Otsikko
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="Esim. Asfaltti ja kulkuväylät"
+            />
+          </label>
+          <label>
+            Jakso / rytmi
+            <input
+              value={cadenceLabel}
+              onChange={(e) => setCadenceLabel(e.target.value)}
+              placeholder="Kerran vuodessa"
+            />
+          </label>
+          <div className="hub-date-row">
+            <label>
+              Alkaa
+              <input
+                type="date"
+                value={windowStart}
+                onChange={(e) => setWindowStart(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Päättyy
+              <input
+                type="date"
+                value={windowEnd}
+                onChange={(e) => setWindowEnd(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+          <label>
+            Taustateksti (valinnainen)
+            <textarea
+              rows={2}
+              value={intro}
+              onChange={(e) => setIntro(e.target.value)}
+              placeholder="Lyhyt ohje tarkastukseen"
+            />
+          </label>
+          <label>
+            Tarkistuskohdat (yksi per rivi)
+            <textarea
+              rows={5}
+              value={itemsText}
+              onChange={(e) => setItemsText(e.target.value)}
+              placeholder={'Poista kasvillisuus asfaltin raoista\nTarkista seisova vesi'}
+            />
+          </label>
+          <button className="btn primary" type="submit" disabled={busy || !title.trim()}>
+            Luo kortti
+          </button>
+        </form>
+      )}
 
       {summary && (
         <section className="surface-card hub-summary" aria-label="Yhteenveto">
