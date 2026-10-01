@@ -40,7 +40,7 @@ export function HubPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page hub-list-page">
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Hub-huolto</h1>
@@ -52,7 +52,12 @@ export function HubPage() {
             : ''}
         </p>
         {user?.role === 'admin' && (
-          <button className="btn ghost small" type="button" disabled={busy} onClick={() => void seed()}>
+          <button
+            className="btn ghost small"
+            type="button"
+            disabled={busy}
+            onClick={() => void seed()}
+          >
             Luo / täydennä vuoden lista
           </button>
         )}
@@ -60,22 +65,49 @@ export function HubPage() {
 
       {error && <p className="error">{error}</p>}
 
-      <div className="card-list">
-        {items.map((insp) => (
-          <Link key={insp.id} className="week-card week-card-link" to={`/huolto/${insp.id}`}>
-            <div className="week-card-top">
-              <strong>{insp.title}</strong>
-              <span className={`pill status-${insp.status}`}>{statusLabel(insp.status)}</span>
+      {summary && (
+        <section className="surface-card hub-summary" aria-label="Yhteenveto">
+          <div className="hub-summary-grid">
+            <div>
+              <span className="hub-summary-value">{summary.openCount}</span>
+              <span className="hub-summary-label">avointa</span>
             </div>
-            <p className="meta">
-              {insp.cadenceLabel} · {insp.windowStart} – {insp.windowEnd}
-            </p>
-            <p className="meta">
-              {insp.doneCount}/{insp.itemCount} merkitty
-              {insp.issueCount ? ` · ${insp.issueCount} puutetta` : ''}
-            </p>
-          </Link>
-        ))}
+            <div>
+              <span className="hub-summary-value">{summary.dueCount}</span>
+              <span className="hub-summary-label">ajankohtaista</span>
+            </div>
+            <div>
+              <span className="hub-summary-value">{items.length}</span>
+              <span className="hub-summary-label">yhteensä</span>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="card-list hub-card-list">
+        {items.map((insp) => {
+          const progress =
+            insp.itemCount > 0 ? Math.round((insp.doneCount / insp.itemCount) * 100) : 0
+          return (
+            <Link key={insp.id} className="hub-list-card" to={`/huolto/${insp.id}`}>
+              <div className="week-card-top">
+                <strong>{insp.title}</strong>
+                <span className={`pill status-${insp.status}`}>{statusLabel(insp.status)}</span>
+              </div>
+              <p className="meta">
+                {insp.cadenceLabel} · {insp.windowStart} – {insp.windowEnd}
+              </p>
+              <div className="hub-list-progress" aria-hidden="true">
+                <span style={{ width: `${progress}%` }} />
+              </div>
+              <p className="meta hub-list-meta">
+                {insp.doneCount}/{insp.itemCount} merkitty
+                {insp.issueCount ? ` · ${insp.issueCount} puutetta` : ''}
+              </p>
+            </Link>
+          )
+        })}
+        {!items.length && <p className="muted">Ei tarkastuksia vielä.</p>}
       </div>
     </div>
   )
