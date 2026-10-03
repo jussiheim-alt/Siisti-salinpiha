@@ -6,7 +6,6 @@ import {
   getPushStatus,
   isInstalledPwa,
   isIosDevice,
-  sendTestPush,
 } from '../push'
 
 type Mode = 'loading' | 'unsupported' | 'on' | 'off' | 'blocked' | 'need-install'
@@ -32,7 +31,6 @@ function detectMode(status: {
 export function PushToggle() {
   const [mode, setMode] = useState<Mode>('loading')
   const [busy, setBusy] = useState(false)
-  const [testing, setTesting] = useState(false)
   const [hint, setHint] = useState('')
   const [showBlockedHelp, setShowBlockedHelp] = useState(false)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
@@ -110,24 +108,6 @@ export function PushToggle() {
     }
   }
 
-  async function onTestPush() {
-    setTesting(true)
-    setHint('')
-    try {
-      await ensurePushSubscription()
-      const result = await sendTestPush()
-      setHint(
-        result.delivered > 0
-          ? 'Testi lähetetty — lukitse puhelin: ilmoituksen pitäisi näkyä.'
-          : 'Testiä ei voitu toimittaa tälle laitteelle.',
-      )
-    } catch (err) {
-      setHint(err instanceof Error ? err.message : 'Testi epäonnistui')
-    } finally {
-      setTesting(false)
-    }
-  }
-
   if (mode === 'loading') return null
   if (mode === 'unsupported') return null
 
@@ -181,17 +161,6 @@ export function PushToggle() {
 
         {hint && (
           <p className={`push-toggle-hint${isBlocked || needInstall ? ' is-warn' : ''}`}>{hint}</p>
-        )}
-
-        {isOn && (
-          <button
-            type="button"
-            className="btn ghost small"
-            disabled={testing || busy}
-            onClick={() => void onTestPush()}
-          >
-            {testing ? 'Lähetetään…' : 'Testaa lukitusnäyttö'}
-          </button>
         )}
 
         {needInstall && (
