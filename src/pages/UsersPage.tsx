@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type User } from '../api'
+import { useAuth } from '../auth'
 import { formatDateFi } from '../shared/datetime'
+import { isOwnerEmail } from '../shared/owner'
 
 const CONSTRAINT_OPTIONS = [
   { id: 'no_heavy', label: 'Ei raskaisiin töihin' },
@@ -23,6 +25,8 @@ function roleLabel(role: string) {
 }
 
 export function UsersPage() {
+  const { user: me } = useAuth()
+  const isOwner = isOwnerEmail(me?.email)
   const [users, setUsers] = useState<User[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
   const [error, setError] = useState('')
@@ -33,6 +37,7 @@ export function UsersPage() {
   const [constraints, setConstraints] = useState<string[]>([])
   const [lastInviteUrl, setLastInviteUrl] = useState('')
   const [editing, setEditing] = useState<User | null>(null)
+  const [busy, setBusy] = useState(false)
 
   async function load() {
     const [u, i] = await Promise.all([
@@ -55,7 +60,7 @@ export function UsersPage() {
     try {
       const data = await api<{ invite: Invite }>('/api/invites', {
         method: 'POST',
-        json: { name, email, role, constraints },
+        json: { name, email, role: isOwner ? role : 'member', constraints },
       })
       setName('')
       setEmail('')
@@ -93,6 +98,7 @@ export function UsersPage() {
     e.preventDefault()
     if (!editing) return
     setError('')
+    setBusy(true)
     try {
       await api(`/api/users/${editing.id}`, {
         method: 'PATCH',
@@ -111,8 +117,38 @@ export function UsersPage() {
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tallennus epäonnistui')
+    } finally {
+      setBusy(false)
     }
   }
+
+  async function deleteUser() {
+    if (!editing) return
+    const ok = window.confirm(
+      `Poistetaanko käyttäjä ${editing.name} pysyvästi? Tätä ei voi perua.`,
+    )
+    if (!ok) return
+    setError('')
+    setBusy(true)
+    try {
+      await api(`/api/users/${editing.id}`, { method: 'DELETE' })
+      setEditing(null)
+      setNotice('Käyttäjä poistettu.')
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Poisto epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const editingIsOwner = editing ? isOwnerEmail(editing.email) : false
+  const canEditRole = isOwner && !editingIsOwner
+  const canDelete =
+    !!editing &&
+    editing.id !== me?.id &&
+    !editingIsOwner &&
+    (editing.role !== 'admin' || isOwner)
 
   return (
     <div className="page">
@@ -127,7 +163,7 @@ export function UsersPage() {
 
       <section className="panel">
         <h2>Kutsu käyttäjä</h2>
-        <form className="stack" onSubmit={onInvite}>
+        <form className="stack" onSubmit={(e) => void onInvite(e)}>
           <label>
             Nimi
             <input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -138,11 +174,18 @@ export function UsersPage() {
           </label>
           <label>
             Käyttöoikeustaso
-            <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')}>
+            <select
+              value={isOwner ? role : 'member'}
+              onChange={(e) => setRole(e.target.value as 'admin' | 'member')}
+              disabled={!isOwner}
+            >
               <option value="member">Käyttäjä — vuorot, tehtävät, huomiot</option>
-              <option value="admin">Ylläpitäjä — täydet oikeudet</option>
+              {isOwner && <option value="admin">Ylläpitäjä — täydet oikeudet</option>}
             </select>
           </label>
+          {!isOwner && (
+            <p className="hint">Vain pääkäyttäjä voi kutsua uusia ylläpitäjiä.</p>
+          )}
           <fieldset className="checks">
             <legend>Käytettävyysrajoitukset</legend>
             {CONSTRAINT_OPTIONS.map((c) => (
@@ -218,7 +261,8 @@ export function UsersPage() {
                 <strong>{u.name}</strong>
                 <span className="muted">
                   {' '}
-                  · {roleLabel(u.role)} · {u.email}
+                  · {roleLabel(u.role)}
+                  {isOwnerEmail(u.email) ? ' · pääkäyttäjä' : ''} · {u.email}
                 </span>
                 <div className="tags">
                   {u.constraints.map((c) => (
@@ -238,74 +282,120 @@ export function UsersPage() {
       </section>
 
       {editing && (
-        <div className="modal-backdrop" onClick={() => setEditing(null)}>
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => !busy && setEditing(null)}
+        >
           <form
-            className="modal stack"
+            className="modal user-rights-modal"
             onClick={(e) => e.stopPropagation()}
-            onSubmit={saveEdit}
+            onSubmit={(e) => void saveEdit(e)}
           >
-            <h2>Käyttöoikeudet</h2>
-            <label>
-              Nimi
-              <input
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-              />
-            </label>
-            <label>
-              Sähköposti
-              <input
-                value={editing.email}
-                onChange={(e) => setEditing({ ...editing, email: e.target.value })}
-              />
-            </label>
-            <label>
-              Käyttöoikeustaso
-              <select
-                value={editing.role}
-                onChange={(e) =>
-                  setEditing({ ...editing, role: e.target.value as 'admin' | 'member' })
-                }
+            <header className="modal-head">
+              <h2>Käyttöoikeudet</h2>
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={() => setEditing(null)}
+                disabled={busy}
               >
-                <option value="member">Käyttäjä</option>
-                <option value="admin">Ylläpitäjä (täydet oikeudet)</option>
-              </select>
-            </label>
-            <fieldset className="checks">
-              <legend>Käytettävyysrajoitukset</legend>
-              {CONSTRAINT_OPTIONS.map((c) => (
-                <label key={c.id} className="check">
-                  <input
-                    type="checkbox"
-                    checked={editing.constraints.includes(c.id)}
-                    onChange={() =>
-                      setEditing({
-                        ...editing,
-                        constraints: editing.constraints.includes(c.id)
-                          ? editing.constraints.filter((x) => x !== c.id)
-                          : [...editing.constraints, c.id],
-                      })
-                    }
-                  />
-                  {c.label}
-                </label>
-              ))}
-            </fieldset>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={editing.active}
-                onChange={(e) => setEditing({ ...editing, active: e.target.checked })}
-              />
-              Aktiivinen tili
-            </label>
-            <div className="row-actions">
-              <button className="btn primary" type="submit">
-                Tallenna
+                Sulje
               </button>
-              <button className="btn" type="button" onClick={() => setEditing(null)}>
-                Peru
-              </button>
+            </header>
+
+            <div className="modal-scroll stack">
+              <label>
+                Nimi
+                <input
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  disabled={editingIsOwner && !isOwner}
+                />
+              </label>
+              <label>
+                Sähköposti
+                <input
+                  value={editing.email}
+                  onChange={(e) => setEditing({ ...editing, email: e.target.value })}
+                  disabled={editingIsOwner && !isOwner}
+                />
+              </label>
+              <label>
+                Käyttöoikeustaso
+                <select
+                  value={editing.role}
+                  disabled={!canEditRole}
+                  onChange={(e) =>
+                    setEditing({ ...editing, role: e.target.value as 'admin' | 'member' })
+                  }
+                >
+                  <option value="member">Käyttäjä</option>
+                  <option value="admin">Ylläpitäjä (täydet oikeudet)</option>
+                </select>
+              </label>
+              {!canEditRole && (
+                <p className="hint">
+                  {editingIsOwner
+                    ? 'Pääkäyttäjän ylläpito-oikeutta ei voi muuttaa.'
+                    : 'Vain pääkäyttäjä (Jussi Heimonen) voi lisätä tai poistaa ylläpitäjiä.'}
+                </p>
+              )}
+              <fieldset className="checks">
+                <legend>Käytettävyysrajoitukset</legend>
+                {CONSTRAINT_OPTIONS.map((c) => (
+                  <label key={c.id} className="check">
+                    <input
+                      type="checkbox"
+                      checked={editing.constraints.includes(c.id)}
+                      onChange={() =>
+                        setEditing({
+                          ...editing,
+                          constraints: editing.constraints.includes(c.id)
+                            ? editing.constraints.filter((x) => x !== c.id)
+                            : [...editing.constraints, c.id],
+                        })
+                      }
+                    />
+                    {c.label}
+                  </label>
+                ))}
+              </fieldset>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={editing.active}
+                  disabled={editingIsOwner}
+                  onChange={(e) => setEditing({ ...editing, active: e.target.checked })}
+                />
+                Aktiivinen tili
+              </label>
+            </div>
+
+            <div className="modal-actions">
+              <div className="row-actions">
+                <button className="btn primary" type="submit" disabled={busy}>
+                  {busy ? 'Tallennetaan…' : 'Tallenna'}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setEditing(null)}
+                  disabled={busy}
+                >
+                  Peru
+                </button>
+              </div>
+              {canDelete && (
+                <button
+                  className="btn danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteUser()}
+                >
+                  Poista käyttäjä
+                </button>
+              )}
             </div>
           </form>
         </div>
