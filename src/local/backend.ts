@@ -6,6 +6,7 @@ import {
   type SeasonKey,
   type TaskCadence,
 } from '../shared/seasons'
+import { formatWeekRangeFi } from '../shared/datetime'
 import { seedTaskCardsFromCatalog, type TaskCard } from '../shared/taskCards'
 
 
@@ -1172,7 +1173,7 @@ export async function localApi<T = unknown>(
         db,
         p.assignments.map((a) => a.userId),
         'Pihavuoro julkaistu',
-        `${p.weekStart} – ${addDays(p.weekStart, 6)}: vuorosi on valmis katsottavaksi.`,
+        `${formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))}: vuorosi on valmis katsottavaksi.`,
         `/pihavuoro/${p.id}`,
         'shift',
       )
@@ -1265,7 +1266,7 @@ export async function localApi<T = unknown>(
         db,
         recipients,
         toUserId ? 'Sinulle tarjottiin vuoronvaihtoa' : 'Avoin vuoronvaihto',
-        `${user!.name} etsii sijaisia viikolle ${p.weekStart}.`,
+        `${user!.name} etsii sijaisia viikolle ${formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))}.`,
         '/vaihdot',
         'swap',
       )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Pihavuoro } from '../api'
 import { useAuth } from '../auth'
+import { formatWeekRangeFi } from '../shared/datetime'
 
 export function CalendarPage() {
   const { user } = useAuth()
@@ -77,8 +78,8 @@ export function CalendarPage() {
           <button className="btn" disabled={creating} onClick={() => void createWeek(false)}>
             Luo luonnos
           </button>
-          <Link className="btn ghost" to="/esteet">
-            Esteviikot
+          <Link className="btn ghost" to="/kaytettavyys">
+            Käytettävyys
           </Link>
         </div>
       )}
@@ -95,7 +96,7 @@ export function CalendarPage() {
               <Link to={`/pihavuoro/${p.id}`} className="week-card-link">
                 <div className="week-card-top">
                   <strong>
-                    {p.weekStart} – {p.weekEnd}
+                    {formatWeekRangeFi(p.weekStart, p.weekEnd)}
                   </strong>
                   <span className={`pill status-${p.status}`}>
                     {p.status === 'draft'

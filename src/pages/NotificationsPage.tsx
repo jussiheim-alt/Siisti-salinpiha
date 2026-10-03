@@ -2,16 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification } from '../api'
 import { useAuth } from '../auth'
+import { formatDateTimeFi } from '../shared/datetime'
 
 function formatWhen(iso: string) {
-  try {
-    return new Intl.DateTimeFormat('fi-FI', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }).format(new Date(iso))
-  } catch {
-    return iso
-  }
+  return formatDateTimeFi(iso)
 }
 
 function kindLabel(kind: string) {
