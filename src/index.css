@@ -2792,3 +2792,69 @@ select:focus {
 .chat-sheet-compose textarea {
   resize: none;
 }
+
+/* Member usage guide */
+.guide-intro p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.guide-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.guide-item {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.guide-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.guide-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide-step {
+  flex-shrink: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--moss) 12%, white);
+  color: var(--moss);
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.guide-body {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0 1rem 1rem 1rem;
+}
+
+.guide-body p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 88%, var(--muted));
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.guide-body .btn {
+  justify-self: start;
+  margin-top: 0.15rem;
+}
