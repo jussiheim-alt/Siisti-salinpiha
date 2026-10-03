@@ -4,7 +4,6 @@ import {
   api,
   type HubInspection,
   type Pihavuoro,
-  type SwapOffer,
   type TaskCard,
   type User,
 } from '../api'
@@ -29,9 +28,6 @@ export function PihavuoroPage() {
   const [leadId, setLeadId] = useState('')
   const [helperIds, setHelperIds] = useState<string[]>([])
   const [savingRoster, setSavingRoster] = useState(false)
-  const [swaps, setSwaps] = useState<SwapOffer[]>([])
-  const [swapMessage, setSwapMessage] = useState('')
-  const [swapTarget, setSwapTarget] = useState('')
   const [activeHub, setActiveHub] = useState<HubInspection[]>([])
   const [canEditHub, setCanEditHub] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -49,12 +45,6 @@ export function PihavuoroPage() {
     )
   }
 
-  async function loadSwaps() {
-    if (!id) return
-    const data = await api<{ swaps: SwapOffer[] }>(`/api/pihavuorot/${id}/swaps`)
-    setSwaps(data.swaps)
-  }
-
   async function loadActiveHub() {
     try {
       const data = await api<{ inspections: HubInspection[]; canEdit: boolean }>('/api/hub/active')
@@ -70,13 +60,6 @@ export function PihavuoroPage() {
     if (!id) return
     load().catch((e) => setError(e.message))
   }, [id])
-
-  useEffect(() => {
-    if (!id || !p) return
-    if (p.status === 'published' || p.status === 'done') {
-      loadSwaps().catch(() => undefined)
-    }
-  }, [id, p?.status, p?.id])
 
   useEffect(() => {
     if (!p || p.status !== 'published') {
@@ -121,27 +104,13 @@ export function PihavuoroPage() {
   }, [user?.id, user?.role])
 
   const myAssignment = p?.assignments.find((a) => a.userId === user?.id)
+  const onShift = Boolean(myAssignment)
   const isLead = myAssignment?.role === 'lead'
   const isAdmin = user?.role === 'admin'
-  const onShift = Boolean(myAssignment)
-  const myOpenSwap = swaps.find((s) => s.fromUserId === user?.id && s.status === 'open')
-  const claimableSwaps = swaps.filter(
-    (s) =>
-      s.status === 'open' &&
-      s.fromUserId !== user?.id &&
-      (!s.toUserId || s.toUserId === user?.id) &&
-      !onShift,
-  )
 
   const candidateUsers = useMemo(() => {
     return users.slice().sort((a, b) => a.name.localeCompare(b.name, 'fi'))
   }, [users])
-
-  const swapCandidates = useMemo(() => {
-    if (!p) return []
-    const assigned = new Set(p.assignments.map((a) => a.userId))
-    return candidateUsers.filter((u) => u.id !== user?.id && !assigned.has(u.id))
-  }, [candidateUsers, p, user?.id])
 
   async function complete(taskId: string, status: 'done' | 'skipped') {
     setBusyId(taskId)
@@ -307,58 +276,6 @@ export function PihavuoroPage() {
     }
   }
 
-  async function createSwap() {
-    if (!id) return
-    setError('')
-    setInfo('')
-    try {
-      await api(`/api/pihavuorot/${id}/swaps`, {
-        method: 'POST',
-        json: {
-          message: swapMessage.trim() || undefined,
-          toUserId: swapTarget || undefined,
-        },
-      })
-      setSwapMessage('')
-      setSwapTarget('')
-      setInfo('Vaihtotarjous julkaistu.')
-      await loadSwaps()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Tarjouksen luonti epäonnistui')
-    }
-  }
-
-  async function acceptSwap(swapId: string) {
-    setBusyId(swapId)
-    setError('')
-    try {
-      const data = await api<{ pihavuoro: Pihavuoro }>(`/api/swaps/${swapId}/accept`, {
-        method: 'POST',
-      })
-      setP(data.pihavuoro)
-      setInfo('Otit vuoron vastaan.')
-      await loadSwaps()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Hyväksyntä epäonnistui')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function cancelSwap(swapId: string) {
-    setBusyId(swapId)
-    setError('')
-    try {
-      await api(`/api/swaps/${swapId}/cancel`, { method: 'POST' })
-      await loadSwaps()
-      setInfo('Tarjous peruttu.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Peruminen epäonnistui')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   if (!p) {
     return (
       <div className="page">
@@ -520,97 +437,6 @@ export function PihavuoroPage() {
           <p className="hint">Raskaita tehtäviä ei voi antaa “ei raskaisiin” -henkilölle.</p>
         )}
       </section>
-
-      {p.status === 'published' && (
-        <section className="panel">
-          <h2>Vuoronvaihto</h2>
-          {onShift && !myOpenSwap && (
-            <div className="stack swap-form">
-              <p className="hint">
-                Jos et pääse paikalle, tarjoa paikkasi ({myAssignment?.role === 'lead' ? 'vastuu' : 'apu'})
-                muille.
-              </p>
-              <label>
-                Viesti (valinnainen)
-                <textarea
-                  rows={2}
-                  value={swapMessage}
-                  onChange={(e) => setSwapMessage(e.target.value)}
-                  placeholder="Esim. matkustan pois viikonloppuna"
-                />
-              </label>
-              <label>
-                Kohdenna henkilölle (valinnainen)
-                <select value={swapTarget} onChange={(e) => setSwapTarget(e.target.value)}>
-                  <option value="">Avoin kaikille</option>
-                  {swapCandidates.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="btn primary" type="button" onClick={() => void createSwap()}>
-                Julkaise vaihtotarjous
-              </button>
-            </div>
-          )}
-
-          {myOpenSwap && (
-            <div className="swap-card">
-              <div>
-                <strong>Oma tarjouksesi auki</strong>
-                <p className="muted">
-                  {myOpenSwap.toUserName
-                    ? `Kohde: ${myOpenSwap.toUserName}`
-                    : 'Avoin kaikille'}
-                  {myOpenSwap.message ? ` · ${myOpenSwap.message}` : ''}
-                </p>
-              </div>
-              <button
-                className="btn small"
-                type="button"
-                disabled={busyId === myOpenSwap.id}
-                onClick={() => void cancelSwap(myOpenSwap.id)}
-              >
-                Peru
-              </button>
-            </div>
-          )}
-
-          {claimableSwaps.length > 0 && (
-            <ul className="swap-list">
-              {claimableSwaps.map((s) => (
-                <li key={s.id} className="swap-card">
-                  <div>
-                    <strong>{s.fromUserName}</strong>
-                    <p className="muted">
-                      {s.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'}
-                      {s.message ? ` · ${s.message}` : ''}
-                    </p>
-                  </div>
-                  <button
-                    className="btn primary small"
-                    type="button"
-                    disabled={busyId === s.id}
-                    onClick={() => void acceptSwap(s.id)}
-                  >
-                    Ota vuoro
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {!onShift && claimableSwaps.length === 0 && !myOpenSwap && (
-            <p className="muted">Ei avoimia vaihtotarjouksia tälle viikolle.</p>
-          )}
-
-          <p className="hint">
-            <Link to="/vaihdot">Katso kaikki avoimet vaihdot</Link>
-          </p>
-        </section>
-      )}
 
       {isAdmin && (
         <section className="panel week-task-picker">

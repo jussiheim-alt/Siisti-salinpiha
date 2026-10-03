@@ -67,7 +67,7 @@ import {
 const PORT = Number(process.env.PORT || 8787)
 
 /** Chat kuuluu FAB-merkkiin + lukitusnäytön pushiin — ei Ilmo-listaan. */
-const NOTIF_EXCLUDE_CHAT = `AND IFNULL(kind, 'general') != 'chat'`
+const NOTIF_EXCLUDE_CHAT = `AND IFNULL(kind, 'general') NOT IN ('chat', 'swap')`
 
 function loadJwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET
@@ -970,12 +970,23 @@ app.get('/api/meta/app', (_req, res) => {
 })
 
 // ——— Käytettävyys (esteviikot) ———
+/** Poista menneet esteviikot — lista rullaa aina nykyisestä maanantaista eteenpäin. */
+function prunePastWeekBlocks(userId?: string) {
+  const start = mondayOf()
+  if (userId) {
+    db.prepare(`DELETE FROM week_blocks WHERE user_id = ? AND week_start < ?`).run(userId, start)
+  } else {
+    db.prepare(`DELETE FROM week_blocks WHERE week_start < ?`).run(start)
+  }
+}
+
 app.get('/api/availability', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const count = Math.min(16, Math.max(4, Number(req.query.weeks) || 10))
   const weeks = upcomingMondays(count)
   const targetId =
     user.role === 'admin' && req.query.userId ? String(req.query.userId) : user.id
+  prunePastWeekBlocks(targetId)
 
   const blocked = new Set(
     (
@@ -1016,6 +1027,9 @@ app.get('/api/availability', authMiddleware, (req, res) => {
 
   res.json({
     userId: targetId,
+    weeksAhead: count,
+    windowStart: weeks[0],
+    windowEnd: weeks[weeks.length - 1],
     weeks: weeks.map((weekStart) => ({
       weekStart,
       weekEnd: format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd'),
@@ -1034,6 +1048,7 @@ app.put('/api/availability', authMiddleware, (req, res) => {
   const blockedWeeks = Array.isArray(req.body?.blockedWeeks)
     ? (req.body.blockedWeeks as unknown[]).map(String).filter((w) => windowSet.has(w))
     : []
+  prunePastWeekBlocks(user.id)
 
   const del = db.prepare(
     `DELETE FROM week_blocks WHERE user_id = ? AND week_start >= ? AND week_start <= ?`,
@@ -1494,49 +1509,6 @@ app.patch('/api/tasks/:id', authMiddleware, (req, res) => {
   res.json({ pihavuoro: hydratePihavuoro(piha) })
 })
 
-// ——— Vuoronvaihto ———
-function hydrateSwap(row: Record<string, unknown>) {
-  const p = db.prepare('SELECT week_start, status FROM pihavuorot WHERE id = ?').get(row.pihavuoro_id) as
-    | { week_start: string; status: string }
-    | undefined
-  const fromName = (
-    db.prepare('SELECT name FROM users WHERE id = ?').get(row.from_user_id) as { name: string } | undefined
-  )?.name
-  const toName = row.to_user_id
-    ? (
-        db.prepare('SELECT name FROM users WHERE id = ?').get(row.to_user_id) as
-          | { name: string }
-          | undefined
-      )?.name
-    : null
-  const acceptedName = row.accepted_by_user_id
-    ? (
-        db.prepare('SELECT name FROM users WHERE id = ?').get(row.accepted_by_user_id) as
-          | { name: string }
-          | undefined
-      )?.name
-    : null
-  const weekStart = p?.week_start || ''
-  return {
-    id: row.id,
-    pihavuoroId: row.pihavuoro_id,
-    weekStart,
-    weekEnd: weekStart ? format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd') : '',
-    pihavuoroStatus: p?.status || null,
-    fromUserId: row.from_user_id,
-    fromUserName: fromName || '—',
-    toUserId: row.to_user_id ?? null,
-    toUserName: toName,
-    role: row.role,
-    message: row.message ?? null,
-    status: row.status,
-    createdAt: row.created_at,
-    resolvedAt: row.resolved_at ?? null,
-    acceptedByUserId: row.accepted_by_user_id ?? null,
-    acceptedByUserName: acceptedName,
-  }
-}
-
 function isAssignedTo(pihavuoroId: string, userId: string) {
   return Boolean(
     db
@@ -1544,273 +1516,6 @@ function isAssignedTo(pihavuoroId: string, userId: string) {
       .get(pihavuoroId, userId),
   )
 }
-
-function applySwapTransfer(pihavuoroId: string, fromUserId: string, toUserId: string, role: string) {
-  const existingTo = db
-    .prepare('SELECT id FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
-    .get(pihavuoroId, toUserId)
-  if (existingTo) throw new Error('Vastaanottaja on jo tässä vuorossa')
-
-  const assignment = db
-    .prepare('SELECT id FROM assignments WHERE pihavuoro_id = ? AND user_id = ? AND role = ?')
-    .get(pihavuoroId, fromUserId, role) as { id: string } | undefined
-  if (!assignment) throw new Error('Alkuperäistä vuoropaikkaa ei löydy')
-
-  const toUser = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(toUserId) as
-    | { constraints_json: string }
-    | undefined
-  const constraints = parseConstraints(toUser?.constraints_json ?? '[]')
-  if (role === 'lead' && constraints.includes('no_lead')) {
-    throw new Error('Vastaanottajalla on rajoitus: ei vastuuhenkilöksi')
-  }
-
-  db.prepare('UPDATE assignments SET user_id = ? WHERE id = ?').run(toUserId, assignment.id)
-
-  const openTasks = db
-    .prepare(
-      `SELECT id, effort FROM shift_tasks
-       WHERE pihavuoro_id = ? AND assignee_user_id = ? AND status = 'open'`,
-    )
-    .all(pihavuoroId, fromUserId) as { id: string; effort: string }[]
-
-  for (const t of openTasks) {
-    if (t.effort === 'heavy' && constraints.includes('no_heavy')) {
-      db.prepare('UPDATE shift_tasks SET assignee_user_id = NULL WHERE id = ?').run(t.id)
-    } else {
-      db.prepare('UPDATE shift_tasks SET assignee_user_id = ? WHERE id = ?').run(toUserId, t.id)
-    }
-  }
-}
-
-function mapSwapRows(rows: Record<string, unknown>[]) {
-  return rows.map(hydrateSwap)
-}
-
-app.get('/api/swaps', authMiddleware, (req, res) => {
-  const user = (req as express.Request & { user: AuthUser }).user
-  const mine = db
-    .prepare(
-      `SELECT s.* FROM swap_offers s
-       JOIN pihavuorot p ON p.id = s.pihavuoro_id
-       WHERE s.from_user_id = ? AND s.status = 'open'
-       ORDER BY p.week_start`,
-    )
-    .all(user.id) as Record<string, unknown>[]
-
-  const available = db
-    .prepare(
-      `SELECT s.* FROM swap_offers s
-       JOIN pihavuorot p ON p.id = s.pihavuoro_id
-       WHERE s.status = 'open'
-         AND p.status = 'published'
-         AND s.from_user_id != ?
-         AND (s.to_user_id IS NULL OR s.to_user_id = ?)
-         AND NOT EXISTS (
-           SELECT 1 FROM assignments a
-           WHERE a.pihavuoro_id = s.pihavuoro_id AND a.user_id = ?
-         )
-       ORDER BY p.week_start`,
-    )
-    .all(user.id, user.id, user.id) as Record<string, unknown>[]
-
-  res.json({
-    mine: mapSwapRows(mine),
-    available: mapSwapRows(available),
-  })
-})
-
-app.get('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
-  const rows = db
-    .prepare(
-      `SELECT * FROM swap_offers WHERE pihavuoro_id = ? AND status = 'open' ORDER BY created_at`,
-    )
-    .all(req.params.id) as Record<string, unknown>[]
-  res.json({ swaps: mapSwapRows(rows) })
-})
-
-app.post('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
-  const user = (req as express.Request & { user: AuthUser }).user
-  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
-    | Record<string, unknown>
-    | undefined
-  if (!piha) return res.status(404).json({ error: 'Pihavuoroa ei löydy' })
-  if (piha.status !== 'published') {
-    return res.status(400).json({ error: 'Vaihto vain julkaistulle vuorolle' })
-  }
-
-  const assignment = db
-    .prepare('SELECT * FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
-    .get(req.params.id, user.id) as Record<string, unknown> | undefined
-  if (!assignment) return res.status(403).json({ error: 'Et ole tässä vuorossa' })
-
-  const existing = db
-    .prepare(
-      `SELECT id FROM swap_offers WHERE pihavuoro_id = ? AND from_user_id = ? AND status = 'open'`,
-    )
-    .get(req.params.id, user.id)
-  if (existing) return res.status(400).json({ error: 'Sinulla on jo avoin vaihtotarjous tälle viikolle' })
-
-  const toUserId = req.body.toUserId ? String(req.body.toUserId) : null
-  if (toUserId) {
-    if (toUserId === user.id) return res.status(400).json({ error: 'Et voi tarjota itsellesi' })
-    const target = db.prepare('SELECT id, active FROM users WHERE id = ?').get(toUserId) as
-      | { id: string; active: number }
-      | undefined
-    if (!target?.active) return res.status(400).json({ error: 'Kohdekäyttäjää ei löydy' })
-    if (isAssignedTo(String(req.params.id), toUserId)) {
-      return res.status(400).json({ error: 'Kohdehenkilö on jo tässä vuorossa' })
-    }
-  }
-
-  const message = String(req.body.message || '').trim().slice(0, 400) || null
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO swap_offers
-     (id, pihavuoro_id, from_user_id, to_user_id, role, message, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'open', ?)`,
-  ).run(id, req.params.id, user.id, toUserId, assignment.role, message, now)
-
-  const hydrated = hydrateSwap(
-    db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(id) as Record<string, unknown>,
-  )
-  const roleLabel = assignment.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'
-  const link = `/pihavuoro/${req.params.id}`
-  if (toUserId) {
-    notifyUsers(
-      [toUserId],
-      'Sinulle tarjottiin vuoronvaihtoa',
-      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
-      link,
-      'swap',
-    )
-  } else {
-    const recipients = (
-      db
-        .prepare(
-          `SELECT id FROM users
-           WHERE active = 1 AND id != ?
-             AND id NOT IN (SELECT user_id FROM assignments WHERE pihavuoro_id = ?)`,
-        )
-        .all(user.id, req.params.id) as { id: string }[]
-    ).map((u) => u.id)
-    notifyUsers(
-      recipients,
-      'Avoin vuoronvaihto',
-      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
-      '/vaihdot',
-      'swap',
-    )
-  }
-
-  res.status(201).json({ swap: hydrated })
-})
-
-app.post('/api/swaps/:id/accept', authMiddleware, (req, res) => {
-  const user = (req as express.Request & { user: AuthUser }).user
-  const offer = db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as
-    | Record<string, unknown>
-    | undefined
-  if (!offer) return res.status(404).json({ error: 'Tarjousta ei löydy' })
-  if (offer.status !== 'open') return res.status(400).json({ error: 'Tarjous ei ole enää auki' })
-  if (offer.from_user_id === user.id) {
-    return res.status(400).json({ error: 'Et voi hyväksyä omaa tarjoustasi' })
-  }
-  if (offer.to_user_id && offer.to_user_id !== user.id) {
-    return res.status(403).json({ error: 'Tarjous on suunnattu toiselle henkilölle' })
-  }
-
-  const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(offer.pihavuoro_id) as
-    | Record<string, unknown>
-    | undefined
-  if (!piha || piha.status !== 'published') {
-    return res.status(400).json({ error: 'Vuoro ei ole enää vaihdettavissa' })
-  }
-
-  try {
-    const tx = db.transaction(() => {
-      applySwapTransfer(
-        String(offer.pihavuoro_id),
-        String(offer.from_user_id),
-        user.id,
-        String(offer.role),
-      )
-      const now = new Date().toISOString()
-      db.prepare(
-        `UPDATE swap_offers
-         SET status = 'accepted', resolved_at = ?, accepted_by_user_id = ?
-         WHERE id = ?`,
-      ).run(now, user.id, offer.id)
-      db.prepare(
-        `UPDATE swap_offers SET status = 'cancelled', resolved_at = ?
-         WHERE pihavuoro_id = ? AND from_user_id = ? AND status = 'open' AND id != ?`,
-      ).run(now, offer.pihavuoro_id, offer.from_user_id, offer.id)
-    })
-    tx()
-  } catch (e) {
-    return res.status(400).json({
-      error: e instanceof Error ? e.message : 'Vaihto epäonnistui',
-    })
-  }
-
-  const hydrated = hydrateSwap(
-    db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as Record<string, unknown>,
-  )
-  const roleLabel = offer.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'
-  notifyUsers(
-    [String(offer.from_user_id)],
-    'Vuoronvaihto hyväksytty',
-    `${user.name} otti paikkasi (${roleLabel}) viikolla ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
-    `/pihavuoro/${offer.pihavuoro_id}`,
-    'swap',
-  )
-  const others = (
-    db
-      .prepare(
-        `SELECT user_id FROM assignments
-         WHERE pihavuoro_id = ? AND user_id NOT IN (?, ?)`,
-      )
-      .all(offer.pihavuoro_id, offer.from_user_id, user.id) as { user_id: string }[]
-  ).map((r) => r.user_id)
-  if (others.length) {
-    notifyUsers(
-      others,
-      'Kokoonpano päivittyi',
-      `${user.name} tuli vuoroon ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)} (${roleLabel}).`,
-      `/pihavuoro/${offer.pihavuoro_id}`,
-      'swap',
-    )
-  }
-
-  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(offer.pihavuoro_id) as Record<
-    string,
-    unknown
-  >
-  res.json({ swap: hydrated, pihavuoro: hydratePihavuoro(updated) })
-})
-
-app.post('/api/swaps/:id/cancel', authMiddleware, (req, res) => {
-  const user = (req as express.Request & { user: AuthUser }).user
-  const offer = db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as
-    | Record<string, unknown>
-    | undefined
-  if (!offer) return res.status(404).json({ error: 'Tarjousta ei löydy' })
-  if (offer.status !== 'open') return res.status(400).json({ error: 'Tarjous ei ole enää auki' })
-  if (offer.from_user_id !== user.id && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Vain tarjouksen tekijä tai ylläpitäjä voi perua' })
-  }
-  db.prepare(
-    `UPDATE swap_offers SET status = 'cancelled', resolved_at = ? WHERE id = ?`,
-  ).run(new Date().toISOString(), offer.id)
-  res.json({
-    swap: hydrateSwap(
-      db.prepare('SELECT * FROM swap_offers WHERE id = ?').get(req.params.id) as Record<
-        string,
-        unknown
-      >,
-    ),
-  })
-})
 
 // ——— Viikkokeskustelu (vain vuorossa oleville) ———
 function requireShiftMember(pihavuoroId: string, userId: string) {
@@ -2232,6 +1937,9 @@ app.get('/api/home', authMiddleware, async (req, res) => {
     console.warn('Weather fetch failed', err)
   }
 
+  // Poista vanhat vuoronvaihto-ilmoitukset (ominaisuus poistettu)
+  db.prepare(`DELETE FROM notifications WHERE kind = 'swap'`).run()
+
   const unreadNotifications = (
     db
       .prepare(
@@ -2273,31 +1981,6 @@ app.get('/api/home', authMiddleware, async (req, res) => {
     }
   ).c
 
-  const openSwapOffers = (
-    db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM swap_offers s
-         JOIN pihavuorot p ON p.id = s.pihavuoro_id
-         WHERE s.status = 'open'
-           AND p.status = 'published'
-           AND s.from_user_id != ?
-           AND (s.to_user_id IS NULL OR s.to_user_id = ?)
-           AND NOT EXISTS (
-             SELECT 1 FROM assignments a
-             WHERE a.pihavuoro_id = s.pihavuoro_id AND a.user_id = ?
-           )`,
-      )
-      .get(user.id, user.id, user.id) as { c: number }
-  ).c
-
-  const myOpenSwaps = (
-    db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM swap_offers WHERE from_user_id = ? AND status = 'open'`,
-      )
-      .get(user.id) as { c: number }
-  ).c
-
   const nextId = row ? String(row.id) : null
   const chatMessageCount = nextId
     ? (
@@ -2320,10 +2003,6 @@ app.get('/api/home', authMiddleware, async (req, res) => {
     availability: {
       weeksAhead: 10,
       blockedCount: myBlockedCount,
-    },
-    swaps: {
-      availableCount: openSwapOffers,
-      myOpenCount: myOpenSwaps,
     },
     chat: nextId
       ? {

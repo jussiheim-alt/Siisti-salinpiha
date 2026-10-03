@@ -102,7 +102,8 @@ export function AvailabilityPage() {
       <section className="panel">
         <h2>Seuraavat 10 viikkoa</h2>
         <p className="hint" style={{ marginTop: '-0.35rem', marginBottom: '0.85rem' }}>
-          Valitse estetyt viikot · {blockedCount} merkitty
+          Lista rullaa eteenpäin joka maanantai: vanhin viikko poistuu ja uusi tulee perään.
+          Valitse estetyt · {blockedCount} merkitty
         </p>
 
         <ul className="avail-list">
