@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type ExtraTask } from '../api'
 import { useAuth } from '../auth'
@@ -34,6 +34,12 @@ export function ExtraTasksPage() {
   const [confirmWipe, setConfirmWipe] = useState(false)
   const [wiping, setWiping] = useState(false)
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
+  const cancelConfirmRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!confirmCancelId) return
+    cancelConfirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [confirmCancelId])
 
   async function load() {
     const data = await api<{ tasks: ExtraTask[]; canCreate: boolean }>('/api/extra-tasks')
@@ -112,7 +118,11 @@ export function ExtraTasksPage() {
           ) : (
             <div className="danger-confirm">
               <div className="danger-confirm-copy">
-                <strong>Poistetaanko kaikki {tasks.length} apukutsua?</strong>
+                <strong>
+                  {tasks.length === 1
+                    ? 'Poistetaanko ainoa apukutsu?'
+                    : `Poistetaanko kaikki ${tasks.length} apukutsua?`}
+                </strong>
                 <p>Kutsut, ilmoittautumiset ja tilat poistuvat pysyvästi. Tätä ei voi perua.</p>
               </div>
               <div className="row-actions danger-confirm-actions">
@@ -218,7 +228,10 @@ export function ExtraTasksPage() {
                 </ul>
               )}
               {cancelling ? (
-                <div className="danger-confirm danger-confirm-inline">
+                <div
+                  className="danger-confirm danger-confirm-inline"
+                  ref={cancelConfirmRef}
+                >
                   <div className="danger-confirm-copy">
                     <strong>Perutaanko tämä apukutsu?</strong>
                     <p>Ilmoittautuneet näkevät kutsun peruttuna.</p>
