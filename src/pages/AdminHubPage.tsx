@@ -22,6 +22,11 @@ const SECTIONS = [
     title: 'Tehtäväkortit',
     body: 'Vuodenajan tehtäväkortit viikkovuoroille.',
   },
+  {
+    to: '/huolto',
+    title: 'Huoltokorttien tehtävät',
+    body: 'Aktivoi huoltokortteja viikkovuorolle — vastuuveli merkitsee tehdyt.',
+  },
 ]
 
 export function AdminHubPage() {

@@ -251,6 +251,8 @@ export type HubInspection = {
   completedByName?: string | null
   completedAt?: string | null
   createdAt: string
+  activatedAt?: string | null
+  activated?: boolean
   items: HubInspectionItem[]
   doneCount: number
   issueCount: number
@@ -263,6 +265,7 @@ export type HubSummary = {
   openCount: number
   dueCount: number
   issueCount: number
+  activatedCount?: number
 }
 
 export type AvailabilityWeek = {

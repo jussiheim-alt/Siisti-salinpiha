@@ -226,6 +226,14 @@ export function initDb() {
     db.exec(`ALTER TABLE notices ADD COLUMN acknowledged_by_user_id TEXT`)
   }
 
+  const hubCols = db.prepare(`PRAGMA table_info(hub_inspections)`).all() as { name: string }[]
+  if (!hubCols.some((c) => c.name === 'activated_at')) {
+    db.exec(`ALTER TABLE hub_inspections ADD COLUMN activated_at TEXT`)
+  }
+  if (!hubCols.some((c) => c.name === 'activated_by_user_id')) {
+    db.exec(`ALTER TABLE hub_inspections ADD COLUMN activated_by_user_id TEXT`)
+  }
+
   seedTaskCards()
   // Vastuuveli-ohjeet eivät ole tehtäväkortti — poista vanha T5-kortti jos löytyy.
   db.prepare(

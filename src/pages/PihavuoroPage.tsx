@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   api,
+  type HubInspection,
   type Pihavuoro,
   type SwapOffer,
   type TaskTemplate,
@@ -29,6 +30,8 @@ export function PihavuoroPage() {
   const [swaps, setSwaps] = useState<SwapOffer[]>([])
   const [swapMessage, setSwapMessage] = useState('')
   const [swapTarget, setSwapTarget] = useState('')
+  const [activeHub, setActiveHub] = useState<HubInspection[]>([])
+  const [canEditHub, setCanEditHub] = useState(false)
 
   async function load() {
     const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}`)
@@ -49,6 +52,17 @@ export function PihavuoroPage() {
     setSwaps(data.swaps)
   }
 
+  async function loadActiveHub() {
+    try {
+      const data = await api<{ inspections: HubInspection[]; canEdit: boolean }>('/api/hub/active')
+      setActiveHub(Array.isArray(data.inspections) ? data.inspections : [])
+      setCanEditHub(Boolean(data.canEdit))
+    } catch {
+      setActiveHub([])
+      setCanEditHub(false)
+    }
+  }
+
   useEffect(() => {
     if (!id) return
     load().catch((e) => setError(e.message))
@@ -60,6 +74,19 @@ export function PihavuoroPage() {
       loadSwaps().catch(() => undefined)
     }
   }, [id, p?.status, p?.id])
+
+  useEffect(() => {
+    if (!p || p.status !== 'published') {
+      setActiveHub([])
+      return
+    }
+    const onRoster = p.assignments.some((a) => a.userId === user?.id) || user?.role === 'admin'
+    if (!onRoster) {
+      setActiveHub([])
+      return
+    }
+    loadActiveHub().catch(() => undefined)
+  }, [p?.id, p?.status, p?.assignments, user?.id, user?.role])
 
   useEffect(() => {
     if (user?.role !== 'admin') return
@@ -629,6 +656,33 @@ export function PihavuoroPage() {
               </div>
             </>
           )}
+        </section>
+      )}
+
+      {activeHub.length > 0 && (
+        <section className="panel">
+          <h2>Huoltokorttien tehtävät</h2>
+          <p className="hint">
+            {canEditHub
+              ? 'Ylläpitäjä on aktivoinut nämä kortit — merkitse tarkastuskohdat tehdyiksi.'
+              : 'Aktivoitu huoltokortti tälle viikolle. Vastuuveli merkitsee kohdat tehdyiksi.'}
+          </p>
+          <div className="card-list">
+            {activeHub.map((h) => (
+              <Link key={h.id} className="hub-list-card" to={`/huolto/${h.id}`}>
+                <div className="week-card-top">
+                  <strong>{h.title}</strong>
+                  <span className={`pill status-${h.status}`}>
+                    {h.status === 'done' ? 'Valmis' : h.status === 'in_progress' ? 'Kesken' : 'Avoin'}
+                  </span>
+                </div>
+                <p className="meta">
+                  {h.doneCount}/{h.itemCount} merkitty
+                  {h.issueCount ? ` · ${h.issueCount} puutetta` : ''}
+                </p>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

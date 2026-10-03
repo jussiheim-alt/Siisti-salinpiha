@@ -15,7 +15,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
       'Kytke push-ilmoitukset päälle, jotta saat tiedon apukutsuista ja tärkeistä päivityksistä.',
-      'Pikavalinnoista pääset käytettävyyteen, vuoronvaihtoihin, hub-huoltoon, apukutsuihin ja huomioihin.',
+      'Pikavalinnoista pääset käytettävyyteen, vuoronvaihtoihin, apukutsuihin ja huomioihin.',
     ],
     to: '/',
     linkLabel: 'Avaa etusivu',
@@ -84,21 +84,12 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     linkLabel: 'Avaa huomiot',
   },
   {
-    id: 'huolto',
-    title: 'Hub-huolto',
-    body: [
-      'Hub-huolto sisältää salin vuosittaisia tarkastuksia ja huoltokortteja.',
-      'Avaa kortti etusivun pikavalinnasta tai Hub-huolto-linkistä ja merkitse tehdyt kohdat.',
-    ],
-    to: '/huolto',
-    linkLabel: 'Avaa hub-huolto',
-  },
-  {
     id: 'vastuu',
     title: 'Kun olet vastuuveli',
     body: [
       'Vastuuveli ei ole erillinen tili — se on viikkokohtainen tehtävä julkaistussa vuorossa.',
       'Etusivulla näkyy vastuuveljen ohje. Luot tarvittaessa apukutsun ja huolehdit, että viikon tehtävät tulevat tehdyiksi.',
+      'Jos ylläpitäjä aktivoi huoltokortin, näet sen Pihavuorossa ja voit merkitä tarkastuskohdat tehdyiksi.',
     ],
   },
 ]

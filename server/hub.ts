@@ -109,6 +109,8 @@ function hydrateInspection(row: Record<string, unknown>) {
     completedByName,
     completedAt: row.completed_at ?? null,
     createdAt: row.created_at,
+    activatedAt: row.activated_at ? String(row.activated_at) : null,
+    activated: Boolean(row.activated_at),
     items,
     doneCount,
     issueCount,
@@ -209,10 +211,33 @@ export function hubOpenSummary(year = helsinkiYear()) {
     )
     return String(r.windowStart) <= today && String(r.windowEnd) >= today
   })
+  const activated = rows.filter((r) => r.activated && r.status !== 'done')
   return {
     year,
     openCount: open.length,
     dueCount: dueSoon.length,
     issueCount: open.reduce((sum, r) => sum + r.issueCount, 0),
+    activatedCount: activated.length,
   }
+}
+
+export function listActivatedHubInspections(year = helsinkiYear()) {
+  return listHubInspections(year).filter((r) => r.activated && r.status !== 'done')
+}
+
+export function setHubActivated(id: string, activated: boolean, userId?: string | null) {
+  const row = db.prepare(`SELECT * FROM hub_inspections WHERE id = ?`).get(id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return null
+  if (activated) {
+    db.prepare(
+      `UPDATE hub_inspections SET activated_at = ?, activated_by_user_id = ? WHERE id = ?`,
+    ).run(new Date().toISOString(), userId ?? null, id)
+  } else {
+    db.prepare(
+      `UPDATE hub_inspections SET activated_at = NULL, activated_by_user_id = NULL WHERE id = ?`,
+    ).run(id)
+  }
+  return getHubInspection(id)
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type AppNotification, type HubSummary, type Pihavuoro, type WeatherPayload } from '../api'
+import { api, type AppNotification, type Pihavuoro, type WeatherPayload } from '../api'
 import { useAuth } from '../auth'
 import { LeadCallout } from '../components/LeadCallout'
 import { NotificationStrip } from '../components/NotificationStrip'
@@ -38,7 +38,6 @@ export function HomePage() {
   const [weather, setWeather] = useState<WeatherPayload | null>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadNotifications, setUnreadNotifications] = useState(0)
-  const [hub, setHub] = useState<HubSummary | null>(null)
   const [blockedCount, setBlockedCount] = useState(0)
   const [swapsAvailable, setSwapsAvailable] = useState(0)
   const [myOpenSwaps, setMyOpenSwaps] = useState(0)
@@ -52,7 +51,6 @@ export function HomePage() {
       weather: WeatherPayload | null
       recentNotifications: AppNotification[]
       unreadNotifications: number
-      hub: HubSummary
       availability?: { weeksAhead: number; blockedCount: number }
       swaps?: { availableCount: number; myOpenCount: number }
     }>('/api/home')
@@ -63,7 +61,6 @@ export function HomePage() {
         setWeather(d.weather)
         setNotifications(d.recentNotifications || [])
         setUnreadNotifications(d.unreadNotifications || 0)
-        setHub(d.hub || null)
         setBlockedCount(d.availability?.blockedCount ?? 0)
         setSwapsAvailable(d.swaps?.availableCount ?? 0)
         setMyOpenSwaps(d.swaps?.myOpenCount ?? 0)
@@ -197,17 +194,6 @@ export function HomePage() {
                       .join(' · ')
               }
               to="/vaihdot"
-            />
-            <QuickLink
-              title="Hub-huolto"
-              body={
-                hub
-                  ? hub.openCount === 0
-                    ? 'Kaikki tarkastukset tehty'
-                    : `${hub.openCount} avointa · ${hub.dueCount} ajankohtaista`
-                  : 'Vuositarkastukset'
-              }
-              to="/huolto"
             />
             <QuickLink
               title="Apukutsut"

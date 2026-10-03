@@ -123,6 +123,8 @@ type HubInspection = {
   completedByUserId?: string | null
   completedAt?: string | null
   createdAt: string
+  activatedAt?: string | null
+  activatedByUserId?: string | null
   items: {
     id: string
     templateItemId: string
@@ -1659,10 +1661,47 @@ export async function localApi<T = unknown>(
     return ok({ ok: true })
   }
 
+  function localIsCurrentWeekLead(userId: string) {
+    const weekStart = mondayOf()
+    return db.pihavuorot.some(
+      (p) =>
+        p.status === 'published' &&
+        p.weekStart === weekStart &&
+        p.assignments.some((a) => a.userId === userId && a.role === 'lead'),
+    )
+  }
+  function localIsOnCurrentWeekShift(userId: string) {
+    const weekStart = mondayOf()
+    return db.pihavuorot.some(
+      (p) =>
+        p.status === 'published' &&
+        p.weekStart === weekStart &&
+        p.assignments.some((a) => a.userId === userId),
+    )
+  }
+  function localCanEditHub(insp: HubInspection) {
+    if (user!.role === 'admin') return true
+    return Boolean(insp.activatedAt) && localIsCurrentWeekLead(user!.id)
+  }
+  function localCanViewHub(insp: HubInspection) {
+    if (user!.role === 'admin') return true
+    return Boolean(insp.activatedAt) && localIsOnCurrentWeekShift(user!.id)
+  }
+
   if (pathname === '/api/hub' && method === 'GET') {
+    if (user!.role !== 'admin' && !localIsOnCurrentWeekShift(user!.id)) {
+      err('Huoltokortit ovat ylläpitäjän hallinnassa')
+    }
+    const activeOnly = String(params.get('activeOnly') || '') === '1'
+    const all = db.hub.map((h) => hydrateHub(h, db))
+    const inspections =
+      user!.role === 'admin' && !activeOnly
+        ? all
+        : all.filter((h) => h.activated && h.status !== 'done')
     return ok({
       year: new Date().getFullYear(),
-      inspections: db.hub.map((h) => hydrateHub(h, db)),
+      inspections,
+      canManage: user!.role === 'admin',
       summary: {
         year: new Date().getFullYear(),
         openCount: db.hub.filter((h) => h.status !== 'done').length,
@@ -1673,7 +1712,19 @@ export async function localApi<T = unknown>(
           (n, h) => n + h.items.filter((i) => i.status === 'issue').length,
           0,
         ),
+        activatedCount: db.hub.filter((h) => h.activatedAt && h.status !== 'done').length,
       },
+    })
+  }
+  if (pathname === '/api/hub/active' && method === 'GET') {
+    if (user!.role !== 'admin' && !localIsOnCurrentWeekShift(user!.id)) {
+      return ok({ inspections: [], canEdit: false })
+    }
+    return ok({
+      inspections: db.hub
+        .filter((h) => h.activatedAt && h.status !== 'done')
+        .map((h) => hydrateHub(h, db)),
+      canEdit: user!.role === 'admin' || localIsCurrentWeekLead(user!.id),
     })
   }
   if (pathname === '/api/hub/seed' && method === 'POST') {
@@ -1692,6 +1743,7 @@ export async function localApi<T = unknown>(
         intro: 'Tarkista piha-alueen kevätkunto.',
         status: 'open',
         createdAt: now,
+        activatedAt: null,
         items: [
           { id: uid(), templateItemId: '1', label: 'Sadevesijärjestelmä', sortOrder: 1, status: 'open' },
           { id: uid(), templateItemId: '2', label: 'Pihavarusteet', sortOrder: 2, status: 'open' },
@@ -1707,11 +1759,26 @@ export async function localApi<T = unknown>(
       inspections: db.hub.map((h) => hydrateHub(h, db)),
     })
   }
+  const hubActivate = pathname.match(/^\/api\/hub\/([^/]+)\/(activate|deactivate)$/)
+  if (hubActivate && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const insp = db.hub.find((h) => h.id === hubActivate[1])
+    if (!insp) err('Ei löydy')
+    if (hubActivate[2] === 'activate') {
+      insp!.activatedAt = new Date().toISOString()
+      insp!.activatedByUserId = user!.id
+    } else {
+      insp!.activatedAt = null
+      insp!.activatedByUserId = null
+    }
+    saveDb(db)
+    return ok({ inspection: hydrateHub(insp!, db) })
+  }
   const hubItem = pathname.match(/^\/api\/hub\/([^/]+)\/items\/([^/]+)$/)
   if (hubItem && method === 'PATCH') {
     const insp = db.hub.find((h) => h.id === hubItem[1])
     if (!insp) err('Ei löydy')
-    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    if (!localCanEditHub(insp!)) err('Vain ylläpitäjä tai viikon vastuuveli (aktivoitu kortti)')
     const item = insp!.items.find((i) => i.id === hubItem[2])
     if (!item) err('Kohtaa ei löydy')
     if (body.status === 'ok' || body.status === 'issue' || body.status === 'open') {
@@ -1720,29 +1787,34 @@ export async function localApi<T = unknown>(
     if (body.note !== undefined) item!.note = String(body.note || '') || null
     if (insp!.status === 'open') insp!.status = 'in_progress'
     saveDb(db)
-    return ok({ inspection: hydrateHub(insp!) })
+    return ok({ inspection: hydrateHub(insp!, db) })
   }
   const hubPhoto = pathname.match(/^\/api\/hub\/([^/]+)\/photo$/)
   if (hubPhoto && method === 'POST') {
     const insp = db.hub.find((h) => h.id === hubPhoto[1])
     if (!insp) err('Ei löydy')
-    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    if (!localCanEditHub(insp!)) err('Vain ylläpitäjä tai viikon vastuuveli (aktivoitu kortti)')
     const file = options.formData?.get('photo')
     if (!(file instanceof File)) err('Kuva puuttuu')
     insp!.photoDataUrl = await fileToDataUrl(file as File)
     saveDb(db)
-    return ok({ inspection: hydrateHub(insp!) })
+    return ok({ inspection: hydrateHub(insp!, db) })
   }
   const hubMatch = pathname.match(/^\/api\/hub\/([^/]+)$/)
   if (hubMatch && method === 'GET') {
     const insp = db.hub.find((h) => h.id === hubMatch[1])
     if (!insp) err('Ei löydy')
-    return ok({ inspection: hydrateHub(insp!), canEdit: user!.role === 'admin' })
+    if (!localCanViewHub(insp!)) err('Kortti ei ole aktivoitu viikkovuorolle')
+    return ok({
+      inspection: hydrateHub(insp!, db),
+      canEdit: localCanEditHub(insp!),
+      canManage: user!.role === 'admin',
+    })
   }
   if (hubMatch && method === 'PATCH') {
     const insp = db.hub.find((h) => h.id === hubMatch[1])
     if (!insp) err('Ei löydy')
-    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    if (!localCanEditHub(insp!)) err('Vain ylläpitäjä tai viikon vastuuveli (aktivoitu kortti)')
     if (body.notes !== undefined) insp!.notes = String(body.notes || '') || null
     if (body.status === 'done' || body.status === 'open' || body.status === 'in_progress') {
       insp!.status = body.status
@@ -1752,7 +1824,7 @@ export async function localApi<T = unknown>(
       }
     }
     saveDb(db)
-    return ok({ inspection: hydrateHub(insp!) })
+    return ok({ inspection: hydrateHub(insp!, db) })
   }
 
   if (pathname === '/api/extra-tasks' && method === 'GET') {
@@ -1936,6 +2008,8 @@ function hydrateHub(h: HubInspection, db?: Db) {
       : null,
     completedAt: h.completedAt ?? null,
     createdAt: h.createdAt,
+    activatedAt: h.activatedAt ?? null,
+    activated: Boolean(h.activatedAt),
     items: h.items,
     doneCount: h.items.filter((i) => i.status !== 'open').length,
     issueCount: h.items.filter((i) => i.status === 'issue').length,
