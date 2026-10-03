@@ -134,31 +134,30 @@ export function HomePage() {
         {next && (
           <section className="surface-card home-shift" style={{ animationDelay: '0.14s' }}>
             <p className="kicker">Pihavuoro</p>
-            <p className="week-line">
-              {formatWeekRangeFi(next.weekStart, next.weekEnd)}
-            </p>
-            <p className="role-line">
-              {next.season === 'talvi' ? 'Talvi' : 'Sulankausi'}
-              {myAssignment
-                ? ` · ${myAssignment.role === 'lead' ? 'vastuuveli' : 'avustaja'}`
-                : ''}
-              {openTasks.length ? ` · ${openTasks.length} avointa tehtävää` : ''}
-            </p>
-            {openTasks.length > 0 && (
-              <ul className="task-preview">
-                {openTasks.slice(0, 3).map((t) => (
-                  <li key={t.id}>
-                    {t.title}
-                    {t.effort === 'heavy' ? ' · raskas' : ''}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {myAssignment && (
-              <p className="muted" style={{ marginTop: '0.65rem' }}>
-                Vuorokeskustelu aukeaa chat-painikkeesta.
-              </p>
-            )}
+            <div className="quick-list">
+              <Link className="quick-link" to={`/pihavuoro/${next.id}`}>
+                <span className="quick-link-text">
+                  <strong>{formatWeekRangeFi(next.weekStart, next.weekEnd)}</strong>
+                  <span>
+                    {next.season === 'talvi' ? 'Talvi' : 'Sulankausi'}
+                    {myAssignment
+                      ? ` · ${myAssignment.role === 'lead' ? 'vastuuveli' : 'avustaja'}`
+                      : ''}
+                    {openTasks.length ? ` · ${openTasks.length} avointa tehtävää` : ' · ei avoimia tehtäviä'}
+                  </span>
+                </span>
+                <span className="quick-link-action">Avaa</span>
+              </Link>
+              {openTasks.slice(0, 3).map((t) => (
+                <Link key={t.id} className="quick-link home-shift-task" to={`/pihavuoro/${next.id}`}>
+                  <span className="quick-link-text">
+                    <strong>{t.title}</strong>
+                    <span>{t.effort === 'heavy' ? 'Raskas tehtävä' : 'Kevyt tehtävä'}</span>
+                  </span>
+                  <span className="quick-link-action">Avaa</span>
+                </Link>
+              ))}
+            </div>
           </section>
         )}
 
