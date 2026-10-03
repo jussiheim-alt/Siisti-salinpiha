@@ -501,41 +501,22 @@ function resolveTemplatesForSeason(
 
 function createTasks(
   season: SeasonKey,
-  assignments: Assignment[],
+  _assignments: Assignment[],
   db: Db,
   templateIds?: string[] | null,
 ): ShiftTask[] {
   const templates = resolveTemplatesForSeason(season, db, templateIds)
-  const lead = assignments.find((a) => a.role === 'lead')
-  const helpers = assignments.filter((a) => a.role === 'helper')
-  let helperCursor = 0
-  let allCursor = 0
-  return templates.map((t, idx) => {
-    let assignee: string | null = null
-    if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
-    else {
-      const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
-      const eligible = pool.filter((h) => {
-        const u = db.users.find((x) => x.id === h.userId)
-        if (t.effort === 'heavy' && u?.constraints.includes('no_heavy')) return false
-        return true
-      })
-      if (eligible.length) {
-        const cursor = t.defaultAssignee === 'all' ? allCursor++ : helperCursor++
-        assignee = eligible[cursor % eligible.length]!.userId
-      }
-    }
-    return {
-      id: uid(),
-      templateId: t.id,
-      title: t.title,
-      instructions: t.instructions,
-      effort: t.effort,
-      assigneeUserId: assignee,
-      status: 'open' as const,
-      sortOrder: t.sortOrder || idx * 10,
-    }
-  })
+  // Tehtävät ovat koko vuoron yhteisiä — ei henkilökohtaista nimeämistä
+  return templates.map((t, idx) => ({
+    id: uid(),
+    templateId: t.id,
+    title: t.title,
+    instructions: t.instructions,
+    effort: t.effort,
+    assigneeUserId: null,
+    status: 'open' as const,
+    sortOrder: t.sortOrder || idx * 10,
+  }))
 }
 
 function getSessionUser(db: Db): User | null {
@@ -1288,10 +1269,6 @@ export async function localApi<T = unknown>(
       if (!templates.length) err('Valitse ainakin yksi huoltotehtävä')
       const keep = new Map(p.tasks.filter((t) => t.templateId).map((t) => [t.templateId!, t]))
       const next: ShiftTask[] = []
-      let helperCursor = 0
-      let allCursor = 0
-      const lead = p.assignments.find((a) => a.role === 'lead')
-      const helpers = p.assignments.filter((a) => a.role === 'helper')
       for (const t of templates) {
         const prev = keep.get(t.id)
         if (prev) {
@@ -1301,22 +1278,9 @@ export async function localApi<T = unknown>(
             instructions: t.instructions,
             effort: t.effort,
             sortOrder: t.sortOrder,
+            assigneeUserId: null,
           })
           continue
-        }
-        let assignee: string | null = null
-        if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
-        else {
-          const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
-          const eligible = pool.filter((h) => {
-            const u = db.users.find((x) => x.id === h.userId)
-            if (t.effort === 'heavy' && u?.constraints.includes('no_heavy')) return false
-            return true
-          })
-          if (eligible.length) {
-            const cursor = t.defaultAssignee === 'all' ? allCursor++ : helperCursor++
-            assignee = eligible[cursor % eligible.length]!.userId
-          }
         }
         next.push({
           id: uid(),
@@ -1324,7 +1288,7 @@ export async function localApi<T = unknown>(
           title: t.title,
           instructions: t.instructions,
           effort: t.effort,
-          assigneeUserId: assignee,
+          assigneeUserId: null,
           status: 'open',
           sortOrder: t.sortOrder,
         })

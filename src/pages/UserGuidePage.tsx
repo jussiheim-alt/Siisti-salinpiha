@@ -36,7 +36,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Vuorot ja Pihavuoro',
     body: [
       'Vuorot-välilehdellä näet julkaistut viikot. Avaa oma viikkosi nähdäksesi kokoonpanon ja tehtävät.',
-      'Kuittaa tehtäviä valmiiksi viikon aikana. Jos olet vastuuveli, näet etusivulla ohjeet ja vastaat viikon töistä.',
+      'Viikon tehtävät ovat koko vuoron yhteisiä — kuka tahansa vuorossa voi kuitata ne tehdyiksi. Jos olet vastuuveli, näet etusivulla ohjeet.',
       'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa. Lukemattomat viestit näkyvät punaisella numerolla kuvakkeessa; lukitusnäytölle tulee push, jos ilmoitukset on kytketty päälle.',
     ],
     to: '/kalenteri',

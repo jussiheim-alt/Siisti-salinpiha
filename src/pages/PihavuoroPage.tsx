@@ -123,7 +123,6 @@ export function PihavuoroPage() {
   const myAssignment = p?.assignments.find((a) => a.userId === user?.id)
   const isLead = myAssignment?.role === 'lead'
   const isAdmin = user?.role === 'admin'
-  const canAssign = isLead || isAdmin
   const onShift = Boolean(myAssignment)
   const myOpenSwap = swaps.find((s) => s.fromUserId === user?.id && s.status === 'open')
   const claimableSwaps = swaps.filter(
@@ -232,22 +231,6 @@ export function PihavuoroPage() {
       setError(e instanceof Error ? e.message : 'Tehtävien tallennus epäonnistui')
     } finally {
       setSavingTasks(false)
-    }
-  }
-
-  async function assign(taskId: string, assigneeUserId: string) {
-    setBusyId(taskId)
-    setError('')
-    try {
-      const data = await api<{ pihavuoro: Pihavuoro }>(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        json: { assigneeUserId: assigneeUserId || null },
-      })
-      setP(data.pihavuoro)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Jako epäonnistui')
-    } finally {
-      setBusyId(null)
     }
   }
 
@@ -728,9 +711,7 @@ export function PihavuoroPage() {
         <h2>Tehtävät ({openCount} auki)</h2>
         <div className="task-list">
           {p.tasks.map((t) => {
-            const canOwn =
-              Boolean(myAssignment) &&
-              (isLead || t.assigneeUserId === user?.id || !t.assigneeUserId || isAdmin)
+            const canAck = Boolean(myAssignment) || isAdmin
             return (
               <article key={t.id} className={`task task-card ${t.status}`}>
                 <div className="task-head">
@@ -742,32 +723,9 @@ export function PihavuoroPage() {
                 <p className="muted">{t.instructions}</p>
                 <p className="meta">
                   {t.effort === 'heavy' ? 'Raskas' : 'Kevyt'}
-                  {t.assigneeName ? ` · ${t.assigneeName}` : ' · ei nimettyä'}
                   {t.doneByName ? ` · kuitannut ${t.doneByName}` : ''}
                 </p>
-                {t.status === 'open' && canAssign && (
-                  <label className="assign-label">
-                    Tekijä
-                    <select
-                      value={t.assigneeUserId || ''}
-                      disabled={busyId === t.id}
-                      onChange={(e) => void assign(t.id, e.target.value)}
-                    >
-                      <option value="">Ei nimettyä</option>
-                      {p.assignments.map((a) => {
-                        const blocked = t.effort === 'heavy' && a.constraints.includes('no_heavy')
-                        return (
-                          <option key={a.userId} value={a.userId} disabled={blocked}>
-                            {a.userName}
-                            {a.role === 'lead' ? ' (vastuu)' : ''}
-                            {blocked ? ' — ei raskaisiin' : ''}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </label>
-                )}
-                {t.status === 'open' && canOwn && (
+                {t.status === 'open' && canAck && (
                   <div className="row-actions task-ack">
                     <button
                       className="btn primary small"
