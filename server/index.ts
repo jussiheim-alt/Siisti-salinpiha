@@ -1437,6 +1437,27 @@ app.post('/api/pihavuorot/:id/publish', authMiddleware, requireAdmin, (req, res)
   res.json({ pihavuoro: hydrated })
 })
 
+app.delete('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  const id = String(req.params.id)
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE extra_tasks SET related_pihavuoro_id = NULL WHERE related_pihavuoro_id = ?`,
+    ).run(id)
+    db.prepare(`DELETE FROM weather_alert_log WHERE pihavuoro_id = ?`).run(id)
+    db.prepare(`DELETE FROM pihavuorot WHERE id = ?`).run(id)
+  })
+  tx()
+  res.json({
+    ok: true,
+    message: 'Pihavuoro poistettu',
+    weekStart: row.week_start,
+  })
+})
+
 // ——— Task completion ———
 app.post('/api/tasks/:id/complete', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user

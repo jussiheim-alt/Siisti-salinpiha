@@ -1306,6 +1306,15 @@ export async function localApi<T = unknown>(
       saveDb(db)
       return ok({ pihavuoro: hydratePihavuoro(db, p) })
     }
+    if (rest === '' && method === 'DELETE' && p) {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      const weekStart = p.weekStart
+      db.pihavuorot = db.pihavuorot.filter((x) => x.id !== p.id)
+      db.swaps = db.swaps.filter((s) => s.pihavuoroId !== p.id)
+      db.messages = db.messages.filter((m) => m.pihavuoroId !== p.id)
+      saveDb(db)
+      return ok({ ok: true, message: 'Pihavuoro poistettu', weekStart })
+    }
     if (rest === '/messages' && method === 'GET' && p) {
       if (!p.assignments.some((a) => a.userId === user!.id)) {
         err('Viestit näkyvät vain tämän viikon vuorossa oleville')
