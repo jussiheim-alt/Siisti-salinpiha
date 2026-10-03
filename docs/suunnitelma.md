@@ -12,7 +12,7 @@ Toteutus näillä rajauksilla. Muutokset = uusi versio / erillinen päätös.
 | Sovellus | **Siisti salin piha** |
 | Vuoro | **Pihavuoro** (ma–su) |
 | Käyttäjät | ≥2 ylläpitäjää, ~20 jäsentä |
-| Kokoonpano | 1 vastuuhenkilö + 3–5 avustajaa |
+| Kokoonpano | 1 vastuuhenkilö + 1–5 avustajaa |
 | Auth | Sähköposti/tunnus + **salasana** |
 | Julkaisu | draft → published |
 | Katalogi | **v1 lukittu** (`tehtavakatalogi.md`) |
@@ -25,7 +25,7 @@ Toteutus näillä rajauksilla. Muutokset = uusi versio / erillinen päätös.
 2. **Käyttäjähallinta** + **käytettävyysrajoitukset** (esim. ei raskaisiin)  
    - Saa olla vuorossa ilman lumitöitä  
    - Vastuuhenkilö näkee rajoitukset rosterissa
-3. **Pihavuorot** viikoittain: lead + 3–5, draft/publish, suositus (järjestys + rajoitukset)
+3. **Pihavuorot** viikoittain: lead + 1–5, draft/publish, suositus (järjestys + rajoitukset)
 4. **Tehtävät v1-katalogista** + kuittaus  
    - Oma tehtävä: vuorossa oleva  
    - Kaikkien tehtävät: vastuuhenkilö

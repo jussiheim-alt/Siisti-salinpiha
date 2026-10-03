@@ -334,6 +334,15 @@ function blockedUserIdsForWeek(weekStart: string): Set<string> {
   )
 }
 
+/** Viikkovuoro: 1 vastuuveli + 1–5 avustajaa */
+const MIN_HELPERS = 1
+const MAX_HELPERS = 5
+
+function clampHelperCount(n: number) {
+  if (!Number.isFinite(n)) return Math.min(MAX_HELPERS, Math.max(MIN_HELPERS, 4))
+  return Math.min(MAX_HELPERS, Math.max(MIN_HELPERS, Math.floor(n)))
+}
+
 function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek?: boolean } = {}) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const blocked = blockedUserIdsForWeek(weekStart)
@@ -372,9 +381,8 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
     })
 
   const lead = ranked.find((u) => !u.constraints.includes('no_lead')) || null
-  const helpers = ranked
-    .filter((u) => u.id !== lead?.id)
-    .slice(0, Math.min(5, Math.max(3, helperCount)))
+  const take = clampHelperCount(helperCount)
+  const helpers = ranked.filter((u) => u.id !== lead?.id).slice(0, take)
 
   return {
     lead,
@@ -1160,12 +1168,12 @@ app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
         'Vastuuhenkilöä ei löytynyt — liian monta esteviikkoa tai rajoitetta tälle viikolle',
     })
   }
-  if (helperIds.length < 3 || helperIds.length > 5) {
+  if (helperIds.length < MIN_HELPERS || helperIds.length > MAX_HELPERS) {
     return res.status(400).json({
       error:
-        helperIds.length < 3
-          ? `Vain ${helperIds.length} saatavilla olevaa jäsentä tälle viikolle (tarvitaan 3–5 avustajaa). Tarkista esteviikot.`
-          : 'Avustajia tarvitaan 3–5',
+        helperIds.length < MIN_HELPERS
+          ? `Vain ${helperIds.length} saatavilla olevaa jäsentä tälle viikolle (tarvitaan ${MIN_HELPERS}–${MAX_HELPERS} avustajaa). Tarkista esteviikot.`
+          : `Avustajia tarvitaan ${MIN_HELPERS}–${MAX_HELPERS}`,
     })
   }
 
@@ -1215,8 +1223,15 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
   if (req.body.leadUserId || req.body.helperUserIds) {
     const leadId = req.body.leadUserId as string
     const helperIds = req.body.helperUserIds as string[]
-    if (!leadId || !helperIds || helperIds.length < 3 || helperIds.length > 5) {
-      return res.status(400).json({ error: 'Kokoonpano: 1 vastuu + 3–5 avustajaa' })
+    if (
+      !leadId ||
+      !helperIds ||
+      helperIds.length < MIN_HELPERS ||
+      helperIds.length > MAX_HELPERS
+    ) {
+      return res.status(400).json({
+        error: `Kokoonpano: 1 vastuu + ${MIN_HELPERS}–${MAX_HELPERS} avustajaa`,
+      })
     }
     const existingTemplateIds = (
       db
