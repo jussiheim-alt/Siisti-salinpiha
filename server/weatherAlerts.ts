@@ -74,12 +74,28 @@ export function notifyUsers(
   })
   tx()
 
+  void sendWebPush(unique, title, body, link, kind)
+}
+
+/** Send OS/web-push to subscribed devices. Returns delivery counts. */
+export async function sendWebPush(
+  userIds: string[],
+  title: string,
+  body: string,
+  link: string,
+  kind = 'general',
+): Promise<{ delivered: number; failed: number }> {
+  const unique = [...new Set(userIds)]
+  if (!unique.length) return { delivered: 0, failed: 0 }
+
   const placeholders = unique.map(() => '?').join(',')
   const subs = db
     .prepare(
       `SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN (${placeholders})`,
     )
     .all(...unique) as { id: string; endpoint: string; p256dh: string; auth: string }[]
+
+  if (!subs.length) return { delivered: 0, failed: 0 }
 
   const pushPayload = JSON.stringify({
     title,
@@ -90,7 +106,9 @@ export function notifyUsers(
     renotify: kind === 'chat',
   })
 
-  void Promise.all(
+  let delivered = 0
+  let failed = 0
+  await Promise.all(
     subs.map(async (sub) => {
       try {
         await webpush.sendNotification(
@@ -99,16 +117,27 @@ export function notifyUsers(
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
           pushPayload,
+          {
+            TTL: 60 * 60 * 24,
+            urgency: 'high',
+          },
         )
+        delivered += 1
       } catch (err) {
+        failed += 1
         const status = (err as { statusCode?: number }).statusCode
-        if (status === 404 || status === 410) {
+        // 401/403 = VAPID/avainvirhe; 404/410 = tilaus kuollut
+        if (status === 404 || status === 410 || status === 401 || status === 403) {
           db.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).run(sub.id)
         }
         console.warn('Push failed', status || err)
       }
     }),
   )
+  if (failed || delivered) {
+    console.info(`Push ${kind}: delivered=${delivered} failed=${failed} users=${unique.length}`)
+  }
+  return { delivered, failed }
 }
 
 function tipToAlert(tip: WeatherTip): { key: string; title: string; body: string } {

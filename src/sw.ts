@@ -34,17 +34,26 @@ self.addEventListener('push', (event) => {
   }
   const title = payload.title || 'Siisti salin piha'
   const url = payload.url || '/'
+  // Älä käytä SVG-ikonia — osa iOS/Android-versioista hylkää ilmoituksen.
+  // Asennettu PWA käyttää kotivalikon kuvaketta.
   const options: NotificationOptions & { renotify?: boolean } = {
     body: payload.body || 'Uusi ilmoitus',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
     tag: payload.tag || payload.kind || 'general',
     renotify: Boolean(payload.renotify),
     data: { url, kind: payload.kind || 'general' },
   }
   event.waitUntil(
     (async () => {
-      await self.registration.showNotification(title, options)
+      try {
+        await self.registration.showNotification(title, options)
+      } catch (err) {
+        console.error('showNotification failed', err)
+        // Viimeinen yritys ilman tagia
+        await self.registration.showNotification(title, {
+          body: options.body,
+          data: options.data,
+        })
+      }
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       for (const client of windows) {
         client.postMessage({

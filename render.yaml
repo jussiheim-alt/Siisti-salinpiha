@@ -23,6 +23,14 @@ services:
         generateValue: true
       - key: APP_PUBLIC_URL
         value: https://siisti-salinpiha.onrender.com
+      # Pidä VAPID-avaimet vakaina (muuten push-tilaukset hajoavat deployssa).
+      # Jos puuttuvat, palvelin luo ne $DATA_DIR/vapid.json-levyyn.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:jussiheim@gmail.com
       - key: ADMIN_EMAIL
         value: jussiheim@gmail.com
       - key: ADMIN_NAME

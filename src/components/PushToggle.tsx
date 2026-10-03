@@ -2,17 +2,28 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   disablePushNotifications,
   enablePushNotifications,
+  ensurePushSubscription,
   getPushStatus,
+  isInstalledPwa,
+  isIosDevice,
+  sendTestPush,
 } from '../push'
 
-type Mode = 'loading' | 'unsupported' | 'on' | 'off' | 'blocked'
+type Mode = 'loading' | 'unsupported' | 'on' | 'off' | 'blocked' | 'need-install'
 
 function detectMode(status: {
   supported: boolean
   permission: NotificationPermission
   subscribed: boolean
+  installed?: boolean
+  ios?: boolean
 }): Mode {
-  if (!status.supported) return 'unsupported'
+  if (!status.supported) {
+    // iOS Safari-välilehdellä PushManager puuttuu → ohjaa kotivalikkoon
+    if (status.ios && !status.installed) return 'need-install'
+    return 'unsupported'
+  }
+  if (status.ios && !status.installed) return 'need-install'
   if (status.permission === 'denied') return 'blocked'
   if (status.permission === 'granted' && status.subscribed) return 'on'
   return 'off'
@@ -21,15 +32,25 @@ function detectMode(status: {
 export function PushToggle() {
   const [mode, setMode] = useState<Mode>('loading')
   const [busy, setBusy] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [hint, setHint] = useState('')
   const [showBlockedHelp, setShowBlockedHelp] = useState(false)
+  const [showInstallHelp, setShowInstallHelp] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
+      // Korjaa vanhentunut / kadonnut tilaus ennen statusta
+      if (
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted' &&
+        (!isIosDevice() || isInstalledPwa())
+      ) {
+        await ensurePushSubscription()
+      }
       const status = await getPushStatus()
       setMode(detectMode(status))
     } catch {
-      setMode('unsupported')
+      setMode(isIosDevice() && !isInstalledPwa() ? 'need-install' : 'unsupported')
     }
   }, [])
 
@@ -51,7 +72,7 @@ export function PushToggle() {
   }, [refresh])
 
   async function setEnabled(wantOn: boolean) {
-    if (busy || mode === 'loading' || mode === 'unsupported') return
+    if (busy || mode === 'loading' || mode === 'unsupported' || mode === 'need-install') return
     setHint('')
 
     if (mode === 'blocked') {
@@ -64,7 +85,7 @@ export function PushToggle() {
     try {
       if (wantOn) {
         await enablePushNotifications()
-        setHint('Ilmoitukset päällä')
+        setHint('Ilmoitukset päällä — lukitusnäyttö saa viestit, kun sovellus on taustalla.')
       } else {
         await disablePushNotifications()
         setHint('Ilmoitukset pois päältä')
@@ -72,7 +93,11 @@ export function PushToggle() {
       await refresh()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Ilmoitusasetus epäonnistui'
-      if (msg === 'DENIED' || /evättiin|denied/i.test(msg)) {
+      if (msg === 'IOS_NOT_INSTALLED') {
+        setMode('need-install')
+        setShowInstallHelp(true)
+        setHint('iPhonella ilmoitukset toimivat vain kotivalikkoon asennetussa sovelluksessa.')
+      } else if (msg === 'DENIED' || /evättiin|denied/i.test(msg)) {
         setMode('blocked')
         setShowBlockedHelp(true)
         setHint('Ilmoitukset on estetty laitteen asetuksissa.')
@@ -85,15 +110,34 @@ export function PushToggle() {
     }
   }
 
+  async function onTestPush() {
+    setTesting(true)
+    setHint('')
+    try {
+      await ensurePushSubscription()
+      const result = await sendTestPush()
+      setHint(
+        result.delivered > 0
+          ? 'Testi lähetetty — lukitse puhelin: ilmoituksen pitäisi näkyä.'
+          : 'Testiä ei voitu toimittaa tälle laitteelle.',
+      )
+    } catch (err) {
+      setHint(err instanceof Error ? err.message : 'Testi epäonnistui')
+    } finally {
+      setTesting(false)
+    }
+  }
+
   if (mode === 'loading') return null
   if (mode === 'unsupported') return null
 
   const isOn = mode === 'on'
   const isBlocked = mode === 'blocked'
+  const needInstall = mode === 'need-install'
 
   return (
     <div
-      className={`surface-card push-toggle-card${isOn ? ' is-on' : ''}${isBlocked ? ' is-blocked' : ''}`}
+      className={`surface-card push-toggle-card${isOn ? ' is-on' : ''}${isBlocked || needInstall ? ' is-blocked' : ''}`}
       style={{ animationDelay: '0.03s' }}
     >
       <section className="push-toggle" aria-label="Push-ilmoitukset">
@@ -101,31 +145,81 @@ export function PushToggle() {
           <div className="push-toggle-copy">
             <p className="kicker">Ilmoitukset</p>
             <strong>
-              {isBlocked ? 'Estetty asetuksissa' : isOn ? 'Päällä' : 'Pois päältä'}
+              {needInstall
+                ? 'Asenna kotivalikkoon'
+                : isBlocked
+                  ? 'Estetty asetuksissa'
+                  : isOn
+                    ? 'Päällä'
+                    : 'Pois päältä'}
             </strong>
             <p>
-              {isBlocked
-                ? 'Salli ilmoitukset puhelimen asetuksissa, jotta voit kytkeä ne taas päälle.'
-                : isOn
-                  ? 'Saat tiedon apukutsuista ja tärkeistä päivityksistä.'
-                  : 'Kytke päälle tai pois — valinta säilyy tällä laitteella.'}
+              {needInstall
+                ? 'iPhonella lukitusnäytön ilmoitukset toimivat vain, kun Siisti salin piha on lisätty kotivalikkoon.'
+                : isBlocked
+                  ? 'Salli ilmoitukset puhelimen asetuksissa, jotta voit kytkeä ne taas päälle.'
+                  : isOn
+                    ? 'Saat chat-viestit, apukutsut ja tärkeät päivitykset lukitusnäytölle.'
+                    : 'Kytke päälle, jotta ilmoitukset näkyvät lukitusnäytöllä kun sovellus on taustalla.'}
             </p>
           </div>
 
-          <button
-            type="button"
-            className={`push-switch${isOn ? ' is-on' : ''}`}
-            role="switch"
-            aria-checked={isOn}
-            aria-label={isOn ? 'Ilmoitukset päällä' : 'Ilmoitukset pois päältä'}
-            disabled={busy}
-            onClick={() => void setEnabled(!isOn)}
-          >
-            <span className="push-switch-knob" />
-          </button>
+          {!needInstall && (
+            <button
+              type="button"
+              className={`push-switch${isOn ? ' is-on' : ''}`}
+              role="switch"
+              aria-checked={isOn}
+              aria-label={isOn ? 'Ilmoitukset päällä' : 'Ilmoitukset pois päältä'}
+              disabled={busy}
+              onClick={() => void setEnabled(!isOn)}
+            >
+              <span className="push-switch-knob" />
+            </button>
+          )}
         </div>
 
-        {hint && <p className={`push-toggle-hint${isBlocked ? ' is-warn' : ''}`}>{hint}</p>}
+        {hint && (
+          <p className={`push-toggle-hint${isBlocked || needInstall ? ' is-warn' : ''}`}>{hint}</p>
+        )}
+
+        {isOn && (
+          <button
+            type="button"
+            className="btn ghost small"
+            disabled={testing || busy}
+            onClick={() => void onTestPush()}
+          >
+            {testing ? 'Lähetetään…' : 'Testaa lukitusnäyttö'}
+          </button>
+        )}
+
+        {needInstall && (
+          <div className="push-blocked-help">
+            {!showInstallHelp ? (
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={() => setShowInstallHelp(true)}
+              >
+                Näytä asennusohje
+              </button>
+            ) : (
+              <ol>
+                <li>
+                  Avaa tämä sivu <strong>Safarissa</strong>
+                </li>
+                <li>
+                  Napauta <strong>Jaa</strong> (neliö + nuoli)
+                </li>
+                <li>
+                  Valitse <strong>Lisää Koti-valikkoon</strong>
+                </li>
+                <li>Avaa sovellus kotivalikosta ja kytke ilmoitukset päälle</li>
+              </ol>
+            )}
+          </div>
+        )}
 
         {isBlocked && (
           <div className="push-blocked-help">
