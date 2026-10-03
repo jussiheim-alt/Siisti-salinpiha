@@ -2,13 +2,15 @@
 
 Pihavuorot, tehtävät ja huomiot — Vääksy.
 
+**Avaa sovellus:** https://siisti-salinpiha.onrender.com
+
 ## Pysyvä käyttö (Render, suositus)
 
 Katso **[JULKAISU.md](./JULKAISU.md)**. Lyhyesti:
 
-1. Render → **New → Blueprint** (tai Web Service) → tämä repo
+1. Render → palvelu **siisti-salinpiha** (tai New → Blueprint → tämä repo)
 2. Käytä **Starter**-suunnitelmaa + **persistent disk** (`/var/data`)
-3. Aseta `JWT_SECRET`, `ADMIN_PASSWORD`, `JONI_EMAIL`, `JONI_PASSWORD`, `APP_PUBLIC_URL`
+3. Aseta `JWT_SECRET`, `ADMIN_PASSWORD`, `JONI_EMAIL`, `JONI_PASSWORD`, `APP_PUBLIC_URL=https://siisti-salinpiha.onrender.com`
 
 Ylläpitäjät: **Jussi Heimonen** ja **Joni Moilanen**. Muut käyttäjät kutsutaan sovelluksesta (rooli + rajoitukset).
 

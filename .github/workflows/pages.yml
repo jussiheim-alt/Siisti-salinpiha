@@ -1,8 +1,8 @@
 name: Deploy GitHub Pages
 
+# Pages is optional (Render is production). Run manually after enabling
+# Settings → Pages → Source: GitHub Actions — avoids red X on every main push.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -27,7 +27,6 @@ jobs:
       - name: Build (local data mode)
         run: npm run build:netlify
         env:
-          # Project site: https://jussiheim-alt.github.io/Siisti-salinpiha/
           VITE_BASE: /Siisti-salinpiha/
       - name: SPA fallback for GitHub Pages
         run: cp dist/index.html dist/404.html

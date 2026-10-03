@@ -2,13 +2,14 @@
 # Free tier has no persistent disk — use at least Starter.
 services:
   - type: web
-    name: siisti-piha
+    name: siisti-salinpiha
     runtime: node
     plan: starter
     region: frankfurt
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /
+    autoDeploy: true
     disk:
       name: siisti-piha-data
       mountPath: /var/data
@@ -21,7 +22,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: APP_PUBLIC_URL
-        sync: false
+        value: https://siisti-salinpiha.onrender.com
       - key: ADMIN_EMAIL
         value: jussiheim@gmail.com
       - key: ADMIN_NAME

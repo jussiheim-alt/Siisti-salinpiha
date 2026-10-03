@@ -1,5 +1,12 @@
 # Siisti salin piha — julkaisu
 
+## Julkinen osoite
+
+**https://siisti-salinpiha.onrender.com**
+
+Deploy-tarkistus: https://siisti-salinpiha.onrender.com/api/meta/app  
+(`commit` = GitHub `main`-viimeisin, `uiVersion` näkyy).
+
 ## Pysyvä käyttö Renderissä (suositus)
 
 Sovellus on Node-palvelin (Express + SQLite + staattinen frontend).  
@@ -14,9 +21,11 @@ Pysyvään käyttöön: **Starter** (tai kalliimpi) + **Disk**.
 4. Syötä kun Render kysyy:
    - `ADMIN_PASSWORD` — Jussi Heimosen salasana (min. 8)
    - `JONI_EMAIL` + `JONI_PASSWORD` — Joni Moilasen tunnus
-   - `APP_PUBLIC_URL` — esim. `https://siisti-piha.onrender.com` (kutsulinkkejä varten)
+   - `APP_PUBLIC_URL` — `https://siisti-salinpiha.onrender.com` (kutsulinkkejä varten)
 5. Deploy → kirjaudu Jussin tai Jonin tunnuksella  
    Kutsu muut **Jäsenet**-sivulta (kutsulinkki + käyttöoikeustaso).
+
+Jos palvelu on jo olemassa: Dashboard → **siisti-salinpiha** → **Manual Deploy** → Deploy latest commit.
 
 ### Vaihtoehto B: manuaalinen Web Service
 
