@@ -71,8 +71,8 @@ export function LeadGuideAdminPage() {
         <p className="lede">
           Näkyvät etusivulla viikkovuoron vastuuveljelle. Voit muokata tekstejä vapaasti.
         </p>
-        <Link className="btn ghost small" to="/tehtavat">
-          ← Tehtävät
+        <Link className="btn ghost small" to="/yllapitaja">
+          ← Ylläpitäjä
         </Link>
       </header>
 

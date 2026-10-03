@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type User } from '../api'
 import { useAuth } from '../auth'
 import { formatDateFi } from '../shared/datetime'
@@ -156,6 +157,9 @@ export function UsersPage() {
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Jäsenet</h1>
         <p className="lede">Kutsu käyttäjiä ja määritä käyttöoikeudet.</p>
+        <Link className="btn ghost small" to="/yllapitaja">
+          ← Ylläpitäjä
+        </Link>
       </header>
 
       {error && <p className="error">{error}</p>}

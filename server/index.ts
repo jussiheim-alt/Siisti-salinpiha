@@ -28,6 +28,7 @@ import {
 import { dataDir, root, uploadsDir } from './paths.ts'
 import { isCadenceKey, isSeasonKey, publicTaskCard } from './taskCards.ts'
 import { ensureLeadGuideTable, getLeadGuide, saveLeadGuide } from './leadGuide.ts'
+import { ensureAppSettings, getAppSettings, saveAppSettings } from './appSettings.ts'
 import { formatWeekRangeFi } from '../src/shared/datetime.ts'
 import {
   assertCanDeleteUser,
@@ -57,6 +58,7 @@ const EFFECTIVE_JWT = loadJwtSecret()
 
 initDb()
 ensureLeadGuideTable()
+ensureAppSettings()
 
 const app = express()
 app.set('trust proxy', 1)
@@ -729,6 +731,16 @@ app.get('/api/lead-guide', authMiddleware, (_req, res) => {
 app.put('/api/lead-guide', authMiddleware, requireAdmin, (req, res) => {
   const guide = saveLeadGuide(req.body?.guide ?? req.body)
   res.json({ guide })
+})
+
+// ——— Sovelluksen asetukset ———
+app.get('/api/app-settings', authMiddleware, (_req, res) => {
+  res.json({ settings: getAppSettings() })
+})
+
+app.put('/api/app-settings', authMiddleware, requireAdmin, (req, res) => {
+  const settings = saveAppSettings(req.body?.settings ?? req.body)
+  res.json({ settings })
 })
 
 // ——— Tehtäväkortit (admin) ———
@@ -2084,7 +2096,10 @@ app.get('/api/home', authMiddleware, async (req, res) => {
 
   let weather = null
   try {
-    const [forecast, warnings] = await Promise.all([getWeather(), getCapWarnings()])
+    const [forecast, warnings] = await Promise.all([
+      getWeather(getAppSettings().weatherPlace),
+      getCapWarnings(),
+    ])
     weather = { ...forecast, warnings }
   } catch (err) {
     console.warn('Weather fetch failed', err)
@@ -2191,7 +2206,10 @@ app.get('/api/home', authMiddleware, async (req, res) => {
 
 app.get('/api/weather', authMiddleware, async (_req, res) => {
   try {
-    const [forecast, warnings] = await Promise.all([getWeather(), getCapWarnings()])
+    const [forecast, warnings] = await Promise.all([
+      getWeather(getAppSettings().weatherPlace),
+      getCapWarnings(),
+    ])
     res.json({ ...forecast, warnings })
   } catch (err) {
     console.warn('Weather fetch failed', err)

@@ -7,12 +7,15 @@ export const WEATHER_PLACE = {
   lon: 25.54716,
 }
 
-const FMI_URL =
-  'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature' +
-  `&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::simple` +
-  `&place=${encodeURIComponent(WEATHER_PLACE.name)}` +
-  `&parameters=Temperature,WeatherSymbol3,WindSpeedMS,Precipitation1h` +
-  `&timestep=60`
+function fmiUrl(place: string) {
+  return (
+    'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature' +
+    `&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::simple` +
+    `&place=${encodeURIComponent(place)}` +
+    `&parameters=Temperature,WeatherSymbol3,WindSpeedMS,Precipitation1h` +
+    `&timestep=60`
+  )
+}
 
 const CACHE_MS = 60 * 60 * 1000
 
@@ -57,10 +60,10 @@ export type WeatherPayload = {
   source: 'fmi-edited'
 }
 
-type CacheEntry = { at: number; data: WeatherPayload }
+type CacheEntry = { at: number; place: string; data: WeatherPayload }
 
 let cache: CacheEntry | null = null
-let inflight: Promise<WeatherPayload> | null = null
+let inflight: { place: string; promise: Promise<WeatherPayload> } | null = null
 
 /** FMI WeatherSymbol3 — https://en.ilmatieteenlaitos.fi/weather-symbols (numeric WFS codes) */
 const SYMBOL_LABELS: Record<number, string> = {
@@ -275,8 +278,8 @@ function pickCurrent(hours: WeatherHour[]): WeatherHour | undefined {
   return best
 }
 
-async function fetchFromFmi(): Promise<WeatherPayload> {
-  const res = await fetch(FMI_URL, {
+async function fetchFromFmi(place: string): Promise<WeatherPayload> {
+  const res = await fetch(fmiUrl(place), {
     headers: { Accept: 'application/xml,text/xml,*/*' },
     signal: AbortSignal.timeout(12_000),
   })
@@ -287,7 +290,7 @@ async function fetchFromFmi(): Promise<WeatherPayload> {
   const currentHour = pickCurrent(hours)
   const days = buildDays(hours)
   return {
-    place: WEATHER_PLACE.name,
+    place,
     updatedAt: new Date().toISOString(),
     current: {
       time: currentHour?.time || hours[0].time,
@@ -303,21 +306,23 @@ async function fetchFromFmi(): Promise<WeatherPayload> {
   }
 }
 
-export async function getWeather(): Promise<WeatherPayload> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.data
-  if (inflight) return inflight
-  inflight = fetchFromFmi()
+export async function getWeather(placeName?: string): Promise<WeatherPayload> {
+  const place = String(placeName || WEATHER_PLACE.name).trim() || WEATHER_PLACE.name
+  if (cache && cache.place === place && Date.now() - cache.at < CACHE_MS) return cache.data
+  if (inflight?.place === place) return inflight.promise
+  const promise = fetchFromFmi(place)
     .then((data) => {
-      cache = { at: Date.now(), data }
+      cache = { at: Date.now(), place, data }
       return data
     })
     .finally(() => {
-      inflight = null
+      if (inflight?.promise === promise) inflight = null
     })
+  inflight = { place, promise }
   try {
-    return await inflight
+    return await promise
   } catch (err) {
-    if (cache) return cache.data
+    if (cache?.place === place) return cache.data
     throw err
   }
 }

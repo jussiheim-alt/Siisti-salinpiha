@@ -3,6 +3,8 @@ import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-rou
 import { api } from './api'
 import { AuthProvider, useAuth } from './auth'
 import { ShiftChatFab } from './components/ShiftChatFab'
+import { AdminHubPage } from './pages/AdminHubPage'
+import { AppSettingsPage } from './pages/AppSettingsPage'
 import { AvailabilityPage } from './pages/AvailabilityPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { ExtraTasksPage } from './pages/ExtraTasksPage'
@@ -67,13 +69,11 @@ function IconNote() {
     </svg>
   )
 }
-function IconUsers() {
+function IconAdmin() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="9" cy="8" r="3" />
-      <circle cx="17" cy="9" r="2.4" />
-      <path d="M4 19c.6-3 2.6-4.5 5-4.5s4.4 1.5 5 4.5" />
-      <path d="M14 19c.3-1.8 1.4-3 3-3s2.5 1 3 3" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6.1 6.1l1.6 1.6M16.3 16.3l1.6 1.6M6.1 17.9l1.6-1.6M16.3 7.7l1.6-1.6" />
     </svg>
   )
 }
@@ -158,9 +158,19 @@ function Shell() {
           </NavLink>
         )}
         {user.role === 'admin' && (
-          <NavLink to="/kayttajat">
-            <IconUsers />
-            Jäsenet
+          <NavLink
+            to="/yllapitaja"
+            className={({ isActive }) =>
+              isActive ||
+              location.pathname.startsWith('/kayttajat') ||
+              location.pathname.startsWith('/vastuuohjeet') ||
+              location.pathname.startsWith('/asetukset')
+                ? 'active'
+                : undefined
+            }
+          >
+            <IconAdmin />
+            Ylläpitäjä
           </NavLink>
         )}
         <button type="button" className="tab-logout" onClick={() => void logout()}>
@@ -188,9 +198,11 @@ export default function App() {
           <Route path="/ilmoitukset" element={<NotificationsPage />} />
           <Route path="/huolto" element={<HubPage />} />
           <Route path="/huolto/:id" element={<HubDetailPage />} />
+          <Route path="/yllapitaja" element={<AdminHubPage />} />
           <Route path="/kayttajat" element={<UsersPage />} />
           <Route path="/tehtavat" element={<TaskCardsPage />} />
           <Route path="/vastuuohjeet" element={<LeadGuideAdminPage />} />
+          <Route path="/asetukset" element={<AppSettingsPage />} />
           <Route path="/kaytettavyys" element={<AvailabilityPage />} />
           <Route path="/esteet" element={<Navigate to="/kaytettavyys" replace />} />
           <Route path="/vaihdot" element={<SwapsPage />} />
