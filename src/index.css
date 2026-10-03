@@ -2091,9 +2091,9 @@ select:focus {
   display: grid;
   align-items: end;
   justify-items: center;
-  padding: 0.75rem;
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  z-index: 80;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) 0.75rem
+    max(0.75rem, env(safe-area-inset-bottom, 0px));
+  z-index: 120;
   animation: rise 0.25s var(--ease) both;
 }
 
@@ -2101,7 +2101,10 @@ select:focus {
   width: min(520px, 100%);
   margin: 0;
   background: var(--birch);
-  max-height: min(88dvh, 740px);
+  max-height: min(
+    calc(100dvh - 1.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)),
+    740px
+  );
 }
 
 .user-rights-modal {
@@ -2109,7 +2112,18 @@ select:focus {
   flex-direction: column;
   gap: 0.75rem;
   overflow: hidden;
+  min-height: 0;
   padding-bottom: 0.95rem;
+}
+
+.modal-danger-slot {
+  margin-top: 0.35rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--danger) 22%, var(--line));
+}
+
+.modal-danger-slot .btn {
+  width: 100%;
 }
 
 .modal-head {
