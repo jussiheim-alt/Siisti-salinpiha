@@ -24,9 +24,9 @@ export const DEFAULT_LEAD_GUIDE: LeadGuide = {
     },
     {
       id: 'tasks',
-      title: 'Miten tehtävät merkitään tehdyksi',
+      title: 'Kuittaa tehtävät viikon päätteeksi',
       body:
-        'Avaa Pihavuoro etusivulta tai Vuorot-välilehdeltä. Merkitse kukin tehtäväkortti tehdyksi, kun työ on valmis. Jos tehtävää ei tarvita tällä viikolla, merkitse se “ei tarvita” ja kirjoita lyhyt syy. Näin muut näkevät tilanteen ajan tasalla.',
+        'Tehtäväkortit ovat viikkotason lista — niitä ei merkitä joka päivä. Viikon päätteeksi (tai kun viikon työt on hoidettu) avaa Pihavuoro ja kuittaa kukin tehtävä: Tehty tai Ei tarvetta (+ lyhyt syy). Näin muut näkevät, että viikko on kunnossa.',
     },
     {
       id: 'weather',
