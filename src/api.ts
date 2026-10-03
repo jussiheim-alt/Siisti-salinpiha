@@ -74,6 +74,8 @@ export type User = {
   constraints: string[]
   constraintNote?: string | null
   snoozeUntil?: string | null
+  /** Same label → suositus pitää henkilöt samalla viikolla */
+  travelGroup?: string | null
 }
 
 export type Assignment = {

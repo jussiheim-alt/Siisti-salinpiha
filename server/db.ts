@@ -102,6 +102,7 @@ export function initDb() {
       constraints_json TEXT NOT NULL DEFAULT '[]',
       constraint_note TEXT,
       snooze_until TEXT,
+      travel_group TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -269,6 +270,7 @@ export function initDb() {
       email TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('admin','member')),
       constraints_json TEXT NOT NULL DEFAULT '[]',
+      travel_group TEXT,
       created_by_user_id TEXT REFERENCES users(id),
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
@@ -313,6 +315,16 @@ export function initDb() {
   }
   if (!hubCols.some((c) => c.name === 'activated_by_user_id')) {
     db.exec(`ALTER TABLE hub_inspections ADD COLUMN activated_by_user_id TEXT`)
+  }
+
+  const userCols = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
+  if (!userCols.some((c) => c.name === 'travel_group')) {
+    db.exec(`ALTER TABLE users ADD COLUMN travel_group TEXT`)
+  }
+
+  const inviteCols = db.prepare(`PRAGMA table_info(invites)`).all() as { name: string }[]
+  if (!inviteCols.some((c) => c.name === 'travel_group')) {
+    db.exec(`ALTER TABLE invites ADD COLUMN travel_group TEXT`)
   }
 
   seedTaskCards()
@@ -381,6 +393,7 @@ export function publicUser(row: Record<string, unknown>) {
     constraints: parseConstraints(String(row.constraints_json ?? '[]')),
     constraintNote: row.constraint_note ?? null,
     snoozeUntil: row.snooze_until ?? null,
+    travelGroup: row.travel_group ? String(row.travel_group) : null,
     createdAt: row.created_at,
   }
 }

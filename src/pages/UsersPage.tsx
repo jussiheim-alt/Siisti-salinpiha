@@ -17,6 +17,7 @@ type Invite = {
   email: string
   role: 'admin' | 'member'
   constraints: string[]
+  travelGroup?: string | null
   inviteUrl: string | null
   expiresAt: string
   status: string
@@ -37,9 +38,18 @@ export function UsersPage() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'admin' | 'member'>('member')
   const [constraints, setConstraints] = useState<string[]>([])
+  const [travelGroup, setTravelGroup] = useState('')
   const [lastInviteUrl, setLastInviteUrl] = useState('')
   const [editing, setEditing] = useState<User | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const knownTravelGroups = [
+    ...new Set(
+      users
+        .map((u) => u.travelGroup?.trim())
+        .filter((g): g is string => Boolean(g)),
+    ),
+  ].sort((a, b) => a.localeCompare(b, 'fi'))
 
   async function load() {
     const [u, i] = await Promise.all([
@@ -62,12 +72,19 @@ export function UsersPage() {
     try {
       const data = await api<{ invite: Invite }>('/api/invites', {
         method: 'POST',
-        json: { name, email, role: isOwner ? role : 'member', constraints },
+        json: {
+          name,
+          email,
+          role: isOwner ? role : 'member',
+          constraints,
+          travelGroup: travelGroup.trim() || null,
+        },
       })
       setName('')
       setEmail('')
       setRole('member')
       setConstraints([])
+      setTravelGroup('')
       setLastInviteUrl(data.invite.inviteUrl || '')
       setNotice('Kutsu luotu — kopioi linkki ja lähetä se henkilölle.')
       await load()
@@ -112,6 +129,7 @@ export function UsersPage() {
           constraints: editing.constraints,
           constraintNote: editing.constraintNote,
           snoozeUntil: editing.snoozeUntil,
+          travelGroup: editing.travelGroup?.trim() || null,
         },
       })
       setEditing(null)
@@ -154,6 +172,11 @@ export function UsersPage() {
 
   return (
     <div className="page">
+      <datalist id="travel-group-options">
+        {knownTravelGroups.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Jäsenet</h1>
@@ -216,6 +239,19 @@ export function UsersPage() {
               </label>
             ))}
           </fieldset>
+          <label>
+            Matkaseura / perhe
+            <input
+              value={travelGroup}
+              onChange={(e) => setTravelGroup(e.target.value)}
+              list="travel-group-options"
+              placeholder="Esim. Heimonen"
+              autoComplete="off"
+            />
+          </label>
+          <p className="hint">
+            Sama nimi yhdistää henkilöt — suositus laittaa heidät samalle viikolle.
+          </p>
           <button className="btn primary" type="submit">
             Luo kutsulinkki
           </button>
@@ -246,6 +282,7 @@ export function UsersPage() {
                     · {roleLabel(inv.role)} · {inv.email}
                   </span>
                   <div className="tags">
+                    {inv.travelGroup && <span className="tag">Perhe: {inv.travelGroup}</span>}
                     <span className="tag">Vanhenee {formatDateFi(inv.expiresAt)}</span>
                   </div>
                 </div>
@@ -278,6 +315,7 @@ export function UsersPage() {
                   {isOwnerEmail(u.email) ? ' · pääkäyttäjä' : ''} · {u.email}
                 </span>
                 <div className="tags">
+                  {u.travelGroup && <span className="tag">Perhe: {u.travelGroup}</span>}
                   {u.constraints.map((c) => (
                     <span key={c} className="tag">
                       {CONSTRAINT_OPTIONS.find((x) => x.id === c)?.label || c}
@@ -378,6 +416,19 @@ export function UsersPage() {
                     </label>
                   ))}
                 </fieldset>
+                <label>
+                  Matkaseura / perhe
+                  <input
+                    value={editing.travelGroup ?? ''}
+                    onChange={(e) => setEditing({ ...editing, travelGroup: e.target.value })}
+                    list="travel-group-options"
+                    placeholder="Esim. Heimonen — tyhjä = ei ryhmää"
+                    autoComplete="off"
+                  />
+                </label>
+                <p className="hint">
+                  Sama nimi yhdistää jäsenet samalle viikolle suosituksessa.
+                </p>
                 <label className="check">
                   <input
                     type="checkbox"
