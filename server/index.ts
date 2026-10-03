@@ -39,6 +39,7 @@ import {
   deleteUserRecord,
   isOwnerUser,
 } from './userAdmin.ts'
+import { cleanupBackupWorkDir, createBackupArchive } from './backup.ts'
 
 const PORT = Number(process.env.PORT || 8787)
 
@@ -743,6 +744,42 @@ app.get('/api/app-settings', authMiddleware, (_req, res) => {
 app.put('/api/app-settings', authMiddleware, requireAdmin, (req, res) => {
   const settings = saveAppSettings(req.body?.settings ?? req.body)
   res.json({ settings })
+})
+
+// ——— Varmuuskopio (admin) ———
+app.get('/api/admin/backup', authMiddleware, requireAdmin, async (_req, res) => {
+  let workDir: string | null = null
+  try {
+    const created = await createBackupArchive()
+    workDir = created.workDir
+    res.setHeader('Content-Type', 'application/gzip')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${created.filename}"; filename*=UTF-8''${encodeURIComponent(created.filename)}`,
+    )
+    res.setHeader('Cache-Control', 'no-store')
+    const stream = fs.createReadStream(created.archivePath)
+    const cleanup = () => {
+      if (workDir) cleanupBackupWorkDir(workDir)
+      workDir = null
+    }
+    stream.on('error', (err) => {
+      cleanup()
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Varmuuskopion lukeminen epäonnistui' })
+      } else {
+        res.destroy(err)
+      }
+    })
+    res.on('close', cleanup)
+    stream.pipe(res)
+  } catch (err) {
+    if (workDir) cleanupBackupWorkDir(workDir)
+    console.error('backup failed', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Varmuuskopion luonti epäonnistui' })
+    }
+  }
 })
 
 // ——— Tehtäväkortit (admin) ———
