@@ -188,11 +188,19 @@ export function UsersPage() {
               {isOwner && <option value="admin">Ylläpitäjä — täydet oikeudet</option>}
             </select>
           </label>
+          <p className="hint">
+            Vastuuveli ei ole erillinen tili. Kutsu jäseneksi käyttäjänä — vastuuveli
+            valitaan viikkokoonpanossa (Vuorot), kun viikko julkaistaan.
+          </p>
           {!isOwner && (
             <p className="hint">Vain pääkäyttäjä voi kutsua uusia ylläpitäjiä.</p>
           )}
           <fieldset className="checks">
             <legend>Käytettävyysrajoitukset</legend>
+            <p className="hint">
+              Jätä tyhjäksi, jos henkilö voi olla viikon vastuuveli. Rasti
+              &quot;Ei vastuuhenkilöksi&quot; vain jos häntä ei saa valita vastuuveljeksi.
+            </p>
             {CONSTRAINT_OPTIONS.map((c) => (
               <label key={c.id} className="check">
                 <input
@@ -336,19 +344,22 @@ export function UsersPage() {
                       setEditing({ ...editing, role: e.target.value as 'admin' | 'member' })
                     }
                   >
-                    <option value="member">Käyttäjä</option>
-                    <option value="admin">Ylläpitäjä (täydet oikeudet)</option>
-                  </select>
-                </label>
-                {!canEditRole && (
-                  <p className="hint">
-                    {editingIsOwner
-                      ? 'Pääkäyttäjän ylläpito-oikeutta ei voi muuttaa.'
-                      : 'Vain pääkäyttäjä (Jussi Heimonen) voi lisätä tai poistaa ylläpitäjiä.'}
-                  </p>
-                )}
-                <fieldset className="checks">
-                  <legend>Käytettävyysrajoitukset</legend>
+                  <option value="member">Käyttäjä</option>
+                  <option value="admin">Ylläpitäjä (täydet oikeudet)</option>
+                </select>
+              </label>
+              <p className="hint">
+                Vastuuveli valitaan viikkokoonpanossa — se ei ole erillinen käyttöoikeustaso.
+              </p>
+              {!canEditRole && (
+                <p className="hint">
+                  {editingIsOwner
+                    ? 'Pääkäyttäjän ylläpito-oikeutta ei voi muuttaa.'
+                    : 'Vain pääkäyttäjä (Jussi Heimonen) voi lisätä tai poistaa ylläpitäjiä.'}
+                </p>
+              )}
+              <fieldset className="checks">
+                <legend>Käytettävyysrajoitukset</legend>
                   {CONSTRAINT_OPTIONS.map((c) => (
                     <label key={c.id} className="check">
                       <input
