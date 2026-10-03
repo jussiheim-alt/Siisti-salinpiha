@@ -61,7 +61,7 @@ Demokäyttäjiä ei enää seedata. Muut jäsenet kutsutaan sovelluksesta.
 ### Huomioita
 
 - Render nukuttaa palvelun idlellä Starterissäkin joskus hinnoittelusta riippuen — tarkista nykyinen plan.
-- Varmuuskopioi ajoittain `siisti-piha.sqlite` (Render shell / disk backup).
+- Varmuuskopio: Ylläpitäjä-sivulta **Lataa varmuuskopio** (SQLite + kuvat `.tar.gz`), tai Render shell / disk.
 - Vaihda admin-salasana heti jos käytit väliaikaista.
 
 ### PWA-päivitykset (kotivalikko)
