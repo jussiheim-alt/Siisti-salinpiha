@@ -167,12 +167,6 @@ export async function ensurePushSubscription() {
   }
 }
 
-export async function sendTestPush() {
-  return api<{ ok: boolean; delivered: number; failed: number }>('/api/push/test', {
-    method: 'POST',
-  })
-}
-
 export async function disablePushNotifications() {
   if (!('serviceWorker' in navigator)) return
   const reg = await navigator.serviceWorker.ready
