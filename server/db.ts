@@ -297,6 +297,8 @@ export function initDb() {
   if (!notifCols.some((c) => c.name === 'kind')) {
     db.exec(`ALTER TABLE notifications ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'`)
   }
+  // Chat-viestit eivät kuulu Ilmo-listaan (FAB-merkki + lukitusnäytön push)
+  db.prepare(`DELETE FROM notifications WHERE kind = 'chat'`).run()
 
   const noticeCols = db.prepare(`PRAGMA table_info(notices)`).all() as { name: string }[]
   if (!noticeCols.some((c) => c.name === 'audience')) {

@@ -66,6 +66,9 @@ import {
 
 const PORT = Number(process.env.PORT || 8787)
 
+/** Chat kuuluu FAB-merkkiin + lukitusnäytön pushiin — ei Ilmo-listaan. */
+const NOTIF_EXCLUDE_CHAT = `AND IFNULL(kind, 'general') != 'chat'`
+
 function loadJwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET
   const secretPath = path.join(dataDir, 'jwt-secret.txt')
@@ -1962,7 +1965,8 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   const weekLabel = formatWeekRangeFi(weekStart, weekEnd)
   if (recipients.length) {
     try {
-      notifyUsers(
+      // Vain lukitusnäytön push — ei Ilmo-välilehden riviä (lukemattomat → chat-kuvake)
+      void sendWebPush(
         recipients,
         'Uusi viesti vuorokeskustelussa',
         `${user.name} (${weekLabel}): ${body.length > 80 ? `${body.slice(0, 77)}…` : body}`,
@@ -1970,7 +1974,7 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
         'chat',
       )
     } catch (err) {
-      console.warn('Chat notification failed', err)
+      console.warn('Chat push failed', err)
     }
   }
 
@@ -2310,14 +2314,17 @@ app.get('/api/home', authMiddleware, async (req, res) => {
 
   const unreadNotifications = (
     db
-      .prepare(`SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL`)
+      .prepare(
+        `SELECT COUNT(*) AS c FROM notifications
+         WHERE user_id = ? AND read_at IS NULL ${NOTIF_EXCLUDE_CHAT}`,
+      )
       .get(user.id) as { c: number }
   ).c
 
   const recentNotifications = db
     .prepare(
       `SELECT id, title, body, link, kind, read_at, created_at
-       FROM notifications WHERE user_id = ?
+       FROM notifications WHERE user_id = ? ${NOTIF_EXCLUDE_CHAT}
        ORDER BY created_at DESC LIMIT 5`,
     )
     .all(user.id)
@@ -2431,16 +2438,21 @@ app.post('/api/weather/alerts/run', authMiddleware, requireAdmin, async (_req, r
 
 app.get('/api/notifications', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
+  // Siivoa vanhat chat-rivit (chat → vain FAB + push)
+  db.prepare(`DELETE FROM notifications WHERE user_id = ? AND kind = 'chat'`).run(user.id)
   const rows = db
     .prepare(
       `SELECT id, title, body, link, kind, read_at, created_at
-       FROM notifications WHERE user_id = ?
+       FROM notifications WHERE user_id = ? ${NOTIF_EXCLUDE_CHAT}
        ORDER BY created_at DESC LIMIT 40`,
     )
     .all(user.id) as Record<string, unknown>[]
   const unreadCount = (
     db
-      .prepare(`SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL`)
+      .prepare(
+        `SELECT COUNT(*) AS c FROM notifications
+         WHERE user_id = ? AND read_at IS NULL ${NOTIF_EXCLUDE_CHAT}`,
+      )
       .get(user.id) as { c: number }
   ).c
   res.json({

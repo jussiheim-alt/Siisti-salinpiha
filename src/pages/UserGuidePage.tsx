@@ -25,7 +25,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Etusivu',
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
-      'Kytke ilmoitukset päälle etusivulta, jotta chat-viestit ja apukutsut näkyvät lukitusnäytöllä. iPhonella sovellus pitää olla lisättynä kotivalikkoon — testaa painikkeella „Testaa lukitusnäyttö”.',
+      'Kytke ilmoitukset päälle etusivulta, jotta apukutsut ja chat näkyvät lukitusnäytöllä. Sovelluksessa uudet chat-viestit näkyvät chat-kuvakkeen punaisessa numerossa (eivät Ilmo-listassa). iPhonella sovellus pitää olla kotivalikossa.',
       'Pikavalinnoista pääset käytettävyyteen, vuoronvaihtoihin, apukutsuihin ja huomioihin.',
     ],
     to: '/',
@@ -37,7 +37,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Vuorot-välilehdellä näet julkaistut viikot. Avaa oma viikkosi nähdäksesi kokoonpanon ja tehtävät.',
       'Kuittaa tehtäviä valmiiksi viikon aikana. Jos olet vastuuveli, näet etusivulla ohjeet ja vastaat viikon töistä.',
-      'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa. Uusi viesti lähettää ilmoituksen muille vuorossa oleville.',
+      'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa. Lukemattomat viestit näkyvät punaisella numerolla kuvakkeessa; lukitusnäytölle tulee push, jos ilmoitukset on kytketty päälle.',
     ],
     to: '/kalenteri',
     linkLabel: 'Avaa vuorot',
