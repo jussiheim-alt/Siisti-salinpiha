@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import { api, type ExtraTask } from '../api'
 import { useAuth } from '../auth'
 
@@ -150,10 +149,6 @@ export function ExtraTasksPage() {
       )}
 
       {error && <p className="error">{error}</p>}
-
-      <p className="hint push-home-hint">
-        Push-ilmoitukset kytketään <Link to="/">etusivulta</Link> (päällä / pois).
-      </p>
 
       {canCreate && (
         <section className="panel">
