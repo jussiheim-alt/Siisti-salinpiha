@@ -16,7 +16,7 @@
   --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
-  --nav-h: 4.85rem;
+  --nav-h: 5.15rem;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
@@ -164,12 +164,13 @@ a {
 .tab-logout {
   display: grid;
   justify-items: center;
-  gap: 0.18rem;
+  align-content: center;
+  gap: 0.2rem;
   text-align: center;
-  padding: 0.4rem 0.08rem 0.3rem;
+  padding: 0.38rem 0.12rem 0.32rem;
   border-radius: 0.85rem;
-  font-size: 0.62rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--muted);
   background: transparent;
@@ -177,20 +178,35 @@ a {
   cursor: pointer;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
   transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.18s var(--ease);
 }
 
+.tab-label {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tabbar svg {
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.22rem;
+  height: 1.22rem;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.tabbar-admin a,
+.tabbar-admin .tab-logout {
+  font-size: 0.64rem;
+  padding-inline: 0.06rem;
 }
 
 .tabbar a.active {

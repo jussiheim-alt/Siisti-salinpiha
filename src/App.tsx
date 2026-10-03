@@ -21,14 +21,6 @@ import { LeadGuideAdminPage } from './pages/LeadGuideAdminPage'
 import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UsersPage } from './pages/UsersPage'
 
-function IconTasks() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 6h12M7 12h12M7 18h8" />
-      <path d="M4 6h.01M4 12h.01M4 18h.01" />
-    </svg>
-  )
-}
 function IconHome() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -112,7 +104,13 @@ function Shell() {
   if (loading) return <div className="boot">Ladataan…</div>
   if (!user) return <Navigate to="/kirjaudu" replace />
 
-  const cols = user.role === 'admin' ? 8 : 6
+  const cols = user.role === 'admin' ? 7 : 6
+  const adminSectionActive =
+    location.pathname.startsWith('/yllapitaja') ||
+    location.pathname.startsWith('/kayttajat') ||
+    location.pathname.startsWith('/vastuuohjeet') ||
+    location.pathname.startsWith('/asetukset') ||
+    location.pathname.startsWith('/tehtavat')
 
   return (
     <div className="app-shell app-shell-bottom-nav">
@@ -120,21 +118,21 @@ function Shell() {
         <Outlet />
       </main>
       <nav
-        className="tabbar tabbar-bottom"
+        className={`tabbar tabbar-bottom${user.role === 'admin' ? ' tabbar-admin' : ''}`}
         aria-label="Päänavigaatio"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         <NavLink to="/" end>
           <IconHome />
-          Etusivu
+          <span className="tab-label">Etusivu</span>
         </NavLink>
         <NavLink to="/kalenteri">
           <IconCal />
-          Vuorot
+          <span className="tab-label">Vuorot</span>
         </NavLink>
         <NavLink to="/apukutsut">
           <IconHelp />
-          Apu
+          <span className="tab-label">Apu</span>
         </NavLink>
         <NavLink to="/ilmoitukset" className="tab-with-badge">
           <span className="tab-icon-wrap">
@@ -145,37 +143,24 @@ function Shell() {
               </span>
             )}
           </span>
-          Ilmo
+          <span className="tab-label">Ilmo</span>
         </NavLink>
         <NavLink to="/huomiot">
           <IconNote />
-          Huomiot
+          <span className="tab-label">Huomiot</span>
         </NavLink>
-        {user.role === 'admin' && (
-          <NavLink to="/tehtavat">
-            <IconTasks />
-            Tehtävät
-          </NavLink>
-        )}
         {user.role === 'admin' && (
           <NavLink
             to="/yllapitaja"
-            className={({ isActive }) =>
-              isActive ||
-              location.pathname.startsWith('/kayttajat') ||
-              location.pathname.startsWith('/vastuuohjeet') ||
-              location.pathname.startsWith('/asetukset')
-                ? 'active'
-                : undefined
-            }
+            className={({ isActive }) => (isActive || adminSectionActive ? 'active' : undefined)}
           >
             <IconAdmin />
-            Ylläpitäjä
+            <span className="tab-label">Ylläpito</span>
           </NavLink>
         )}
         <button type="button" className="tab-logout" onClick={() => void logout()}>
           <IconOut />
-          Ulos
+          <span className="tab-label">Ulos</span>
         </button>
       </nav>
       <ShiftChatFab />
