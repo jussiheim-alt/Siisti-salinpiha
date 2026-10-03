@@ -27,6 +27,7 @@ import {
 } from './hub.ts'
 import { dataDir, root, uploadsDir } from './paths.ts'
 import { isCadenceKey, isSeasonKey, publicTaskCard } from './taskCards.ts'
+import { formatWeekRangeFi } from '../src/shared/datetime.ts'
 
 const PORT = Number(process.env.PORT || 8787)
 
@@ -755,7 +756,7 @@ app.get('/api/meta/app', (_req, res) => {
   })
 })
 
-// ——— Esteviikot (saatavuus) ———
+// ——— Käytettävyys (esteviikot) ———
 app.get('/api/availability', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const count = Math.min(16, Math.max(4, Number(req.query.weeks) || 10))
@@ -1198,7 +1199,7 @@ app.post('/api/pihavuorot/:id/publish', authMiddleware, requireAdmin, (req, res)
     notifyUsers(
       assigneeIds,
       'Pihavuoro julkaistu',
-      `${hydrated.weekStart} – ${hydrated.weekEnd}: vuorosi on valmis katsottavaksi.`,
+      `${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}: vuorosi on valmis katsottavaksi.`,
       `/pihavuoro/${hydrated.id}`,
       'shift',
     )
@@ -1472,7 +1473,7 @@ app.post('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
     notifyUsers(
       [toUserId],
       'Sinulle tarjottiin vuoronvaihtoa',
-      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
       link,
       'swap',
     )
@@ -1489,7 +1490,7 @@ app.post('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
     notifyUsers(
       recipients,
       'Avoin vuoronvaihto',
-      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
       '/vaihdot',
       'swap',
     )
@@ -1552,7 +1553,7 @@ app.post('/api/swaps/:id/accept', authMiddleware, (req, res) => {
   notifyUsers(
     [String(offer.from_user_id)],
     'Vuoronvaihto hyväksytty',
-    `${user.name} otti paikkasi (${roleLabel}) viikolla ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+    `${user.name} otti paikkasi (${roleLabel}) viikolla ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
     `/pihavuoro/${offer.pihavuoro_id}`,
     'swap',
   )
@@ -1568,7 +1569,7 @@ app.post('/api/swaps/:id/accept', authMiddleware, (req, res) => {
     notifyUsers(
       others,
       'Kokoonpano päivittyi',
-      `${user.name} tuli vuoroon ${hydrated.weekStart} – ${hydrated.weekEnd} (${roleLabel}).`,
+      `${user.name} tuli vuoroon ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)} (${roleLabel}).`,
       `/pihavuoro/${offer.pihavuoro_id}`,
       'swap',
     )
@@ -1688,7 +1689,7 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
     message: hydrateMessage(
       db.prepare('SELECT * FROM shift_messages WHERE id = ?').get(id) as Record<string, unknown>,
     ),
-    weekLabel: `${weekStart} – ${weekEnd}`,
+    weekLabel: formatWeekRangeFi(weekStart, weekEnd),
   })
 })
 

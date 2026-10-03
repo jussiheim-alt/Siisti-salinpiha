@@ -8,6 +8,7 @@ import {
   type User,
 } from '../api'
 import { useAuth } from '../auth'
+import { formatWeekRangeFi } from '../shared/datetime'
 
 export function PihavuoroPage() {
   const { id } = useParams()
@@ -342,7 +343,7 @@ export function PihavuoroPage() {
       <header className="page-hero compact">
         <p className="brand-mark">Pihavuoro</p>
         <h1>
-          {p.weekStart} – {p.weekEnd}
+          {formatWeekRangeFi(p.weekStart, p.weekEnd)}
         </h1>
         <p className="lede">
           {p.season === 'talvi' ? 'Talvi' : 'Sulankausi'} ·{' '}

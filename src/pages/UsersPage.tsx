@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type User } from '../api'
+import { formatDateFi } from '../shared/datetime'
 
 const CONSTRAINT_OPTIONS = [
   { id: 'no_heavy', label: 'Ei raskaisiin töihin' },
@@ -189,7 +190,7 @@ export function UsersPage() {
                     · {roleLabel(inv.role)} · {inv.email}
                   </span>
                   <div className="tags">
-                    <span className="tag">Vanhenee {new Date(inv.expiresAt).toLocaleDateString('fi-FI')}</span>
+                    <span className="tag">Vanhenee {formatDateFi(inv.expiresAt)}</span>
                   </div>
                 </div>
                 <div className="row-actions">

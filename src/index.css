@@ -1162,8 +1162,13 @@ select:focus {
 }
 
 .avail-row.is-blocked {
-  background: color-mix(in srgb, var(--resin) 10%, white);
-  border-color: color-mix(in srgb, var(--resin) 35%, var(--line));
+  background: color-mix(in srgb, var(--danger) 14%, white);
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.avail-row.is-blocked:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
 }
 
 .avail-row.is-locked {
@@ -1187,9 +1192,9 @@ select:focus {
 }
 
 .avail-check.on {
-  background: var(--moss);
-  border-color: var(--moss);
-  color: var(--birch);
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 .avail-meta {
@@ -1212,7 +1217,10 @@ select:focus {
 }
 
 .avail-flag.on {
-  color: var(--resin);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, white);
+  padding: 0.22rem 0.45rem;
+  border-radius: 0.4rem;
 }
 
 .avail-summary li {

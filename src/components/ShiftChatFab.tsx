@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { api, type ShiftMessage } from '../api'
 import { useAuth } from '../auth'
+import { formatDateTimeFi, formatWeekRangeFi } from '../shared/datetime'
 
 type CurrentChat = {
   pihavuoroId: string
@@ -35,18 +36,6 @@ function IconSend() {
       <path d="M5 12h12M13 6l6 6-6 6" />
     </svg>
   )
-}
-
-function formatChatTime(iso: string) {
-  try {
-    return new Intl.DateTimeFormat('fi-FI', {
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(iso))
-  } catch {
-    return iso
-  }
 }
 
 export function ShiftChatFab() {
@@ -193,7 +182,7 @@ export function ShiftChatFab() {
             <div>
               <p className="chat-sheet-kicker">Vuoron chat</p>
               <strong>
-                {chat.weekStart} – {chat.weekEnd}
+                {formatWeekRangeFi(chat.weekStart, chat.weekEnd)}
               </strong>
               <p className="muted">
                 Yksityinen viikkokeskustelu
@@ -226,7 +215,7 @@ export function ShiftChatFab() {
                   <div className={`chat-bubble${mine ? ' mine' : ''}`}>
                     {!mine && <strong className="chat-name">{m.authorName}</strong>}
                     <p>{m.body}</p>
-                    <time dateTime={m.createdAt}>{formatChatTime(m.createdAt)}</time>
+                    <time dateTime={m.createdAt}>{formatDateTimeFi(m.createdAt)}</time>
                   </div>
                 </div>
               )

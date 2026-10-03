@@ -3,6 +3,7 @@ import { getISOWeek, parseISO } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { formatWeekRangeFi } from '../shared/datetime'
 
 type WeekRow = {
   weekStart: string
@@ -18,13 +19,6 @@ type SummaryWeek = {
   blockedUsers: { id: string; name: string }[]
   availableCount: number
   tight: boolean
-}
-
-function formatWeekLabel(weekStart: string, weekEnd: string) {
-  const start = new Date(`${weekStart}T12:00:00`)
-  const end = new Date(`${weekEnd}T12:00:00`)
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'numeric' }
-  return `${start.toLocaleDateString('fi-FI', opts)} – ${end.toLocaleDateString('fi-FI', opts)}`
 }
 
 function weekNumber(weekStart: string) {
@@ -96,14 +90,14 @@ export function AvailabilityPage() {
       </Link>
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
-        <h1>Esteviikot</h1>
+        <h1>Käytettävyys</h1>
         <p className="lede">
           Merkitse viikot, jolloin et voi olla Pihavuorossa. Suositus ohittaa nämä viikot.
         </p>
       </header>
 
       {error && <p className="error">{error}</p>}
-      {saved && !dirty && <p className="ok-flash">Esteviikot tallennettu.</p>}
+      {saved && !dirty && <p className="ok-flash">Käytettävyys tallennettu.</p>}
 
       <section className="panel">
         <h2>Seuraavat 10 viikkoa</h2>
@@ -129,7 +123,7 @@ export function AvailabilityPage() {
                   </span>
                   <span className="avail-meta">
                     <strong>
-                      Vk {weekNumber(w.weekStart)} · {formatWeekLabel(w.weekStart, w.weekEnd)}
+                      Vk {weekNumber(w.weekStart)} · {formatWeekRangeFi(w.weekStart, w.weekEnd)}
                     </strong>
                     <span className="muted">
                       {locked
@@ -157,7 +151,7 @@ export function AvailabilityPage() {
             disabled={saving || !dirty}
             onClick={() => void save()}
           >
-            {saving ? 'Tallennetaan…' : 'Tallenna esteviikot'}
+            {saving ? 'Tallennetaan…' : 'Tallenna käytettävyys'}
           </button>
         </div>
       </section>
@@ -173,7 +167,7 @@ export function AvailabilityPage() {
               <li key={w.weekStart} className={w.tight ? 'is-tight' : undefined}>
                 <div className="avail-summary-top">
                   <strong>
-                    Vk {weekNumber(w.weekStart)} · {formatWeekLabel(w.weekStart, w.weekEnd)}
+                    Vk {weekNumber(w.weekStart)} · {formatWeekRangeFi(w.weekStart, w.weekEnd)}
                   </strong>
                   <span className={`pill${w.tight ? ' status-draft' : ''}`}>
                     {w.availableCount} saatavilla
