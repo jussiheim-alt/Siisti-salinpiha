@@ -2044,10 +2044,12 @@ app.get('/api/home', authMiddleware, async (req, res) => {
       .get(user.id) as { c: number }
   ).c
 
+  // Etusivulla vain lukemattomat — luetut näkyvät Ilmo-välilehdellä
   const recentNotifications = db
     .prepare(
       `SELECT id, title, body, link, kind, read_at, created_at
-       FROM notifications WHERE user_id = ? ${NOTIF_EXCLUDE_CHAT}
+       FROM notifications
+       WHERE user_id = ? AND read_at IS NULL ${NOTIF_EXCLUDE_CHAT}
        ORDER BY created_at DESC LIMIT 5`,
     )
     .all(user.id)

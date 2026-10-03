@@ -992,18 +992,18 @@ export async function localApi<T = unknown>(
     // Poista vanhat chat-ilmoitukset (kuuluvat FAB-merkkiin)
     db.notifications = db.notifications.filter((n) => n.kind !== 'chat')
     const inbox = db.notifications.filter((n) => n.userId === user!.id && n.kind !== 'chat')
-    const unread = inbox.filter((n) => !n.readAt).length
-    const recent = inbox
-      .slice(0, 5)
-      .map((n) => ({
-        id: n.id,
-        title: n.title,
-        body: n.body,
-        link: n.link,
-        kind: n.kind,
-        readAt: n.readAt ?? null,
-        createdAt: n.createdAt,
-      }))
+    const unreadItems = inbox.filter((n) => !n.readAt)
+    const unread = unreadItems.length
+    // Etusivulla vain lukemattomat — luetut näkyvät Ilmo-välilehdellä
+    const recent = unreadItems.slice(0, 5).map((n) => ({
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      link: n.link,
+      kind: n.kind,
+      readAt: n.readAt ?? null,
+      createdAt: n.createdAt,
+    }))
     const window = upcomingMondays(10)
     const blockedCount = db.weekBlocks.filter(
       (b) => b.userId === user!.id && b.weekStart >= window[0]! && b.weekStart <= window[window.length - 1]!,
