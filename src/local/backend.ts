@@ -1018,9 +1018,11 @@ export async function localApi<T = unknown>(
     const openExtras = db.extraTasks.filter((t) =>
       ['open', 'ready', 'in_progress'].includes(t.status),
     ).length
-    const unread = db.notifications.filter((n) => n.userId === user!.id && !n.readAt).length
-    const recent = db.notifications
-      .filter((n) => n.userId === user!.id)
+    // Poista vanhat chat-ilmoitukset (kuuluvat FAB-merkkiin)
+    db.notifications = db.notifications.filter((n) => n.kind !== 'chat')
+    const inbox = db.notifications.filter((n) => n.userId === user!.id && n.kind !== 'chat')
+    const unread = inbox.filter((n) => !n.readAt).length
+    const recent = inbox
       .slice(0, 5)
       .map((n) => ({
         id: n.id,
@@ -1386,15 +1388,7 @@ export async function localApi<T = unknown>(
         createdAt: new Date().toISOString(),
       }
       db.messages.push(msg)
-      const weekLabel = formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))
-      notify(
-        db,
-        p.assignments.map((a) => a.userId).filter((id) => id !== user!.id),
-        'Uusi viesti vuorokeskustelussa',
-        `${user!.name} (${weekLabel}): ${text.length > 80 ? `${text.slice(0, 77)}…` : text}`,
-        `/pihavuoro/${p.id}?chat=1`,
-        'chat',
-      )
+      // Chat: ei Ilmo-listaan — lukemattomat näkyvät chat-kuvakkeessa
       saveDb(db)
       return ok({
         message: {
@@ -1687,8 +1681,9 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/notifications' && method === 'GET') {
+    db.notifications = db.notifications.filter((n) => n.kind !== 'chat')
     const items = db.notifications
-      .filter((n) => n.userId === user!.id)
+      .filter((n) => n.userId === user!.id && n.kind !== 'chat')
       .slice(0, 50)
       .map((n) => ({
         id: n.id,
@@ -1699,6 +1694,7 @@ export async function localApi<T = unknown>(
         readAt: n.readAt ?? null,
         createdAt: n.createdAt,
       }))
+    saveDb(db)
     return ok({
       items,
       unreadCount: items.filter((n) => !n.readAt).length,

@@ -2685,19 +2685,20 @@ label.template-pick input[type='checkbox'] {
 
 .chat-fab-badge {
   position: absolute;
-  top: -0.15rem;
-  right: -0.15rem;
-  min-width: 1.15rem;
-  height: 1.15rem;
-  padding: 0 0.28rem;
-  border-radius: 0.4rem;
-  background: var(--resin);
+  top: -0.2rem;
+  right: -0.2rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--danger);
   color: white;
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 800;
   display: grid;
   place-items: center;
   line-height: 1;
+  box-shadow: 0 0 0 2px var(--panel, #fff);
 }
 
 .chat-sheet {

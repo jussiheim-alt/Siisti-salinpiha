@@ -15,7 +15,6 @@ function kindLabel(kind: string) {
   if (kind === 'notice') return 'Huomio'
   if (kind === 'hub') return 'Hub'
   if (kind === 'shift') return 'Vuoro'
-  if (kind === 'chat') return 'Chat'
   return 'Ilmoitus'
 }
 
@@ -96,7 +95,7 @@ export function NotificationsPage() {
         <p className="lede">
           {unreadCount === 0
             ? 'Kaikki ilmoitukset on luettu.'
-            : `${unreadCount} lukematonta — chat, sää, apukutsut ja muut.`}
+            : `${unreadCount} lukematonta — sää, apukutsut ja muut.`}
         </p>
         {unreadCount > 0 && (
           <button
@@ -124,7 +123,8 @@ export function NotificationsPage() {
 
       {items.length === 0 ? (
         <p className="empty-state">
-          Ei ilmoituksia vielä. Vuorokeskustelun viestit, sää ja apukutsut ilmestyvät tänne.
+          Ei ilmoituksia vielä. Sää ja apukutsut ilmestyvät tänne. Chat-viestit näkyvät
+          chat-kuvakkeen punaisessa merkissä.
         </p>
       ) : (
         <ul className="notif-list">
