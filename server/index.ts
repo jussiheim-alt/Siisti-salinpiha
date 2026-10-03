@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 import { randomBytes } from 'node:crypto'
 import { startOfWeek, format, parseISO, addDays } from 'date-fns'
 import {
@@ -39,7 +40,12 @@ import {
   deleteUserRecord,
   isOwnerUser,
 } from './userAdmin.ts'
-import { cleanupBackupWorkDir, createBackupArchive } from './backup.ts'
+import {
+  cleanupBackupWorkDir,
+  createBackupArchive,
+  RESTORE_CONFIRM_WORD,
+  restoreFromArchive,
+} from './backup.ts'
 
 const PORT = Number(process.env.PORT || 8787)
 
@@ -79,6 +85,22 @@ const upload = multer({
     },
   }),
   limits: { fileSize: 8 * 1024 * 1024 },
+})
+
+const backupUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(os.tmpdir())),
+    filename: (_req, _file, cb) => cb(null, `siisti-restore-${Date.now()}-${crypto.randomUUID()}.tar.gz`),
+  }),
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = file.originalname.toLowerCase()
+    if (name.endsWith('.tar.gz') || name.endsWith('.tgz')) {
+      cb(null, true)
+      return
+    }
+    cb(new Error('Valitse .tar.gz-varmuuskopio'))
+  },
 })
 
 type AuthUser = {
@@ -781,6 +803,52 @@ app.get('/api/admin/backup', authMiddleware, requireAdmin, async (_req, res) => 
     }
   }
 })
+
+app.post(
+  '/api/admin/backup/restore',
+  authMiddleware,
+  requireAdmin,
+  (req, res, next) => {
+    backupUpload.single('backup')(req, res, (err: unknown) => {
+      if (err) {
+        const msg = err instanceof Error ? err.message : 'Tiedoston vastaanotto epäonnistui'
+        return res.status(400).json({ error: msg })
+      }
+      next()
+    })
+  },
+  async (req, res) => {
+    const confirm = String(req.body?.confirm || '').trim().toUpperCase()
+    if (confirm !== RESTORE_CONFIRM_WORD) {
+      if (req.file?.path) fs.rmSync(req.file.path, { force: true })
+      return res.status(400).json({
+        error: `Vahvista palautus kirjoittamalla ${RESTORE_CONFIRM_WORD}`,
+      })
+    }
+    if (!req.file?.path) {
+      return res.status(400).json({ error: 'Valitse varmuuskopiotiedosto (.tar.gz)' })
+    }
+    const archivePath = req.file.path
+    try {
+      const result = await restoreFromArchive(archivePath)
+      res.json({
+        ok: true,
+        message: 'Varmuuskopio palautettu. Nykyinen data korvattiin.',
+        users: result.users,
+      })
+    } catch (err) {
+      console.error('restore failed', err)
+      const msg = err instanceof Error ? err.message : 'Palautus epäonnistui'
+      res.status(400).json({ error: msg })
+    } finally {
+      try {
+        fs.rmSync(archivePath, { force: true })
+      } catch {
+        /* ignore */
+      }
+    }
+  },
+)
 
 // ——— Tehtäväkortit (admin) ———
 app.get('/api/task-cards', authMiddleware, requireAdmin, (_req, res) => {

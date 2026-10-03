@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { getToken, isLocalDataMode } from '../api'
 import { useAuth } from '../auth'
@@ -31,6 +31,8 @@ const SECTIONS = [
   },
 ]
 
+const RESTORE_CONFIRM_WORD = 'PALAUTA'
+
 function stampFi() {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -49,10 +51,14 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 export function AdminHubPage() {
-  const { user } = useAuth()
+  const { user, refresh } = useAuth()
+  const fileRef = useRef<HTMLInputElement>(null)
   const [backupBusy, setBackupBusy] = useState(false)
+  const [restoreBusy, setRestoreBusy] = useState(false)
   const [backupError, setBackupError] = useState('')
   const [backupInfo, setBackupInfo] = useState('')
+  const [restoreFile, setRestoreFile] = useState<File | null>(null)
+  const [restoreConfirm, setRestoreConfirm] = useState('')
 
   if (user && user.role !== 'admin') return <Navigate to="/" replace />
 
@@ -96,6 +102,60 @@ export function AdminHubPage() {
     }
   }
 
+  async function restoreBackup() {
+    setRestoreBusy(true)
+    setBackupError('')
+    setBackupInfo('')
+    try {
+      if (restoreConfirm.trim().toUpperCase() !== RESTORE_CONFIRM_WORD) {
+        throw new Error(`Vahvista palautus kirjoittamalla ${RESTORE_CONFIRM_WORD}`)
+      }
+      if (!restoreFile) throw new Error('Valitse varmuuskopiotiedosto')
+
+      if (isLocalDataMode) {
+        const text = await restoreFile.text()
+        JSON.parse(text)
+        localStorage.setItem('siisti-piha-local-db-v3', text)
+        setBackupInfo('Paikallinen data palautettu. Sivua ladataan uudelleen…')
+        setTimeout(() => window.location.reload(), 600)
+        return
+      }
+
+      const token = getToken()
+      const body = new FormData()
+      body.append('backup', restoreFile)
+      body.append('confirm', RESTORE_CONFIRM_WORD)
+      const res = await fetch('/api/admin/backup/restore', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+        body,
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        users?: number
+      }
+      if (!res.ok) throw new Error(data.error || 'Palautus epäonnistui')
+      setBackupInfo(
+        data.message ||
+          `Varmuuskopio palautettu${typeof data.users === 'number' ? ` (${data.users} käyttäjää)` : ''}.`,
+      )
+      setRestoreFile(null)
+      setRestoreConfirm('')
+      if (fileRef.current) fileRef.current.value = ''
+      await refresh().catch(() => {
+        window.location.href = '/login'
+      })
+    } catch (err) {
+      setBackupError(err instanceof Error ? err.message : 'Palautus epäonnistui')
+    } finally {
+      setRestoreBusy(false)
+    }
+  }
+
+  const busy = backupBusy || restoreBusy
+
   return (
     <div className="page">
       <header className="page-hero compact">
@@ -129,10 +189,51 @@ export function AdminHubPage() {
         <button
           type="button"
           className="btn primary"
-          disabled={backupBusy}
+          disabled={busy}
           onClick={() => void downloadBackup()}
         >
           {backupBusy ? 'Luodaan varmuuskopiota…' : 'Lataa varmuuskopio'}
+        </button>
+
+        <hr style={{ border: 0, borderTop: '1px solid var(--border, #d8e0da)', margin: '0.5rem 0' }} />
+
+        <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Palauta varmuuskopiosta</h3>
+        <p className="hint" style={{ margin: 0 }}>
+          Korvaa nykyisen sovelluksen datan valitulla varmuuskopiolla. Tätä ei voi peruuttaa —
+          lataa ensin tuore varmuuskopio jos olet epävarma.
+        </p>
+        <label>
+          Varmuuskopiotiedosto (.tar.gz)
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
+            disabled={busy}
+            onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+          />
+        </label>
+        <label>
+          Kirjoita vahvistukseksi <strong>{RESTORE_CONFIRM_WORD}</strong>
+          <input
+            value={restoreConfirm}
+            disabled={busy}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={RESTORE_CONFIRM_WORD}
+            onChange={(e) => setRestoreConfirm(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="btn danger"
+          disabled={
+            busy ||
+            !restoreFile ||
+            restoreConfirm.trim().toUpperCase() !== RESTORE_CONFIRM_WORD
+          }
+          onClick={() => void restoreBackup()}
+        >
+          {restoreBusy ? 'Palautetaan…' : 'Palauta varmuuskopio'}
         </button>
       </section>
     </div>

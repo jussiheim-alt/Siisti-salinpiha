@@ -1,15 +1,53 @@
 import Database from 'better-sqlite3'
+import fs from 'node:fs'
 import path from 'node:path'
 import { TASK_CATALOG_V1 } from './catalog.ts'
 import { ensureFoundingAdmins } from './foundingAdmins.ts'
 import { dataDir } from './paths.ts'
 import { seedTaskCardsFromCatalog, type TaskCard } from './taskCards.ts'
 
-const dbPath = path.join(dataDir, 'siisti-piha.sqlite')
+export const dbPath = path.join(dataDir, 'siisti-piha.sqlite')
 
-export const db = new Database(dbPath)
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+function openDatabase() {
+  const instance = new Database(dbPath)
+  instance.pragma('journal_mode = WAL')
+  instance.pragma('foreign_keys = ON')
+  return instance
+}
+
+let dbInstance = openDatabase()
+
+/** Stable export: always forwards to the current open connection (supports restore). */
+export const db = new Proxy({} as Database.Database, {
+  get(_target, prop, _receiver) {
+    const value = Reflect.get(dbInstance, prop, dbInstance) as unknown
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(dbInstance)
+    }
+    return value
+  },
+  set(_target, prop, value) {
+    Reflect.set(dbInstance, prop, value)
+    return true
+  },
+})
+
+/** Replace live SQLite file from a validated backup copy, then reopen. */
+export function replaceDatabaseFromFile(sourceSqlitePath: string) {
+  if (!fs.existsSync(sourceSqlitePath)) {
+    throw new Error('Varmuuskopion tietokantaa ei löydy')
+  }
+  dbInstance.close()
+  fs.copyFileSync(sourceSqlitePath, dbPath)
+  for (const suffix of ['-wal', '-shm']) {
+    try {
+      fs.rmSync(dbPath + suffix, { force: true })
+    } catch {
+      /* ignore */
+    }
+  }
+  dbInstance = openDatabase()
+}
 
 export function initDb() {
   db.exec(`
