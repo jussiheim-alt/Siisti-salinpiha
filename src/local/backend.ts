@@ -17,6 +17,11 @@ import {
 import { formatWeekRangeFi } from '../shared/datetime'
 import { isOwnerEmail } from '../shared/owner'
 import { seedTaskCardsFromCatalog, type TaskCard } from '../shared/taskCards'
+import {
+  normalizeTravelGroup,
+  pickLeadAndHelpers,
+  resolveHelperCount,
+} from '../shared/travelGroup'
 
 
 const DB_KEY = 'siisti-piha-local-db-v3'
@@ -40,6 +45,7 @@ type User = {
   constraints: string[]
   constraintNote?: string | null
   snoozeUntil?: string | null
+  travelGroup?: string | null
   createdAt: string
 }
 
@@ -144,6 +150,7 @@ type Invite = {
   email: string
   role: Role
   constraints: string[]
+  travelGroup?: string | null
   createdByUserId: string
   createdAt: string
   expiresAt: string
@@ -228,6 +235,12 @@ function normalizeDb(db: Db): Db {
     if (n.audience !== 'all' && n.audience !== 'leads') n.audience = 'all'
     if (n.acknowledgedAt === undefined) n.acknowledgedAt = null
     if (n.acknowledgedByUserId === undefined) n.acknowledgedByUserId = null
+  }
+  for (const u of db.users) {
+    if (u.travelGroup === undefined) u.travelGroup = null
+  }
+  for (const inv of db.invites) {
+    if (inv.travelGroup === undefined) inv.travelGroup = null
   }
   return db
 }
@@ -385,6 +398,7 @@ function publicInvite(inv: Invite, inviteUrl?: string) {
     email: inv.email,
     role: inv.role,
     constraints: inv.constraints,
+    travelGroup: inv.travelGroup ?? null,
     createdAt: inv.createdAt,
     expiresAt: inv.expiresAt,
     acceptedAt: inv.acceptedAt ?? null,
@@ -410,6 +424,7 @@ function publicUser(u: User) {
     constraints: u.constraints,
     constraintNote: u.constraintNote ?? null,
     snoozeUntil: u.snoozeUntil ?? null,
+    travelGroup: u.travelGroup ?? null,
   }
 }
 
@@ -703,6 +718,7 @@ export async function localApi<T = unknown>(
       role: inv!.role,
       active: true,
       constraints: [...inv!.constraints],
+      travelGroup: inv!.travelGroup ?? null,
       createdAt: new Date().toISOString(),
     }
     inv!.acceptedAt = new Date().toISOString()
@@ -737,6 +753,7 @@ export async function localApi<T = unknown>(
       role: nextRole,
       active: true,
       constraints: Array.isArray(body.constraints) ? (body.constraints as string[]) : [],
+      travelGroup: normalizeTravelGroup(body.travelGroup),
       createdAt: new Date().toISOString(),
     }
     db.users.push(nu)
@@ -775,6 +792,7 @@ export async function localApi<T = unknown>(
     if (Array.isArray(body.constraints)) target!.constraints = body.constraints as string[]
     if (body.constraintNote !== undefined) target!.constraintNote = String(body.constraintNote || '') || null
     if (body.snoozeUntil !== undefined) target!.snoozeUntil = body.snoozeUntil ? String(body.snoozeUntil) : null
+    if (body.travelGroup !== undefined) target!.travelGroup = normalizeTravelGroup(body.travelGroup)
     if (body.password) {
       if (String(body.password).length < 8) err('Salasanan oltava vähintään 8 merkkiä')
       target!.passwordHash = await hashPassword(String(body.password))
@@ -867,6 +885,7 @@ export async function localApi<T = unknown>(
       email,
       role: nextRole,
       constraints: Array.isArray(body.constraints) ? (body.constraints as string[]) : [],
+      travelGroup: normalizeTravelGroup(body.travelGroup),
       createdByUserId: user!.id,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1112,17 +1131,33 @@ export async function localApi<T = unknown>(
       }
     }
     if (db.pihavuorot.some((p) => p.weekStart === weekStart)) err('Viikolle on jo Pihavuoro')
-    const active = db.users.filter((u) => u.active && !u.snoozeUntil)
+    const helperCount = resolveHelperCount({
+      totalPeople: body.totalPeople,
+      helperCount: body.helperCount,
+    })
     const blocked = new Set(db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId))
-    const available = active
+    const ranked = db.users
+      .filter((u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()))
       .filter((u) => !blocked.has(u.id))
-      .sort((a, b) => a.name.localeCompare(b.name, 'fi'))
-    const lead = available.find((u) => !u.constraints.includes('no_lead')) || available[0]
+      .map((u) => {
+        const last = db.pihavuorot
+          .filter((p) => p.assignments.some((a) => a.userId === u.id))
+          .map((p) => p.weekStart)
+          .sort()
+          .at(-1) as string | undefined
+        return { ...publicUser(u), last }
+      })
+      .sort((a, b) => {
+        if (!a.last && !b.last) return a.name.localeCompare(b.name, 'fi')
+        if (!a.last) return -1
+        if (!b.last) return 1
+        return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
+      })
+    const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
     if (!lead) err('Vastuuhenkilöä ei löytynyt')
-    const helpers = available.filter((u) => u.id !== lead!.id).slice(0, 4)
     if (helpers.length < 1) {
       err(
-        'Vain 0 saatavilla olevaa jäsentä tälle viikolle (tarvitaan 1–5 avustajaa). Tarkista esteviikot.',
+        `Vain ${helpers.length} saatavilla olevaa jäsentä tälle viikolle (tarvitaan 1–5 avustajaa). Tarkista esteviikot.`,
       )
     }
     const assignments: Assignment[] = [
@@ -1159,7 +1194,10 @@ export async function localApi<T = unknown>(
     if (id === 'meta' && rest.startsWith('/recommend') && method === 'GET') {
       if (user!.role !== 'admin') err('Vain ylläpitäjälle')
       const weekStart = mondayOf(params.get('weekStart') || undefined)
-      const helperCount = Math.min(5, Math.max(1, Number(params.get('helperCount') || 4)))
+      const helperCount = resolveHelperCount({
+        totalPeople: params.get('totalPeople'),
+        helperCount: params.get('helperCount'),
+      })
       const ignoreCurrent = params.get('fresh') === '1'
       const blocked = new Set(
         db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId),
@@ -1187,13 +1225,14 @@ export async function localApi<T = unknown>(
           if (!b.last) return 1
           return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
         })
-      const lead = ranked.find((u) => !u.constraints.includes('no_lead')) || null
-      const helpers = ranked.filter((u) => u.id !== lead?.id).slice(0, helperCount)
+      const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
       return ok({
         weekStart,
         lead,
         helpers,
         ranked,
+        helperCount,
+        totalPeople: helperCount + 1,
         blockedCount: blocked.size,
         availableCount: ranked.length,
         season: seasonFor(weekStart),

@@ -39,6 +39,13 @@ import { ensureLeadGuideTable, getLeadGuide, saveLeadGuide } from './leadGuide.t
 import { ensureAppSettings, getAppSettings, saveAppSettings } from './appSettings.ts'
 import { formatWeekRangeFi } from '../src/shared/datetime.ts'
 import {
+  MAX_HELPERS,
+  MIN_HELPERS,
+  normalizeTravelGroup,
+  pickLeadAndHelpers,
+  resolveHelperCount,
+} from '../src/shared/travelGroup.ts'
+import {
   assertCanDeleteUser,
   assertCanInviteAdmin,
   assertCanManageAdminRole,
@@ -350,15 +357,6 @@ function blockedUserIdsForWeek(weekStart: string): Set<string> {
   )
 }
 
-/** Viikkovuoro: 1 vastuuveli + 1–5 avustajaa */
-const MIN_HELPERS = 1
-const MAX_HELPERS = 5
-
-function clampHelperCount(n: number) {
-  if (!Number.isFinite(n)) return Math.min(MAX_HELPERS, Math.max(MIN_HELPERS, 4))
-  return Math.min(MAX_HELPERS, Math.max(MIN_HELPERS, Math.floor(n)))
-}
-
 function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek?: boolean } = {}) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const blocked = blockedUserIdsForWeek(weekStart)
@@ -396,9 +394,7 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
       return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
     })
 
-  const lead = ranked.find((u) => !u.constraints.includes('no_lead')) || null
-  const take = clampHelperCount(helperCount)
-  const helpers = ranked.filter((u) => u.id !== lead?.id).slice(0, take)
+  const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
 
   return {
     lead,
@@ -468,6 +464,7 @@ function publicInvite(row: Record<string, unknown>, inviteUrl?: string) {
     email: row.email,
     role: row.role,
     constraints: parseConstraints(String(row.constraints_json ?? '[]')),
+    travelGroup: row.travel_group ? String(row.travel_group) : null,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     acceptedAt: row.accepted_at ?? null,
@@ -498,15 +495,17 @@ app.get('/api/directory', authMiddleware, (_req, res) => {
 
 app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
   const actor = (req as express.Request & { user: AuthUser }).user
-  const { name, email, password, role, constraints, constraintNote, snoozeUntil } = req.body as {
-    name?: string
-    email?: string
-    password?: string
-    role?: 'admin' | 'member'
-    constraints?: string[]
-    constraintNote?: string
-    snoozeUntil?: string | null
-  }
+  const { name, email, password, role, constraints, constraintNote, snoozeUntil, travelGroup } =
+    req.body as {
+      name?: string
+      email?: string
+      password?: string
+      role?: 'admin' | 'member'
+      constraints?: string[]
+      constraintNote?: string
+      snoozeUntil?: string | null
+      travelGroup?: string | null
+    }
   if (!name?.trim() || !email?.trim() || !password) {
     return res.status(400).json({ error: 'Nimi, sähköposti ja salasana vaaditaan' })
   }
@@ -522,8 +521,8 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
   const id = crypto.randomUUID()
   try {
     db.prepare(
-      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, constraint_note, snooze_until, created_at)
-       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, constraint_note, snooze_until, travel_group, created_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       name.trim(),
@@ -533,6 +532,7 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
       JSON.stringify(constraints ?? []),
       constraintNote ?? null,
       snoozeUntil || null,
+      normalizeTravelGroup(travelGroup),
       new Date().toISOString(),
     )
   } catch {
@@ -575,9 +575,25 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
     body.constraintNote !== undefined ? (body.constraintNote as string | null) : row.constraint_note
   const snoozeUntil =
     body.snoozeUntil !== undefined ? (body.snoozeUntil as string | null) : row.snooze_until
+  const travelGroup =
+    body.travelGroup !== undefined
+      ? normalizeTravelGroup(body.travelGroup)
+      : row.travel_group
+        ? String(row.travel_group)
+        : null
   db.prepare(
-    `UPDATE users SET name=?, email=?, role=?, active=?, constraints_json=?, constraint_note=?, snooze_until=? WHERE id=?`,
-  ).run(name, email, role, active, constraints, constraintNote, snoozeUntil || null, req.params.id)
+    `UPDATE users SET name=?, email=?, role=?, active=?, constraints_json=?, constraint_note=?, snooze_until=?, travel_group=? WHERE id=?`,
+  ).run(
+    name,
+    email,
+    role,
+    active,
+    constraints,
+    constraintNote,
+    snoozeUntil || null,
+    travelGroup,
+    req.params.id,
+  )
   if (body.password) {
     if (String(body.password).length < 8) {
       return res.status(400).json({ error: 'Salasanan oltava vähintään 8 merkkiä' })
@@ -638,11 +654,12 @@ app.get('/api/invites', authMiddleware, requireAdmin, (req, res) => {
 
 app.post('/api/invites', authMiddleware, requireAdmin, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  const { name, email, role, constraints } = req.body as {
+  const { name, email, role, constraints, travelGroup } = req.body as {
     name?: string
     email?: string
     role?: 'admin' | 'member'
     constraints?: string[]
+    travelGroup?: string | null
   }
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Nimi ja sähköposti vaaditaan' })
@@ -671,9 +688,10 @@ app.post('/api/invites', authMiddleware, requireAdmin, (req, res) => {
   const token = randomBytes(24).toString('hex')
   const now = new Date()
   const expires = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const group = normalizeTravelGroup(travelGroup)
   db.prepare(
-    `INSERT INTO invites (id, token, name, email, role, constraints_json, created_by_user_id, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO invites (id, token, name, email, role, constraints_json, travel_group, created_by_user_id, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     token,
@@ -681,6 +699,7 @@ app.post('/api/invites', authMiddleware, requireAdmin, (req, res) => {
     normalizedEmail,
     nextRole,
     JSON.stringify(Array.isArray(constraints) ? constraints : []),
+    group,
     user.id,
     now.toISOString(),
     expires.toISOString(),
@@ -742,8 +761,8 @@ app.post('/api/invites/token/:token/accept', (req, res) => {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   db.prepare(
-    `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, created_at)
-     VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+    `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, travel_group, created_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
   ).run(
     id,
     String(row.name),
@@ -751,6 +770,7 @@ app.post('/api/invites/token/:token/accept', (req, res) => {
     bcrypt.hashSync(password, 10),
     row.role === 'admin' ? 'admin' : 'member',
     String(row.constraints_json ?? '[]'),
+    row.travel_group ? String(row.travel_group) : null,
     now,
   )
   db.prepare(`UPDATE invites SET accepted_at = ? WHERE id = ?`).run(now, row.id)
@@ -1126,11 +1146,16 @@ app.get('/api/pihavuorot', authMiddleware, (req, res) => {
 
 app.get('/api/pihavuorot/meta/recommend', authMiddleware, requireAdmin, (req, res) => {
   const weekStart = mondayOf(String(req.query.weekStart || ''))
-  const helperCount = Number(req.query.helperCount || 4)
+  const helperCount = resolveHelperCount({
+    totalPeople: req.query.totalPeople,
+    helperCount: req.query.helperCount,
+  })
   const ignoreCurrentWeek = String(req.query.fresh || '') === '1'
   res.json({
     weekStart,
     ...recommend(weekStart, helperCount, { ignoreCurrentWeek }),
+    helperCount,
+    totalPeople: helperCount + 1,
     season: seasonForDate(weekStart),
   })
 })
@@ -1162,7 +1187,10 @@ app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
     }
   }
   const season = isSeasonKey(req.body.season) ? req.body.season : seasonForDate(weekStart)
-  const helperCount = Number(req.body.helperCount ?? 4)
+  const helperCount = resolveHelperCount({
+    totalPeople: req.body.totalPeople,
+    helperCount: req.body.helperCount,
+  })
   const useRecommend = req.body.recommend !== false
   const id = crypto.randomUUID()
 

@@ -270,7 +270,7 @@ export function PihavuoroPage() {
         blockedCount?: number
         availableCount?: number
       }>(
-        `/api/pihavuorot/meta/recommend?weekStart=${encodeURIComponent(p.weekStart)}&helperCount=4&fresh=1`,
+        `/api/pihavuorot/meta/recommend?weekStart=${encodeURIComponent(p.weekStart)}&totalPeople=${Math.min(6, Math.max(2, (helperIds.length || 4) + 1))}&fresh=1`,
       )
       if (data.lead) setLeadId(data.lead.id)
       setHelperIds(data.helpers.map((h) => h.id).filter((id) => id !== data.lead?.id))

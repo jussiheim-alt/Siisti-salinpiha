@@ -3,6 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, type Pihavuoro } from '../api'
 import { useAuth } from '../auth'
 import { formatWeekRangeFi } from '../shared/datetime'
+import {
+  DEFAULT_TOTAL_PEOPLE,
+  MAX_TOTAL_PEOPLE,
+  MIN_TOTAL_PEOPLE,
+} from '../shared/travelGroup'
 
 export function CalendarPage() {
   const { user } = useAuth()
@@ -11,6 +16,7 @@ export function CalendarPage() {
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [publishingId, setPublishingId] = useState<string | null>(null)
+  const [totalPeople, setTotalPeople] = useState(DEFAULT_TOTAL_PEOPLE)
 
   async function load() {
     const data = await api<{ pihavuorot: Pihavuoro[] }>('/api/pihavuorot')
@@ -27,7 +33,7 @@ export function CalendarPage() {
     try {
       const data = await api<{ pihavuoro: Pihavuoro }>('/api/pihavuorot', {
         method: 'POST',
-        json: { recommend: true, helperCount: 4 },
+        json: { recommend: true, totalPeople },
       })
       let id = data.pihavuoro.id
       if (andPublish) {
@@ -58,6 +64,11 @@ export function CalendarPage() {
     }
   }
 
+  const sizeOptions = Array.from(
+    { length: MAX_TOTAL_PEOPLE - MIN_TOTAL_PEOPLE + 1 },
+    (_, i) => MIN_TOTAL_PEOPLE + i,
+  )
+
   return (
     <div className="page">
       <header className="page-hero compact">
@@ -67,20 +78,36 @@ export function CalendarPage() {
       </header>
 
       {user?.role === 'admin' && (
-        <div className="row-actions" style={{ marginBottom: '0.85rem' }}>
-          <button
-            className="btn primary"
-            disabled={creating}
-            onClick={() => void createWeek(true)}
-          >
-            {creating ? 'Luodaan…' : 'Luo ja julkaise viikko'}
-          </button>
-          <button className="btn" disabled={creating} onClick={() => void createWeek(false)}>
-            Luo luonnos
-          </button>
-          <Link className="btn ghost" to="/kaytettavyys">
-            Käytettävyys
-          </Link>
+        <div className="stack" style={{ marginBottom: '0.85rem' }}>
+          <label style={{ maxWidth: '16rem' }}>
+            Henkilöitä vuorolla
+            <select
+              value={totalPeople}
+              onChange={(e) => setTotalPeople(Number(e.target.value))}
+              disabled={creating}
+            >
+              {sizeOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n} henkilöä (1 vastuuveli + {n - 1} avustajaa)
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="row-actions">
+            <button
+              className="btn primary"
+              disabled={creating}
+              onClick={() => void createWeek(true)}
+            >
+              {creating ? 'Luodaan…' : 'Luo ja julkaise viikko'}
+            </button>
+            <button className="btn" disabled={creating} onClick={() => void createWeek(false)}>
+              Luo luonnos
+            </button>
+            <Link className="btn ghost" to="/kaytettavyys">
+              Käytettävyys
+            </Link>
+          </div>
         </div>
       )}
 
