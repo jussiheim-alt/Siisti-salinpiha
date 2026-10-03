@@ -3,7 +3,7 @@ import { getISOWeek, parseISO } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { formatWeekRangeFi } from '../shared/datetime'
+import { formatWeekRangeFiCompact } from '../shared/datetime'
 
 type WeekRow = {
   weekStart: string
@@ -122,8 +122,14 @@ export function AvailabilityPage() {
                     {checked ? '✓' : ''}
                   </span>
                   <span className="avail-meta">
-                    <strong>
-                      Vk {weekNumber(w.weekStart)} · {formatWeekRangeFi(w.weekStart, w.weekEnd)}
+                    <strong className="avail-week-label">
+                      <span className="avail-week-num">Vk {weekNumber(w.weekStart)}</span>
+                      <span className="avail-week-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span className="avail-week-dates">
+                        {formatWeekRangeFiCompact(w.weekStart, w.weekEnd)}
+                      </span>
                     </strong>
                     <span className="muted">
                       {locked
@@ -166,8 +172,14 @@ export function AvailabilityPage() {
             {summary.map((w) => (
               <li key={w.weekStart} className={w.tight ? 'is-tight' : undefined}>
                 <div className="avail-summary-top">
-                  <strong>
-                    Vk {weekNumber(w.weekStart)} · {formatWeekRangeFi(w.weekStart, w.weekEnd)}
+                  <strong className="avail-week-label">
+                    <span className="avail-week-num">Vk {weekNumber(w.weekStart)}</span>
+                    <span className="avail-week-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="avail-week-dates">
+                      {formatWeekRangeFiCompact(w.weekStart, w.weekEnd)}
+                    </span>
                   </strong>
                   <span className={`pill${w.tight ? ' status-draft' : ''}`}>
                     {w.availableCount} saatavilla

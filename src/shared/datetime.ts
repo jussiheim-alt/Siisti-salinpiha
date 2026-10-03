@@ -60,3 +60,23 @@ export function formatTimeFi(value: string | Date): string {
 export function formatWeekRangeFi(weekStart: string, weekEnd: string): string {
   return `${formatDateFi(weekStart)} – ${formatDateFi(weekEnd)}`
 }
+
+/**
+ * Compact week range for narrow lists (stays on one line):
+ * same month → 19.–25.10.2026
+ * same year  → 28.09.–04.10.2026
+ * else       → 28.12.2026–03.01.2027
+ */
+export function formatWeekRangeFiCompact(weekStart: string, weekEnd: string): string {
+  const start = parseInput(weekStart)
+  const end = parseInput(weekEnd)
+  const d1 = String(start.getDate()).padStart(2, '0')
+  const d2 = String(end.getDate()).padStart(2, '0')
+  const m1 = String(start.getMonth() + 1).padStart(2, '0')
+  const m2 = String(end.getMonth() + 1).padStart(2, '0')
+  const y1 = start.getFullYear()
+  const y2 = end.getFullYear()
+  if (y1 === y2 && m1 === m2) return `${d1}.–${d2}.${m1}.${y1}`
+  if (y1 === y2) return `${d1}.${m1}.–${d2}.${m2}.${y1}`
+  return `${d1}.${m1}.${y1}–${d2}.${m2}.${y2}`
+}
