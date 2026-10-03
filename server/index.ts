@@ -1437,13 +1437,9 @@ app.post('/api/tasks/:id/complete', authMiddleware, (req, res) => {
   const assignment = db
     .prepare('SELECT * FROM assignments WHERE pihavuoro_id = ? AND user_id = ?')
     .get(task.pihavuoro_id, user.id) as Record<string, unknown> | undefined
-  if (!assignment && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Et ole tässä Pihavuorossa' })
-  }
-
-  // Kuka tahansa vuorossa oleva (tai admin) voi kuitata — tehtävät ovat yhteisiä
-  if (!assignment && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Et ole tässä Pihavuorossa' })
+  const isLead = assignment?.role === 'lead'
+  if (!isLead && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Vain vastuuveli voi kuitata viikon tehtävät' })
   }
 
   const status = req.body.status === 'skipped' ? 'skipped' : 'done'

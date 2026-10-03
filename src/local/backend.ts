@@ -1940,7 +1940,9 @@ export async function localApi<T = unknown>(
     if (!p) err('Tehtävää ei löydy')
     const task = p!.tasks.find((t) => t.id === taskId)!
     const assignment = p!.assignments.find((a) => a.userId === user!.id)
-    if (!assignment && user!.role !== 'admin') err('Et ole tässä Pihavuorossa')
+    if (assignment?.role !== 'lead' && user!.role !== 'admin') {
+      err('Vain vastuuveli voi kuitata viikon tehtävät')
+    }
     task.status = body.status === 'skipped' ? 'skipped' : 'done'
     task.skipReason = task.status === 'skipped' ? String(body.skipReason || 'Ei tarvetta') : null
     task.doneByUserId = user!.id
