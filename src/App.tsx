@@ -19,6 +19,7 @@ import { PihavuoroPage } from './pages/PihavuoroPage'
 import { SwapsPage } from './pages/SwapsPage'
 import { LeadGuideAdminPage } from './pages/LeadGuideAdminPage'
 import { TaskCardsPage } from './pages/TaskCardsPage'
+import { UserGuidePage } from './pages/UserGuidePage'
 import { UsersPage } from './pages/UsersPage'
 
 function IconHome() {
@@ -191,6 +192,7 @@ export default function App() {
           <Route path="/kaytettavyys" element={<AvailabilityPage />} />
           <Route path="/esteet" element={<Navigate to="/kaytettavyys" replace />} />
           <Route path="/vaihdot" element={<SwapsPage />} />
+          <Route path="/ohjeet" element={<UserGuidePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

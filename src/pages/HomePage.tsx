@@ -169,6 +169,12 @@ export function HomePage() {
           <p className="kicker">Pikavalinnat</p>
           <div className="quick-list">
             <QuickLink
+              title="Käyttöohje"
+              body="Näin käytät sovellusta puhelimella"
+              to="/ohjeet"
+              action="Avaa"
+            />
+            <QuickLink
               title="Käytettävyys"
               body={
                 blockedCount === 0

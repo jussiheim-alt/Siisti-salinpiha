@@ -58,6 +58,7 @@ export function LoginPage() {
           </button>
         </form>
         <p className="hint">Uusi käyttäjä? Pyydä ylläpitäjältä kutsulinkki.</p>
+        <p className="hint">Kirjautumisen jälkeen avaa etusivulta Käyttöohje.</p>
       </div>
     </div>
   )
