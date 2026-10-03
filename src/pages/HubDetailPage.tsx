@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type HubInspection } from '../api'
+import { useAuth } from '../auth'
 import { formatDateFi } from '../shared/datetime'
 
 function itemStatusLabel(status: HubInspection['items'][number]['status']) {
@@ -11,16 +12,23 @@ function itemStatusLabel(status: HubInspection['items'][number]['status']) {
 
 export function HubDetailPage() {
   const { id } = useParams()
+  const { user } = useAuth()
   const [insp, setInsp] = useState<HubInspection | null>(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [canManage, setCanManage] = useState(false)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function load() {
-    const data = await api<{ inspection: HubInspection; canEdit: boolean }>(`/api/hub/${id}`)
+    const data = await api<{
+      inspection: HubInspection
+      canEdit: boolean
+      canManage?: boolean
+    }>(`/api/hub/${id}`)
     setInsp(data.inspection)
     setCanEdit(Boolean(data.canEdit))
+    setCanManage(Boolean(data.canManage) || user?.role === 'admin')
     setNotes(data.inspection.notes || '')
   }
 
@@ -104,14 +112,15 @@ export function HubDetailPage() {
 
   return (
     <div className="page hub-detail-page">
-      <Link className="back" to="/huolto">
-        ← Hub-huolto
+      <Link className="back" to={canManage ? '/huolto' : '/'}>
+        {canManage ? '← Huoltokorttien tehtävät' : '← Etusivu'}
       </Link>
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>{insp.title}</h1>
         <p className="lede">
           {insp.cadenceLabel} · {insp.windowStart} – {insp.windowEnd}
+          {insp.activated ? ' · aktivoitu viikkovuorolle' : ''}
         </p>
         <div className="hub-progress-meta">
           <span>
@@ -126,7 +135,11 @@ export function HubDetailPage() {
 
       {error && <p className="error">{error}</p>}
       {!canEdit && (
-        <p className="hint">Vain ylläpitäjä tai viikon vastuuhenkilö voi merkitä tarkastuksia.</p>
+        <p className="hint">
+          {insp.activated
+            ? 'Vain viikon vastuuveli tai ylläpitäjä voi merkitä tarkastuksia tehdyiksi.'
+            : 'Kortti ei ole vielä aktivoitu viikkovuorolle.'}
+        </p>
       )}
 
       {insp.intro && (

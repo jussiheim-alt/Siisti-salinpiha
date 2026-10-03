@@ -111,7 +111,8 @@ function Shell() {
     location.pathname.startsWith('/kayttajat') ||
     location.pathname.startsWith('/vastuuohjeet') ||
     location.pathname.startsWith('/asetukset') ||
-    location.pathname.startsWith('/tehtavat')
+    location.pathname.startsWith('/tehtavat') ||
+    location.pathname.startsWith('/huolto')
 
   return (
     <div className="app-shell app-shell-bottom-nav">

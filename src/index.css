@@ -1832,6 +1832,10 @@ select:focus {
   transition: border-color 0.18s var(--ease);
 }
 
+.hub-admin-card {
+  cursor: default;
+}
+
 .hub-list-card:hover {
   border-color: color-mix(in srgb, var(--moss) 25%, var(--line));
 }

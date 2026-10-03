@@ -20,8 +20,10 @@ import { notifyUsers, runWeatherAlertCheck, startWeatherAlertScheduler } from '.
 import {
   getHubInspection,
   hubOpenSummary,
+  listActivatedHubInspections,
   listHubInspections,
   seedHubYear,
+  setHubActivated,
   updateHubInspection,
   updateHubItem,
 } from './hub.ts'
@@ -2288,6 +2290,28 @@ function isCurrentWeekLead(userId: string) {
   return Boolean(row)
 }
 
+function isOnCurrentWeekShift(userId: string) {
+  const weekStart = mondayOf()
+  const row = db
+    .prepare(
+      `SELECT a.id FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE a.user_id = ? AND p.status = 'published' AND p.week_start = ?`,
+    )
+    .get(userId, weekStart)
+  return Boolean(row)
+}
+
+function canViewHub(user: AuthUser, insp: { activated?: boolean }) {
+  if (user.role === 'admin') return true
+  return Boolean(insp.activated) && isOnCurrentWeekShift(user.id)
+}
+
+function canEditHubTasks(user: AuthUser, insp: { activated?: boolean }) {
+  if (user.role === 'admin') return true
+  return Boolean(insp.activated) && isCurrentWeekLead(user.id)
+}
+
 function canCreateExtra(user: AuthUser) {
   return user.role === 'admin' || isCurrentWeekLead(user.id)
 }
@@ -2580,14 +2604,35 @@ app.post('/api/extra-tasks/:id/cancel', authMiddleware, (req, res) => {
   res.json({ task: hydrateExtraTask(updated, user.id) })
 })
 
-// ——— Hub inspections ———
+// ——— Hub inspections (huoltokorttien tehtävät) ———
 app.get('/api/hub', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const year = Number(req.query.year) || undefined
+  const activeOnly = String(req.query.activeOnly || '') === '1'
+  if (user.role !== 'admin' && !activeOnly && !isOnCurrentWeekShift(user.id)) {
+    return res.status(403).json({ error: 'Huoltokortit ovat ylläpitäjän hallinnassa' })
+  }
+  const all = listHubInspections(year)
+  const inspections =
+    user.role === 'admin' && !activeOnly
+      ? all
+      : all.filter((r) => r.activated && r.status !== 'done')
   res.json({
     summary: hubOpenSummary(year),
-    inspections: listHubInspections(year),
-    canEdit: canEditHub(user),
+    inspections,
+    canManage: user.role === 'admin',
+  })
+})
+
+app.get('/api/hub/active', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  if (user.role !== 'admin' && !isOnCurrentWeekShift(user.id)) {
+    return res.json({ inspections: [], canEdit: false })
+  }
+  const year = Number(req.query.year) || undefined
+  res.json({
+    inspections: listActivatedHubInspections(year),
+    canEdit: user.role === 'admin' || isCurrentWeekLead(user.id),
   })
 })
 
@@ -2600,17 +2645,53 @@ app.get('/api/hub/:id', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const insp = getHubInspection(String(req.params.id))
   if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
-  res.json({ inspection: insp, canEdit: canEditHub(user) })
+  if (!canViewHub(user, insp)) {
+    return res.status(403).json({ error: 'Kortti ei ole aktivoitu viikkovuorolle' })
+  }
+  res.json({
+    inspection: insp,
+    canEdit: canEditHubTasks(user, insp),
+    canManage: user.role === 'admin',
+  })
 })
 
-function canEditHub(user: AuthUser) {
-  return user.role === 'admin' || isCurrentWeekLead(user.id)
-}
+app.post('/api/hub/:id/activate', authMiddleware, requireAdmin, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const insp = setHubActivated(String(req.params.id), true, user.id)
+  if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+
+  const weekStart = mondayOf()
+  const roster = db
+    .prepare(
+      `SELECT a.user_id AS id FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE p.status = 'published' AND p.week_start = ?`,
+    )
+    .all(weekStart) as { id: string }[]
+  if (roster.length) {
+    notifyUsers(
+      roster.map((r) => r.id),
+      `Huoltokortti aktivoitu: ${insp.title}`,
+      'Vastuuveli voi merkitä tarkastuskohdat tehdyiksi Pihavuorossa.',
+      `/huolto/${insp.id}`,
+      'hub',
+    )
+  }
+  res.json({ inspection: insp })
+})
+
+app.post('/api/hub/:id/deactivate', authMiddleware, requireAdmin, (req, res) => {
+  const insp = setHubActivated(String(req.params.id), false)
+  if (!insp) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  res.json({ inspection: insp })
+})
 
 app.patch('/api/hub/:id/items/:itemId', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  if (!canEditHub(user)) {
-    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  const current = getHubInspection(String(req.params.id))
+  if (!current) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  if (!canEditHubTasks(user, current)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuveli (aktivoitu kortti)' })
   }
   const status = req.body?.status as 'open' | 'ok' | 'issue' | undefined
   const note = req.body?.note as string | null | undefined
@@ -2626,7 +2707,7 @@ app.patch('/api/hub/:id/items/:itemId', authMiddleware, (req, res) => {
       .all() as { id: string }[]
     notifyUsers(
       admins.map((a) => a.id),
-      `Hub: huomio — ${insp.title}`,
+      `Huoltokortti: huomio — ${insp.title}`,
       note?.trim() || 'Tarkastuksessa merkitty puute',
       `/huolto/${insp.id}`,
       'hub',
@@ -2638,8 +2719,10 @@ app.patch('/api/hub/:id/items/:itemId', authMiddleware, (req, res) => {
 
 app.patch('/api/hub/:id', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  if (!canEditHub(user)) {
-    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  const current = getHubInspection(String(req.params.id))
+  if (!current) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  if (!canEditHubTasks(user, current)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuveli (aktivoitu kortti)' })
   }
   const notes = req.body?.notes as string | null | undefined
   const status = req.body?.status as 'open' | 'in_progress' | 'done' | undefined
@@ -2657,8 +2740,10 @@ app.patch('/api/hub/:id', authMiddleware, (req, res) => {
 
 app.post('/api/hub/:id/photo', authMiddleware, upload.single('photo'), (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  if (!canEditHub(user)) {
-    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuhenkilö' })
+  const current = getHubInspection(String(req.params.id))
+  if (!current) return res.status(404).json({ error: 'Tarkastusta ei löydy' })
+  if (!canEditHubTasks(user, current)) {
+    return res.status(403).json({ error: 'Vain ylläpitäjä tai viikon vastuuveli (aktivoitu kortti)' })
   }
   if (!req.file) return res.status(400).json({ error: 'Kuva puuttuu' })
   const insp = updateHubInspection(String(req.params.id), { photoPath: req.file.filename })
