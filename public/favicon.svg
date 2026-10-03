@@ -1,5 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#1a3c2e"/>
-  <path d="M8 22c4-8 7-11 10-12 3 1 6 4 10 12" stroke="#c5d6c0" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M16 8v14" stroke="#c48b3a" stroke-width="1.8" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Siisti salin piha">
+  <!-- Dark moss tile — matches brand -->
+  <rect width="512" height="512" rx="112" fill="#123d2f"/>
+
+  <!-- Accent leaf -->
+  <g transform="translate(318 188) rotate(22)">
+    <ellipse cx="36" cy="48" rx="34" ry="52" fill="#9cbc9e"/>
+    <path d="M36 18v62" stroke="#1f5c45" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- Rake handle -->
+  <path d="M168 392 L286 214" stroke="#d8a96a" stroke-width="42" stroke-linecap="round"/>
+
+  <!-- Rake head (fan) -->
+  <g fill="none" stroke="#eef4ef" stroke-width="22" stroke-linecap="round">
+    <path d="M286 214 C250 250 220 292 206 338"/>
+    <path d="M286 214 C268 252 252 298 248 346"/>
+    <path d="M286 214 C286 258 286 308 286 356"/>
+    <path d="M286 214 C304 252 320 298 324 346"/>
+    <path d="M286 214 C322 250 352 292 366 338"/>
+    <path d="M286 214 C338 242 378 278 402 318"/>
+    <path d="M286 214 C234 242 194 278 170 318"/>
+  </g>
+
+  <!-- Head collar -->
+  <circle cx="286" cy="214" r="22" fill="#eef4ef"/>
 </svg>
