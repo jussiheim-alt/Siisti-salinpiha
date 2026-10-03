@@ -31,6 +31,10 @@ export function PihavuoroPage() {
   const [activeHub, setActiveHub] = useState<HubInspection[]>([])
   const [canEditHub, setCanEditHub] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [customTitle, setCustomTitle] = useState('')
+  const [customInstructions, setCustomInstructions] = useState('')
+  const [customEffort, setCustomEffort] = useState<'light' | 'heavy'>('light')
+  const [addingCustom, setAddingCustom] = useState(false)
 
   async function load() {
     const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}`)
@@ -200,6 +204,55 @@ export function PihavuoroPage() {
       setError(e instanceof Error ? e.message : 'Tehtävien tallennus epäonnistui')
     } finally {
       setSavingTasks(false)
+    }
+  }
+
+  async function addCustomTask() {
+    if (!id) return
+    const title = customTitle.trim()
+    if (!title) {
+      setError('Anna kertaluonteisen tehtävän nimi')
+      return
+    }
+    setAddingCustom(true)
+    setError('')
+    setInfo('')
+    try {
+      const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}/tasks/custom`, {
+        method: 'POST',
+        json: {
+          title,
+          instructions: customInstructions.trim() || undefined,
+          effort: customEffort,
+        },
+      })
+      setP(data.pihavuoro)
+      setCustomTitle('')
+      setCustomInstructions('')
+      setCustomEffort('light')
+      setInfo('Kertaluonteinen tehtävä lisätty viikolle.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lisäys epäonnistui')
+    } finally {
+      setAddingCustom(false)
+    }
+  }
+
+  async function removeCustomTask(taskId: string) {
+    if (!window.confirm('Poistetaanko tämä kertaluonteinen tehtävä?')) return
+    setBusyId(taskId)
+    setError('')
+    setInfo('')
+    try {
+      const data = await api<{ pihavuoro: Pihavuoro }>(`/api/tasks/${taskId}`, {
+        method: 'DELETE',
+      })
+      setP(data.pihavuoro)
+      setInfo('Kertaluonteinen tehtävä poistettu.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Poisto epäonnistui')
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -459,13 +512,14 @@ export function PihavuoroPage() {
           </div>
           {!editingTasks ? (
             <p className="hint" style={{ margin: 0 }}>
-              Valitse katalogista vain ne tehtävät, jotka kuuluvat tälle viikolle. Jäsenet kuittaavat
-              kortit tehdyksi tai ei tarvetta.
+              Valitse katalogista vain ne tehtävät, jotka kuuluvat tälle viikolle. Voit myös lisätä
+              kertaluonteisen lisätehtävän alle.
             </p>
           ) : (
             <>
               <p className="hint">
-                Viikoittaiset on valmiiksi merkitty. Lisää tarvittaessa tilanteen mukaiset työt.
+                Viikoittaiset on valmiiksi merkitty. Lisää tarvittaessa tilanteen mukaiset työt
+                katalogista — tai kertaluonteinen tehtävä alle.
               </p>
               <ul className="template-pick-list">
                 {seasonCatalog.map((t) => {
@@ -503,6 +557,54 @@ export function PihavuoroPage() {
               </div>
             </>
           )}
+
+          <div className="custom-week-task" style={{ marginTop: '1rem' }}>
+            <h3 style={{ margin: '0 0 0.35rem', fontSize: '1rem' }}>Kertaluonteinen lisätehtävä</h3>
+            <p className="hint" style={{ marginTop: 0 }}>
+              Kun jotain pitää tehdä tämän viikon lisäksi, eikä se ole valmiina korteissa.
+            </p>
+            <div className="stack">
+              <label>
+                Tehtävän nimi
+                <input
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="Esim. Korjaa portin sarana"
+                  maxLength={120}
+                />
+              </label>
+              <label>
+                Ohje (valinnainen)
+                <textarea
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  placeholder="Lyhyt ohje vuorolle"
+                  rows={2}
+                  maxLength={600}
+                />
+              </label>
+              <label>
+                Kuormitus
+                <select
+                  value={customEffort}
+                  onChange={(e) => setCustomEffort(e.target.value as 'light' | 'heavy')}
+                >
+                  <option value="light">Kevyt</option>
+                  <option value="heavy">Raskas</option>
+                </select>
+              </label>
+              <div className="row-actions">
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={addingCustom || !customTitle.trim()}
+                  onClick={() => void addCustomTask()}
+                >
+                  {addingCustom ? 'Lisätään…' : 'Lisää viikolle'}
+                </button>
+              </div>
+            </div>
+          </div>
         </section>
       )}
 
@@ -538,6 +640,7 @@ export function PihavuoroPage() {
         <div className="task-list">
           {p.tasks.map((t) => {
             const canAck = isLead || isAdmin
+            const isCustom = !t.templateId
             return (
               <article key={t.id} className={`task task-card ${t.status}`}>
                 <div className="task-head">
@@ -548,6 +651,7 @@ export function PihavuoroPage() {
                 </div>
                 <p className="muted">{t.instructions}</p>
                 <p className="meta">
+                  {isCustom ? 'Kertaluonteinen · ' : ''}
                   {t.effort === 'heavy' ? 'Raskas' : 'Kevyt'}
                   {t.doneByName ? ` · kuitannut ${t.doneByName}` : ''}
                 </p>
@@ -566,6 +670,26 @@ export function PihavuoroPage() {
                       onClick={() => void complete(t.id, 'skipped')}
                     >
                       Ei tehty
+                    </button>
+                    {isAdmin && isCustom && (
+                      <button
+                        className="btn small danger"
+                        disabled={busyId === t.id}
+                        onClick={() => void removeCustomTask(t.id)}
+                      >
+                        Poista
+                      </button>
+                    )}
+                  </div>
+                )}
+                {isAdmin && isCustom && t.status !== 'open' && (
+                  <div className="row-actions task-ack">
+                    <button
+                      className="btn small danger"
+                      disabled={busyId === t.id}
+                      onClick={() => void removeCustomTask(t.id)}
+                    >
+                      Poista
                     </button>
                   </div>
                 )}

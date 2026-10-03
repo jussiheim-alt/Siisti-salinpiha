@@ -1229,13 +1229,14 @@ export async function localApi<T = unknown>(
           ...helperIds.map((hid) => ({ id: uid(), userId: hid, role: 'helper' as const })),
         ]
         const existingIds = p.tasks.map((t) => t.templateId).filter(Boolean) as string[]
+        const customTasks = p.tasks.filter((t) => !t.templateId)
         const templateIds = Array.isArray(body.templateIds)
           ? (body.templateIds as unknown[]).map(String)
           : existingIds.length
             ? existingIds
             : defaultTemplateIdsForSeason(p.season, db)
         p.assignments = assignments
-        p.tasks = createTasks(p.season, assignments, db, templateIds)
+        p.tasks = [...createTasks(p.season, assignments, db, templateIds), ...customTasks]
       }
       saveDb(db)
       return ok({ pihavuoro: hydratePihavuoro(db, p) })
@@ -1247,6 +1248,7 @@ export async function localApi<T = unknown>(
       const templates = resolveTemplatesForSeason(p.season, db, templateIds)
       if (!templates.length) err('Valitse ainakin yksi huoltotehtävä')
       const keep = new Map(p.tasks.filter((t) => t.templateId).map((t) => [t.templateId!, t]))
+      const customs = p.tasks.filter((t) => !t.templateId)
       const next: ShiftTask[] = []
       for (const t of templates) {
         const prev = keep.get(t.id)
@@ -1272,7 +1274,26 @@ export async function localApi<T = unknown>(
           sortOrder: t.sortOrder,
         })
       }
-      p.tasks = next
+      p.tasks = [...next, ...customs]
+      saveDb(db)
+      return ok({ pihavuoro: hydratePihavuoro(db, p) })
+    }
+    if (rest === '/tasks/custom' && method === 'POST' && p) {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      const title = String(body.title || '').trim().slice(0, 120)
+      if (!title) err('Anna tehtävän nimi')
+      const instructions = String(body.instructions || '').trim().slice(0, 600) || title
+      const effort = body.effort === 'heavy' ? 'heavy' : 'light'
+      const maxSort = p.tasks.reduce((m, t) => Math.max(m, t.sortOrder || 0), 0)
+      p.tasks.push({
+        id: uid(),
+        title,
+        instructions,
+        effort,
+        assigneeUserId: null,
+        status: 'open',
+        sortOrder: maxSort + 10,
+      })
       saveDb(db)
       return ok({ pihavuoro: hydratePihavuoro(db, p) })
     }
@@ -1865,6 +1886,19 @@ export async function localApi<T = unknown>(
       }
       task.assigneeUserId = assigneeId
     }
+    saveDb(db)
+    return ok({ pihavuoro: hydratePihavuoro(db, p!) })
+  }
+  if (taskPatch && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const taskId = taskPatch[1]!
+    const p = db.pihavuorot.find((x) => x.tasks.some((t) => t.id === taskId))
+    if (!p) err('Tehtävää ei löydy')
+    const task = p!.tasks.find((t) => t.id === taskId)!
+    if (task.templateId) {
+      err('Katalogitehtävä poistetaan viikon tehtävävalinnasta, ei tästä')
+    }
+    p!.tasks = p!.tasks.filter((t) => t.id !== taskId)
     saveDb(db)
     return ok({ pihavuoro: hydratePihavuoro(db, p!) })
   }

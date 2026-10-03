@@ -1274,11 +1274,30 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
     }
     const existingTemplateIds = (
       db
-        .prepare('SELECT DISTINCT template_id FROM shift_tasks WHERE pihavuoro_id = ?')
+        .prepare(
+          `SELECT DISTINCT template_id FROM shift_tasks
+           WHERE pihavuoro_id = ? AND template_id IS NOT NULL`,
+        )
         .all(req.params.id) as { template_id: string }[]
     )
       .map((r) => r.template_id)
       .filter(Boolean)
+    const customTasks = db
+      .prepare(
+        `SELECT id, title, instructions, effort, status, skip_reason, done_by_user_id, done_at, sort_order
+         FROM shift_tasks WHERE pihavuoro_id = ? AND template_id IS NULL`,
+      )
+      .all(req.params.id) as {
+      id: string
+      title: string
+      instructions: string
+      effort: string
+      status: string
+      skip_reason: string | null
+      done_by_user_id: string | null
+      done_at: string | null
+      sort_order: number
+    }[]
     const templateIds = Array.isArray(req.body.templateIds)
       ? (req.body.templateIds as unknown[]).map(String)
       : existingTemplateIds.length
@@ -1304,6 +1323,26 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
         ],
         templateIds,
       )
+      // Säilytä kertaluonteiset lisätehtävät kokoonpanon päivityksen jälkeen
+      const reinsert = db.prepare(
+        `INSERT INTO shift_tasks
+         (id, pihavuoro_id, template_id, title, instructions, effort, assignee_user_id, status, sort_order, skip_reason, done_by_user_id, done_at)
+         VALUES (?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+      )
+      for (const c of customTasks) {
+        reinsert.run(
+          c.id,
+          req.params.id,
+          c.title,
+          c.instructions,
+          c.effort,
+          c.status,
+          c.sort_order,
+          c.skip_reason,
+          c.done_by_user_id,
+          c.done_at,
+        )
+      }
     })
     tx()
   }
@@ -1340,7 +1379,7 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
     )
     .all(req.params.id) as {
     id: string
-    template_id: string
+    template_id: string | null
     status: string
     skip_reason: string | null
     done_by_user_id: string | null
@@ -1348,7 +1387,9 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
     assignee_user_id: string | null
   }[]
 
-  const keepByTemplate = new Map(existing.map((t) => [t.template_id, t]))
+  const keepByTemplate = new Map(
+    existing.filter((t) => t.template_id).map((t) => [t.template_id as string, t]),
+  )
   const wanted = new Set(templates.map((t) => t.id))
 
   const insert = db.prepare(
@@ -1358,6 +1399,8 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
 
   const tx = db.transaction(() => {
     for (const old of existing) {
+      // Kertaluonteiset (ei template_id) säilyvät katalogin synkronoinnissa
+      if (!old.template_id) continue
       if (!wanted.has(old.template_id)) {
         db.prepare('DELETE FROM shift_tasks WHERE id = ?').run(old.id)
       }
@@ -1390,6 +1433,58 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
   tx()
 
   const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ pihavuoro: hydratePihavuoro(updated) })
+})
+
+/** Admin: lisää kertaluonteinen lisätehtävä tälle viikolle (ei katalogikortti). */
+app.post('/api/pihavuorot/:id/tasks/custom', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+
+  const title = String(req.body?.title || '').trim().slice(0, 120)
+  if (!title) return res.status(400).json({ error: 'Anna tehtävän nimi' })
+  const instructions = String(req.body?.instructions || '').trim().slice(0, 600) || title
+  const effort = req.body?.effort === 'heavy' ? 'heavy' : 'light'
+
+  const maxSort = (
+    db
+      .prepare(`SELECT COALESCE(MAX(sort_order), 0) AS m FROM shift_tasks WHERE pihavuoro_id = ?`)
+      .get(req.params.id) as { m: number }
+  ).m
+
+  const id = crypto.randomUUID()
+  db.prepare(
+    `INSERT INTO shift_tasks
+     (id, pihavuoro_id, template_id, title, instructions, effort, assignee_user_id, status, sort_order)
+     VALUES (?, ?, NULL, ?, ?, ?, NULL, 'open', ?)`,
+  ).run(id, req.params.id, title, instructions, effort, maxSort + 10)
+
+  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.status(201).json({ pihavuoro: hydratePihavuoro(updated) })
+})
+
+/** Admin: poista kertaluonteinen lisätehtävä. */
+app.delete('/api/tasks/:id', authMiddleware, requireAdmin, (req, res) => {
+  const task = db.prepare('SELECT * FROM shift_tasks WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!task) return res.status(404).json({ error: 'Tehtävää ei löydy' })
+  if (task.template_id) {
+    return res.status(400).json({
+      error: 'Katalogitehtävä poistetaan viikon tehtävävalinnasta, ei tästä',
+    })
+  }
+  const pihavuoroId = String(task.pihavuoro_id)
+  db.prepare('DELETE FROM shift_tasks WHERE id = ?').run(req.params.id)
+  const updated = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(pihavuoroId) as Record<
     string,
     unknown
   >
