@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   api,
   type HubInspection,
@@ -14,6 +14,7 @@ import { CADENCE_LABELS, SEASON_LABELS } from '../shared/seasons'
 
 export function PihavuoroPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [p, setP] = useState<Pihavuoro | null>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -33,6 +34,7 @@ export function PihavuoroPage() {
   const [swapTarget, setSwapTarget] = useState('')
   const [activeHub, setActiveHub] = useState<HubInspection[]>([])
   const [canEditHub, setCanEditHub] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function load() {
     const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}`)
@@ -167,6 +169,28 @@ export function PihavuoroPage() {
       setP(data.pihavuoro)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Julkaisu epäonnistui')
+    }
+  }
+
+  async function deleteWeek() {
+    if (!id || !p) return
+    const label = formatWeekRangeFi(p.weekStart, p.weekEnd)
+    if (
+      !window.confirm(
+        `Poistetaanko Pihavuoro ${label}? Kokoonpano, tehtävät ja vuorokeskustelu poistuvat. Tätä ei voi perua.`,
+      )
+    ) {
+      return
+    }
+    if (!window.confirm('Vahvista poisto vielä kerran.')) return
+    setDeleting(true)
+    setError('')
+    try {
+      await api(`/api/pihavuorot/${id}`, { method: 'DELETE' })
+      navigate('/kalenteri', { replace: true })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Poisto epäonnistui')
+      setDeleting(false)
     }
   }
 
@@ -389,10 +413,20 @@ export function PihavuoroPage() {
       {error && <p className="error">{error}</p>}
       {info && <p className="ok-flash">{info}</p>}
 
-      {isAdmin && p.status === 'draft' && (
+      {isAdmin && (
         <div className="row-actions" style={{ marginBottom: '1rem' }}>
-          <button className="btn primary" onClick={() => void publish()}>
-            Julkaise vuoro
+          {p.status === 'draft' && (
+            <button className="btn primary" onClick={() => void publish()}>
+              Julkaise vuoro
+            </button>
+          )}
+          <button
+            className="btn danger"
+            type="button"
+            disabled={deleting}
+            onClick={() => void deleteWeek()}
+          >
+            {deleting ? 'Poistetaan…' : 'Poista viikkovuoro'}
           </button>
         </div>
       )}
