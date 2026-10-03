@@ -422,7 +422,7 @@ export function PihavuoroPage() {
                     · {a.role === 'lead' ? 'Vastuuveli' : 'Avustaja'}
                   </span>
                 </div>
-                {a.constraintLabels.length > 0 && (isLead || isAdmin || a.userId === user?.id) && (
+                {isAdmin && a.constraintLabels.length > 0 && (
                   <div className="tags">
                     {a.constraintLabels.map((c) => (
                       <span key={c} className="tag">
@@ -493,11 +493,14 @@ export function PihavuoroPage() {
           </div>
         )}
 
-        {(isLead || isAdmin) && !editingRoster && (
+        {isAdmin && !editingRoster && (
           <p className="hint">
-            Vastuuhenkilö näkee rajoitukset. Raskaita tehtäviä ei voi antaa “ei raskaisiin”
-            -henkilölle.
+            Rajoitteet (esim. ei vastuuhenkilöksi) näkyvät vain ylläpitäjille. Raskaita tehtäviä ei
+            voi antaa “ei raskaisiin” -henkilölle.
           </p>
+        )}
+        {isLead && !isAdmin && !editingRoster && (
+          <p className="hint">Raskaita tehtäviä ei voi antaa “ei raskaisiin” -henkilölle.</p>
         )}
       </section>
 
