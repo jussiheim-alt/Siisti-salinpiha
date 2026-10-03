@@ -27,7 +27,7 @@ Yhteinen toimintatapa puutteissa: huomautus (+ kuva) → ilmoita huoltokoordinaa
 | T2 | Pieni lumi 1–2 cm: harjaa portaat, salin edustan kiveys, varauloskäynnin kulkuväylä (parkkia ei välttämättä kolata) | tarvittaessa | helpers |
 | T3 | Hiekoitus hyvissä ajoin ennen kokouksia ja kenttäkokouksia | tarvittaessa | lead |
 | T4 | Välineet ulkovarastosta (varauloskäynnin vieressä); puhdista lumesta ennen palautusta | kun töitä | helpers |
-| T5 | Vastuuveli: varmistaa viikon työt; pyytää lisäapua jos resurssit eivät riitä | joka viikko | lead |
+| — | Vastuuveljen ohjeet eivät ole tehtäväkortti — näkyvät etusivulla vastuuveljelle (muokattavissa) | — | — |
 
 ### Sulankausi / kesä / syksyn lehtityöt
 

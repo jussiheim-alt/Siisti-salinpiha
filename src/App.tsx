@@ -15,6 +15,7 @@ import { NoticesPage } from './pages/NoticesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { PihavuoroPage } from './pages/PihavuoroPage'
 import { SwapsPage } from './pages/SwapsPage'
+import { LeadGuideAdminPage } from './pages/LeadGuideAdminPage'
 import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UsersPage } from './pages/UsersPage'
 
@@ -189,6 +190,7 @@ export default function App() {
           <Route path="/huolto/:id" element={<HubDetailPage />} />
           <Route path="/kayttajat" element={<UsersPage />} />
           <Route path="/tehtavat" element={<TaskCardsPage />} />
+          <Route path="/vastuuohjeet" element={<LeadGuideAdminPage />} />
           <Route path="/esteet" element={<AvailabilityPage />} />
           <Route path="/vaihdot" element={<SwapsPage />} />
         </Route>

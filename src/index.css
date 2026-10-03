@@ -687,6 +687,132 @@ a {
   font-weight: 500;
 }
 
+.lead-callout {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1.05rem 1.1rem 1.1rem;
+  border-radius: calc(var(--radius) + 0.15rem);
+  background:
+    linear-gradient(145deg, rgba(31, 122, 92, 0.16), rgba(255, 255, 255, 0.96) 48%),
+    #fff;
+  border: 1.5px solid color-mix(in srgb, var(--resin) 42%, var(--line));
+  box-shadow: 0 12px 32px rgba(11, 36, 28, 0.1);
+}
+
+.lead-callout-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: var(--moss);
+  color: #f4faf7;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lead-callout h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 4.2vw, 1.45rem);
+  letter-spacing: -0.03em;
+  color: var(--moss-deep);
+}
+
+.lead-callout p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.lead-callout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.lead-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(10, 24, 18, 0.45);
+  display: grid;
+  align-items: end;
+  padding: 0.75rem;
+}
+
+.lead-guide-sheet {
+  width: min(560px, 100%);
+  max-height: min(86dvh, 720px);
+  margin: 0 auto;
+  overflow: auto;
+  background: var(--birch);
+  border-radius: 1.2rem 1.2rem 0.9rem 0.9rem;
+  padding: 1rem 1.05rem 1.15rem;
+  box-shadow: 0 -12px 40px rgba(11, 36, 28, 0.18);
+}
+
+.lead-guide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.lead-guide-head h2 {
+  margin: 0.15rem 0 0;
+  font-size: 1.2rem;
+}
+
+.lead-guide-body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.lead-guide-section {
+  padding: 0.8rem 0.85rem;
+  border-radius: 0.9rem;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.lead-guide-section h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+  color: var(--moss-deep);
+}
+
+.lead-guide-section p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+}
+
+.lead-guide-admin {
+  margin: 0.9rem 0 0;
+  font-size: 0.88rem;
+}
+
+.lead-guide-admin a {
+  color: var(--resin);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.lead-admin-section {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border-radius: 0.95rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--birch) 70%, white);
+}
+
 .push-toggle-card {
   padding: 0.85rem 1rem;
 }

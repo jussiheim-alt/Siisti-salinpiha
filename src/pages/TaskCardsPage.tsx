@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { api, type TaskCard } from '../api'
 import { useAuth } from '../auth'
 import {
@@ -152,6 +152,9 @@ export function TaskCardsPage() {
           Vuodenajan tehtäväkortit — pohja viikkovuorojen huoltotehtäville. Yhteensä {cards.length}{' '}
           korttia.
         </p>
+        <Link className="btn ghost small" to="/vastuuohjeet">
+          Muokkaa vastuuveljen ohjeita
+        </Link>
       </header>
 
       {error && <p className="error">{error}</p>}

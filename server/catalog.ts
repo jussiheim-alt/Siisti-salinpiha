@@ -60,17 +60,6 @@ export const TASK_CATALOG_V1: TaskTemplate[] = [
     sortOrder: 40,
   },
   {
-    id: 'T5',
-    title: 'Vastuuveli: viikon tilanne ja lisäapu',
-    instructions:
-      'Varmista että työt saadaan tehtyä viikon aikana. Jos resurssit eivät riitä, pyydä lisäapua muilta.',
-    season: 'talvi',
-    cadence: 'every_week',
-    defaultAssignee: 'lead',
-    effort: 'light',
-    sortOrder: 50,
-  },
-  {
     id: 'K1',
     title: 'Siimaleikkuri: parkki- ja ojien reunat',
     instructions:
