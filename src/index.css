@@ -1984,7 +1984,12 @@ select:focus {
   gap: 0.45rem;
 }
 
-.template-pick {
+.template-pick-list > li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+label.template-pick {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
@@ -1993,33 +1998,51 @@ select:focus {
   border: 1px solid rgba(18, 35, 28, 0.08);
   background: linear-gradient(180deg, #fbfcfb 0%, #f4f8f6 100%);
   cursor: pointer;
+  font-weight: 600;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
-.template-pick.is-on {
+label.template-pick.is-on {
   border-color: color-mix(in srgb, var(--resin) 40%, rgba(18, 35, 28, 0.07));
   background: linear-gradient(180deg, rgba(31, 122, 92, 0.1), #f7fbf9 70%);
   box-shadow: inset 3px 0 0 var(--resin);
 }
 
-.template-pick input {
-  margin-top: 0.2rem;
+/* Override global `input { width: 100% }` — checkbox must stay compact. */
+label.template-pick input[type='checkbox'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-width: 1.15rem;
+  flex-shrink: 0;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--moss);
 }
 
 .template-pick-body {
   display: grid;
   gap: 0.12rem;
+  flex: 1;
   min-width: 0;
 }
 
 .template-pick-body strong {
   font-size: 0.98rem;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .template-pick-body span {
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .week-task-picker h2 {
