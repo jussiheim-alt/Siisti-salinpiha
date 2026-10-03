@@ -711,7 +711,7 @@ export function PihavuoroPage() {
         <h2>Tehtävät ({openCount} auki)</h2>
         <div className="task-list">
           {p.tasks.map((t) => {
-            const canAck = Boolean(myAssignment) || isAdmin
+            const canAck = isLead || isAdmin
             return (
               <article key={t.id} className={`task task-card ${t.status}`}>
                 <div className="task-head">
