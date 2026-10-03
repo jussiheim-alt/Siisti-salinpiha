@@ -69,7 +69,7 @@ export function LeadCallout({
             </div>
             {user?.role === 'admin' && (
               <p className="lead-guide-admin">
-                <Link to="/vastuuohjeet">Muokkaa ohjeita (ylläpitäjä)</Link>
+                <Link to="/yllapitaja">Ylläpitäjä: ohjeet ja asetukset</Link>
               </p>
             )}
           </div>

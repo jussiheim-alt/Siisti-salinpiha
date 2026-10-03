@@ -1,5 +1,10 @@
 import { CONSTRAINT_LABELS, TASK_CATALOG_V1 } from '../shared/catalog'
 import { getWeather } from '../shared/fmiWeather'
+import {
+  DEFAULT_APP_SETTINGS,
+  normalizeAppSettings,
+  type AppSettings,
+} from '../shared/appSettings'
 import { DEFAULT_LEAD_GUIDE, normalizeLeadGuide, type LeadGuide } from '../shared/leadGuide'
 import {
   isCadenceKey,
@@ -154,6 +159,7 @@ type Db = {
   hub: HubInspection[]
   taskCards: TaskCard[]
   leadGuide?: LeadGuide
+  appSettings?: AppSettings
   extraTasks: {
     id: string
     createdByUserId: string
@@ -209,6 +215,7 @@ function normalizeDb(db: Db): Db {
     (c) => c.id !== 'T5' && !c.title.startsWith('Vastuuveli: viikon tilanne'),
   )
   db.leadGuide = normalizeLeadGuide(db.leadGuide || DEFAULT_LEAD_GUIDE)
+  db.appSettings = normalizeAppSettings(db.appSettings || DEFAULT_APP_SETTINGS)
   for (const n of db.notices) {
     if (n.audience !== 'all' && n.audience !== 'leads') n.audience = 'all'
     if (n.acknowledgedAt === undefined) n.acknowledgedAt = null
@@ -882,6 +889,16 @@ export async function localApi<T = unknown>(
     return ok({ guide: db.leadGuide })
   }
 
+  if (pathname === '/api/app-settings' && method === 'GET') {
+    return ok({ settings: normalizeAppSettings(db.appSettings || DEFAULT_APP_SETTINGS) })
+  }
+  if (pathname === '/api/app-settings' && method === 'PUT') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    db.appSettings = normalizeAppSettings(body.settings ?? body)
+    saveDb(db)
+    return ok({ settings: db.appSettings })
+  }
+
   if (pathname === '/api/task-cards' && method === 'GET') {
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
     const cards = (db.taskCards || [])
@@ -1003,7 +1020,9 @@ export async function localApi<T = unknown>(
       openExtraTasks: openExtras,
       canCreateExtraTask: user!.role === 'admin',
       constraintLabels: CONSTRAINT_LABELS,
-      weather: await getWeather(),
+      weather: await getWeather(
+        normalizeAppSettings(db.appSettings || DEFAULT_APP_SETTINGS).weatherPlace,
+      ),
       unreadNotifications: unread,
       recentNotifications: recent,
       hub: {
@@ -1027,7 +1046,9 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/weather' && method === 'GET') {
-    return ok(await getWeather())
+    return ok(
+      await getWeather(normalizeAppSettings(db.appSettings || DEFAULT_APP_SETTINGS).weatherPlace),
+    )
   }
 
   if (pathname === '/api/chat/current' && method === 'GET') {

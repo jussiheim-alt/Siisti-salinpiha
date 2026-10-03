@@ -1,3 +1,4 @@
+import { getAppSettings } from './appSettings.ts'
 import { db } from './db.ts'
 import { capToAlertTips, getCapWarnings } from './capWarnings.ts'
 import { getWeather, type WeatherPayload, type WeatherTip } from './weather.ts'
@@ -135,7 +136,10 @@ export async function runWeatherAlertCheck(): Promise<{
     return { sent: [], skipped: 'Ei julkaistua Pihavuoroa tälle viikolle' }
   }
 
-  const [weather, caps] = await Promise.all([getWeather(), getCapWarnings()])
+  const [weather, caps] = await Promise.all([
+    getWeather(getAppSettings().weatherPlace),
+    getCapWarnings(),
+  ])
   const tips = collectAlertTips(weather, capToAlertTips(caps))
   if (!tips.length) {
     return {
