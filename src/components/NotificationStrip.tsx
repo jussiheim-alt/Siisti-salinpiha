@@ -31,11 +31,7 @@ export function NotificationStrip({
           <div>
             <p className="kicker">Ilmoitukset</p>
             <p className="notif-strip-sub">
-              {unreadCount > 0
-                ? `${unreadCount} lukematonta`
-                : items.length > 0
-                  ? 'Ajantasalla'
-                  : 'Ei uusia ilmoituksia'}
+              {unreadCount > 0 ? `${unreadCount} lukematonta` : 'Ei uusia ilmoituksia'}
             </p>
           </div>
         </div>
