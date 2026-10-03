@@ -26,6 +26,25 @@ const emptyForm: {
   defaultAssignee: 'helpers',
 }
 
+function AssigneeFields({
+  value,
+  onChange,
+}: {
+  value: 'lead' | 'helpers' | 'all'
+  onChange: (v: 'lead' | 'helpers' | 'all') => void
+}) {
+  return (
+    <label>
+      Oletusjako
+      <select value={value} onChange={(e) => onChange(e.target.value as 'lead' | 'helpers' | 'all')}>
+        <option value="lead">Vastuuveli</option>
+        <option value="helpers">Avustajat</option>
+        <option value="all">Kaikki vuorossa</option>
+      </select>
+    </label>
+  )
+}
+
 export function TaskCardsPage() {
   const { user } = useAuth()
   const [cards, setCards] = useState<TaskCard[]>([])
@@ -45,6 +64,14 @@ export function TaskCardsPage() {
     load().catch((e) => setError(e.message))
   }, [user?.role])
 
+  const counts = useMemo(() => {
+    const map: Record<SeasonKey, number> = { kevat: 0, kesa: 0, syksy: 0, talvi: 0 }
+    for (const c of cards) {
+      if (map[c.season] != null) map[c.season] += 1
+    }
+    return map
+  }, [cards])
+
   const filtered = useMemo(
     () =>
       cards
@@ -62,9 +89,10 @@ export function TaskCardsPage() {
     try {
       await api('/api/task-cards', {
         method: 'POST',
-        json: { ...form, season: seasonTab },
+        json: { ...form, season: form.season || seasonTab },
       })
-      setForm({ ...emptyForm, season: seasonTab })
+      setSeasonTab(form.season || seasonTab)
+      setForm({ ...emptyForm, season: form.season || seasonTab })
       setInfo('Tehtäväkortti lisätty.')
       await load()
     } catch (err) {
@@ -89,6 +117,7 @@ export function TaskCardsPage() {
           active: editing.active,
         },
       })
+      setSeasonTab(editing.season)
       setEditing(null)
       setInfo('Kortti päivitetty.')
       await load()
@@ -120,7 +149,8 @@ export function TaskCardsPage() {
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Tehtävät</h1>
         <p className="lede">
-          Vuodenajan tehtäväkortit — pohja viikkovuorojen huoltotehtäville.
+          Vuodenajan tehtäväkortit — pohja viikkovuorojen huoltotehtäville. Yhteensä {cards.length}{' '}
+          korttia.
         </p>
       </header>
 
@@ -135,12 +165,22 @@ export function TaskCardsPage() {
             role="tab"
             aria-selected={seasonTab === s}
             className={`season-tab${seasonTab === s ? ' active' : ''}`}
-            onClick={() => setSeasonTab(s)}
+            onClick={() => {
+              setSeasonTab(s)
+              setForm((f) => ({ ...f, season: s }))
+              setEditing(null)
+            }}
           >
             {SEASON_LABELS[s]}
+            <span className="season-tab-count">{counts[s]}</span>
           </button>
         ))}
       </div>
+
+      <p className="muted season-tab-hint">
+        Näytetään {SEASON_LABELS[seasonTab].toLowerCase()}kortit ({filtered.length}). Vaihda
+        vuodenaikaa nähdäksesi loput.
+      </p>
 
       <section className="panel">
         <h2>Uusi kortti · {SEASON_LABELS[seasonTab]}</h2>
@@ -165,7 +205,7 @@ export function TaskCardsPage() {
           <label>
             Vuodenaika
             <select
-              value={seasonTab}
+              value={form.season}
               onChange={(e) => {
                 const season = e.target.value as SeasonKey
                 setSeasonTab(season)
@@ -204,22 +244,10 @@ export function TaskCardsPage() {
               <option value="heavy">Raskas</option>
             </select>
           </label>
-          <label>
-            Oletusjako
-            <select
-              value={form.defaultAssignee}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  defaultAssignee: e.target.value as 'lead' | 'helpers' | 'all',
-                })
-              }
-            >
-              <option value="lead">Vastuuveli</option>
-              <option value="helpers">Avustajat</option>
-              <option value="all">Kaikki vuorossa</option>
-            </select>
-          </label>
+          <AssigneeFields
+            value={form.defaultAssignee}
+            onChange={(defaultAssignee) => setForm({ ...form, defaultAssignee })}
+          />
           <button className="btn primary" type="submit">
             Lisää kortti
           </button>
@@ -230,30 +258,73 @@ export function TaskCardsPage() {
         {filtered.map((c) => (
           <article key={c.id} className="notice-card">
             {editing?.id === c.id ? (
-              <form className="stack" onSubmit={saveEdit}>
-                <input
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                  required
+              <form className="stack" onSubmit={(e) => void saveEdit(e)}>
+                <label>
+                  Otsikko
+                  <input
+                    value={editing.title}
+                    onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Ohje
+                  <textarea
+                    rows={3}
+                    value={editing.instructions}
+                    onChange={(e) => setEditing({ ...editing, instructions: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Vuodenaika
+                  <select
+                    value={editing.season}
+                    onChange={(e) =>
+                      setEditing({ ...editing, season: e.target.value as SeasonKey })
+                    }
+                  >
+                    {SEASON_ORDER.map((s) => (
+                      <option key={s} value={s}>
+                        {SEASON_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Toistuvuus
+                  <select
+                    value={editing.cadence}
+                    onChange={(e) =>
+                      setEditing({ ...editing, cadence: e.target.value as TaskCadence })
+                    }
+                  >
+                    {(Object.keys(CADENCE_LABELS) as TaskCadence[]).map((x) => (
+                      <option key={x} value={x}>
+                        {CADENCE_LABELS[x]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Rasitus
+                  <select
+                    value={editing.effort}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        effort: e.target.value as 'light' | 'heavy',
+                      })
+                    }
+                  >
+                    <option value="light">Kevyt</option>
+                    <option value="heavy">Raskas</option>
+                  </select>
+                </label>
+                <AssigneeFields
+                  value={editing.defaultAssignee}
+                  onChange={(defaultAssignee) => setEditing({ ...editing, defaultAssignee })}
                 />
-                <textarea
-                  rows={3}
-                  value={editing.instructions}
-                  onChange={(e) => setEditing({ ...editing, instructions: e.target.value })}
-                  required
-                />
-                <select
-                  value={editing.cadence}
-                  onChange={(e) =>
-                    setEditing({ ...editing, cadence: e.target.value as TaskCadence })
-                  }
-                >
-                  {(Object.keys(CADENCE_LABELS) as TaskCadence[]).map((x) => (
-                    <option key={x} value={x}>
-                      {CADENCE_LABELS[x]}
-                    </option>
-                  ))}
-                </select>
                 <label className="check-row">
                   <input
                     type="checkbox"
@@ -279,7 +350,12 @@ export function TaskCardsPage() {
                 </div>
                 <p>{c.instructions}</p>
                 <p className="meta">
-                  {c.effort === 'heavy' ? 'Raskas' : 'Kevyt'}
+                  {SEASON_LABELS[c.season]} · {c.effort === 'heavy' ? 'Raskas' : 'Kevyt'} ·{' '}
+                  {c.defaultAssignee === 'lead'
+                    ? 'Vastuuveli'
+                    : c.defaultAssignee === 'all'
+                      ? 'Kaikki'
+                      : 'Avustajat'}
                   {!c.active ? ' · pois käytöstä' : ''}
                 </p>
                 <div className="row-actions">
