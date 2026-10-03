@@ -1386,11 +1386,12 @@ export async function localApi<T = unknown>(
         createdAt: new Date().toISOString(),
       }
       db.messages.push(msg)
+      const weekLabel = formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))
       notify(
         db,
         p.assignments.map((a) => a.userId).filter((id) => id !== user!.id),
-        'Viesti Pihavuorossa',
-        `${user!.name}: ${text.length > 100 ? `${text.slice(0, 97)}…` : text}`,
+        'Uusi viesti vuorokeskustelussa',
+        `${user!.name} (${weekLabel}): ${text.length > 80 ? `${text.slice(0, 77)}…` : text}`,
         `/pihavuoro/${p.id}?chat=1`,
         'chat',
       )

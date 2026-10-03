@@ -25,7 +25,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Etusivu',
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
-      'Kytke push-ilmoitukset päälle, jotta saat tiedon apukutsuista ja tärkeistä päivityksistä.',
+      'Kytke push-ilmoitukset päälle, jotta saat tiedon vuorokeskustelun viesteistä, apukutsuista ja tärkeistä päivityksistä.',
       'Pikavalinnoista pääset käytettävyyteen, vuoronvaihtoihin, apukutsuihin ja huomioihin.',
     ],
     to: '/',
@@ -37,7 +37,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Vuorot-välilehdellä näet julkaistut viikot. Avaa oma viikkosi nähdäksesi kokoonpanon ja tehtävät.',
       'Kuittaa tehtäviä valmiiksi viikon aikana. Jos olet vastuuveli, näet etusivulla ohjeet ja vastaat viikon töistä.',
-      'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa.',
+      'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa. Uusi viesti lähettää ilmoituksen muille vuorossa oleville.',
     ],
     to: '/kalenteri',
     linkLabel: 'Avaa vuorot',

@@ -81,6 +81,15 @@ export function notifyUsers(
     )
     .all(...unique) as { id: string; endpoint: string; p256dh: string; auth: string }[]
 
+  const pushPayload = JSON.stringify({
+    title,
+    body,
+    url: link,
+    kind,
+    tag: kind === 'chat' ? 'chat' : kind.startsWith('weather') ? 'weather' : kind,
+    renotify: kind === 'chat',
+  })
+
   void Promise.all(
     subs.map(async (sub) => {
       try {
@@ -89,7 +98,7 @@ export function notifyUsers(
             endpoint: sub.endpoint,
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
-          JSON.stringify({ title, body, url: link }),
+          pushPayload,
         )
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode

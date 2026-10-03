@@ -3,6 +3,7 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { api, type ShiftMessage } from '../api'
 import { useAuth } from '../auth'
 import { formatDateTimeFi, formatWeekRangeFi } from '../shared/datetime'
+import { onServiceWorkerPush, startLiveRefresh } from '../shared/liveRefresh'
 
 type CurrentChat = {
   pihavuoroId: string
@@ -95,9 +96,14 @@ export function ShiftChatFab() {
 
   useEffect(() => {
     if (!user) return
-    void refreshChatMeta()
-    const id = window.setInterval(() => void refreshChatMeta(), 60_000)
-    return () => window.clearInterval(id)
+    const stopRefresh = startLiveRefresh(() => void refreshChatMeta(), 12_000)
+    const stopPush = onServiceWorkerPush((data) => {
+      if (!data.kind || data.kind === 'chat') void refreshChatMeta()
+    })
+    return () => {
+      stopRefresh()
+      stopPush()
+    }
   }, [user?.id, location.pathname])
 
   useEffect(() => {

@@ -21,6 +21,7 @@ import { LeadGuideAdminPage } from './pages/LeadGuideAdminPage'
 import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UserGuidePage } from './pages/UserGuidePage'
 import { UsersPage } from './pages/UsersPage'
+import { onServiceWorkerPush, startLiveRefresh } from './shared/liveRefresh'
 
 function IconHome() {
   return (
@@ -94,11 +95,12 @@ function Shell() {
         })
         .catch(() => undefined)
     }
-    load()
-    const id = window.setInterval(load, 60_000)
+    const stopRefresh = startLiveRefresh(load, 15_000)
+    const stopPush = onServiceWorkerPush(() => load())
     return () => {
       cancelled = true
-      window.clearInterval(id)
+      stopRefresh()
+      stopPush()
     }
   }, [user, location.pathname])
 
