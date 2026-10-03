@@ -45,6 +45,8 @@ Jos palvelu on jo olemassa: Dashboard → **siisti-salinpiha** → **Manual Depl
 | `DATA_DIR` | `/var/data` |
 | `JWT_SECRET` | pitkä satunnainen (Render Generate) |
 | `APP_PUBLIC_URL` | julkinen osoite (kutsulinkit) |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | push-ilmoitukset (suositus; muuten `$DATA_DIR/vapid.json`) |
+| `VAPID_SUBJECT` | esim. `mailto:jussiheim@gmail.com` |
 | `ADMIN_EMAIL` | oletus `jussiheim@gmail.com` |
 | `ADMIN_PASSWORD` | Jussi Heimosen salasana |
 | `JONI_EMAIL` | Joni Moilasen sähköposti |

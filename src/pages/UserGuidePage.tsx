@@ -25,7 +25,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Etusivu',
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
-      'Kytke push-ilmoitukset päälle, jotta saat tiedon vuorokeskustelun viesteistä, apukutsuista ja tärkeistä päivityksistä.',
+      'Kytke ilmoitukset päälle etusivulta, jotta chat-viestit ja apukutsut näkyvät lukitusnäytöllä. iPhonella sovellus pitää olla lisättynä kotivalikkoon — testaa painikkeella „Testaa lukitusnäyttö”.',
       'Pikavalinnoista pääset käytettävyyteen, vuoronvaihtoihin, apukutsuihin ja huomioihin.',
     ],
     to: '/',

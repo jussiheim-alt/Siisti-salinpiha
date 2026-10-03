@@ -2022,6 +2022,9 @@ export async function localApi<T = unknown>(
   if (pathname === '/api/push/subscribe' && (method === 'POST' || method === 'DELETE')) {
     return ok({ ok: true })
   }
+  if (pathname === '/api/push/test' && method === 'POST') {
+    err('Push-ilmoitukset eivät ole käytössä paikallisessa tilassa')
+  }
   if (pathname.startsWith('/api/push')) {
     return ok({ ok: true, publicKey: null, subscribed: false })
   }
