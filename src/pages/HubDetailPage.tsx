@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, type HubInspection } from '../api'
+import { formatDateFi } from '../shared/datetime'
 
 function itemStatusLabel(status: HubInspection['items'][number]['status']) {
   if (status === 'ok') return 'OK'
@@ -256,7 +257,7 @@ export function HubDetailPage() {
           <p className="meta hub-done-meta">
             Valmis
             {insp.completedByName ? ` · ${insp.completedByName}` : ''}
-            {insp.completedAt ? ` · ${insp.completedAt.slice(0, 10)}` : ''}
+            {insp.completedAt ? ` · ${formatDateFi(insp.completedAt)}` : ''}
           </p>
         )}
       </form>

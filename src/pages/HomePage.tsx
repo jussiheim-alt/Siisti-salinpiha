@@ -6,6 +6,7 @@ import { LeadCallout } from '../components/LeadCallout'
 import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
+import { formatWeekRangeFi } from '../shared/datetime'
 
 function QuickLink({
   title,
@@ -137,7 +138,7 @@ export function HomePage() {
           <section className="surface-card home-shift" style={{ animationDelay: '0.14s' }}>
             <p className="kicker">Pihavuoro</p>
             <p className="week-line">
-              {next.weekStart} – {next.weekEnd}
+              {formatWeekRangeFi(next.weekStart, next.weekEnd)}
             </p>
             <p className="role-line">
               {next.season === 'talvi' ? 'Talvi' : 'Sulankausi'}
@@ -168,13 +169,13 @@ export function HomePage() {
           <p className="kicker">Pikavalinnat</p>
           <div className="quick-list">
             <QuickLink
-              title="Esteviikot"
+              title="Käytettävyys"
               body={
                 blockedCount === 0
                   ? 'Ei merkittyjä esteitä'
                   : `${blockedCount} estettyä viikkoa`
               }
-              to="/esteet"
+              to="/kaytettavyys"
               action="Muokkaa"
             />
             <QuickLink

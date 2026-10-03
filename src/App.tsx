@@ -191,7 +191,8 @@ export default function App() {
           <Route path="/kayttajat" element={<UsersPage />} />
           <Route path="/tehtavat" element={<TaskCardsPage />} />
           <Route path="/vastuuohjeet" element={<LeadGuideAdminPage />} />
-          <Route path="/esteet" element={<AvailabilityPage />} />
+          <Route path="/kaytettavyys" element={<AvailabilityPage />} />
+          <Route path="/esteet" element={<Navigate to="/kaytettavyys" replace />} />
           <Route path="/vaihdot" element={<SwapsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

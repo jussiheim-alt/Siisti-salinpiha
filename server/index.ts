@@ -28,6 +28,14 @@ import {
 import { dataDir, root, uploadsDir } from './paths.ts'
 import { isCadenceKey, isSeasonKey, publicTaskCard } from './taskCards.ts'
 import { ensureLeadGuideTable, getLeadGuide, saveLeadGuide } from './leadGuide.ts'
+import { formatWeekRangeFi } from '../src/shared/datetime.ts'
+import {
+  assertCanDeleteUser,
+  assertCanInviteAdmin,
+  assertCanManageAdminRole,
+  deleteUserRecord,
+  isOwnerUser,
+} from './userAdmin.ts'
 
 const PORT = Number(process.env.PORT || 8787)
 
@@ -438,6 +446,7 @@ app.get('/api/directory', authMiddleware, (_req, res) => {
 })
 
 app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
+  const actor = (req as express.Request & { user: AuthUser }).user
   const { name, email, password, role, constraints, constraintNote, snoozeUntil } = req.body as {
     name?: string
     email?: string
@@ -453,6 +462,12 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
   if (password.length < 8) {
     return res.status(400).json({ error: 'Salasanan oltava vähintään 8 merkkiä' })
   }
+  const nextRole = role === 'admin' ? 'admin' : 'member'
+  try {
+    assertCanInviteAdmin(actor, nextRole)
+  } catch (e) {
+    return res.status(403).json({ error: e instanceof Error ? e.message : 'Ei oikeuksia' })
+  }
   const id = crypto.randomUUID()
   try {
     db.prepare(
@@ -463,7 +478,7 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
       name.trim(),
       email.trim().toLowerCase(),
       bcrypt.hashSync(password, 10),
-      role === 'admin' ? 'admin' : 'member',
+      nextRole,
       JSON.stringify(constraints ?? []),
       constraintNote ?? null,
       snoozeUntil || null,
@@ -477,6 +492,7 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
 })
 
 app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
+  const actor = (req as express.Request & { user: AuthUser }).user
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as
     | Record<string, unknown>
     | undefined
@@ -484,12 +500,24 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
   const body = req.body as Record<string, unknown>
   const name = body.name != null ? String(body.name) : String(row.name)
   const email = body.email != null ? String(body.email).toLowerCase() : String(row.email)
-  const role = body.role === 'admin' || body.role === 'member' ? body.role : row.role
+  const role = body.role === 'admin' || body.role === 'member' ? body.role : String(row.role)
   const active = body.active != null ? (body.active ? 1 : 0) : row.active
   const wasAdmin = row.role === 'admin' && Number(row.active) === 1
   const staysAdmin = role === 'admin' && Number(active) === 1
+  try {
+    assertCanManageAdminRole(
+      actor,
+      { email: String(row.email), role: String(row.role) },
+      staysAdmin ? 'admin' : 'member',
+    )
+  } catch (e) {
+    return res.status(403).json({ error: e instanceof Error ? e.message : 'Ei oikeuksia' })
+  }
   if (wasAdmin && !staysAdmin && activeAdminCount() <= 1) {
     return res.status(400).json({ error: 'Viimeistä ylläpitäjää ei voi poistaa tai alentaa' })
+  }
+  if (isOwnerUser({ email: String(row.email) }) && !isOwnerUser(actor)) {
+    return res.status(403).json({ error: 'Pääkäyttäjän tietoja voi muokata vain hän itse' })
   }
   const constraints = body.constraints != null ? JSON.stringify(body.constraints) : row.constraints_json
   const constraintNote =
@@ -515,6 +543,35 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
   res.json({ user: publicUser(updated) })
 })
 
+app.delete('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
+  const actor = (req as express.Request & { user: AuthUser }).user
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Ei löydy' })
+  try {
+    assertCanDeleteUser(
+      actor,
+      {
+        id: String(row.id),
+        email: String(row.email),
+        role: String(row.role),
+        active: Number(row.active),
+      },
+      activeAdminCount(),
+    )
+    deleteUserRecord(db, String(row.id))
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Poisto epäonnistui'
+    const status =
+      msg.includes('Vain pääkäyttäjä') || msg.includes('Pääkäyttäjää') || msg.includes('omaa tiliä')
+        ? 403
+        : 400
+    return res.status(status).json({ error: msg })
+  }
+  res.json({ ok: true })
+})
+
 // ——— Invites ———
 app.get('/api/invites', authMiddleware, requireAdmin, (req, res) => {
   const rows = db
@@ -538,6 +595,12 @@ app.post('/api/invites', authMiddleware, requireAdmin, (req, res) => {
   }
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Nimi ja sähköposti vaaditaan' })
+  }
+  const nextRole = role === 'admin' ? 'admin' : 'member'
+  try {
+    assertCanInviteAdmin(user, nextRole)
+  } catch (e) {
+    return res.status(403).json({ error: e instanceof Error ? e.message : 'Ei oikeuksia' })
   }
   const normalizedEmail = email.trim().toLowerCase()
   const existingUser = db
@@ -565,7 +628,7 @@ app.post('/api/invites', authMiddleware, requireAdmin, (req, res) => {
     token,
     name.trim(),
     normalizedEmail,
-    role === 'admin' ? 'admin' : 'member',
+    nextRole,
     JSON.stringify(Array.isArray(constraints) ? constraints : []),
     user.id,
     now.toISOString(),
@@ -767,7 +830,7 @@ app.get('/api/meta/app', (_req, res) => {
   })
 })
 
-// ——— Esteviikot (saatavuus) ———
+// ——— Käytettävyys (esteviikot) ———
 app.get('/api/availability', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const count = Math.min(16, Math.max(4, Number(req.query.weeks) || 10))
@@ -1210,7 +1273,7 @@ app.post('/api/pihavuorot/:id/publish', authMiddleware, requireAdmin, (req, res)
     notifyUsers(
       assigneeIds,
       'Pihavuoro julkaistu',
-      `${hydrated.weekStart} – ${hydrated.weekEnd}: vuorosi on valmis katsottavaksi.`,
+      `${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}: vuorosi on valmis katsottavaksi.`,
       `/pihavuoro/${hydrated.id}`,
       'shift',
     )
@@ -1484,7 +1547,7 @@ app.post('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
     notifyUsers(
       [toUserId],
       'Sinulle tarjottiin vuoronvaihtoa',
-      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
       link,
       'swap',
     )
@@ -1501,7 +1564,7 @@ app.post('/api/pihavuorot/:id/swaps', authMiddleware, (req, res) => {
     notifyUsers(
       recipients,
       'Avoin vuoronvaihto',
-      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+      `${user.name} etsii sijaisia (${roleLabel}) viikolle ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
       '/vaihdot',
       'swap',
     )
@@ -1564,7 +1627,7 @@ app.post('/api/swaps/:id/accept', authMiddleware, (req, res) => {
   notifyUsers(
     [String(offer.from_user_id)],
     'Vuoronvaihto hyväksytty',
-    `${user.name} otti paikkasi (${roleLabel}) viikolla ${hydrated.weekStart} – ${hydrated.weekEnd}.`,
+    `${user.name} otti paikkasi (${roleLabel}) viikolla ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)}.`,
     `/pihavuoro/${offer.pihavuoro_id}`,
     'swap',
   )
@@ -1580,7 +1643,7 @@ app.post('/api/swaps/:id/accept', authMiddleware, (req, res) => {
     notifyUsers(
       others,
       'Kokoonpano päivittyi',
-      `${user.name} tuli vuoroon ${hydrated.weekStart} – ${hydrated.weekEnd} (${roleLabel}).`,
+      `${user.name} tuli vuoroon ${formatWeekRangeFi(hydrated.weekStart, hydrated.weekEnd)} (${roleLabel}).`,
       `/pihavuoro/${offer.pihavuoro_id}`,
       'swap',
     )
@@ -1700,7 +1763,7 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
     message: hydrateMessage(
       db.prepare('SELECT * FROM shift_messages WHERE id = ?').get(id) as Record<string, unknown>,
     ),
-    weekLabel: `${weekStart} – ${weekEnd}`,
+    weekLabel: formatWeekRangeFi(weekStart, weekEnd),
   })
 })
 

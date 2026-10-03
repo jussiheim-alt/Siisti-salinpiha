@@ -7,6 +7,8 @@ import {
   type SeasonKey,
   type TaskCadence,
 } from '../shared/seasons'
+import { formatWeekRangeFi } from '../shared/datetime'
+import { isOwnerEmail } from '../shared/owner'
 import { seedTaskCardsFromCatalog, type TaskCard } from '../shared/taskCards'
 
 
@@ -702,12 +704,16 @@ export async function localApi<T = unknown>(
     const password = String(body.password || '')
     if (!name || !email || password.length < 8) err('Nimi, sähköposti ja salasana (min. 8) vaaditaan')
     if (db.users.some((u) => u.email.toLowerCase() === email)) err('Sähköposti on jo käytössä')
+    const nextRole = body.role === 'admin' ? 'admin' : 'member'
+    if (nextRole === 'admin' && !isOwnerEmail(user!.email)) {
+      err('Vain pääkäyttäjä (Jussi Heimonen) voi lisätä tai poistaa ylläpitäjiä')
+    }
     const nu: User = {
       id: uid(),
       name,
       email,
       passwordHash: await hashPassword(password),
-      role: body.role === 'admin' ? 'admin' : 'member',
+      role: nextRole,
       active: true,
       constraints: Array.isArray(body.constraints) ? (body.constraints as string[]) : [],
       createdAt: new Date().toISOString(),
@@ -725,6 +731,18 @@ export async function localApi<T = unknown>(
     const nextActive = typeof body.active === 'boolean' ? body.active : target!.active
     const wasAdmin = target!.role === 'admin' && target!.active
     const staysAdmin = nextRole === 'admin' && nextActive
+    const roleChangingToOrFromAdmin =
+      (target!.role === 'admin' && nextRole !== 'admin') ||
+      (target!.role !== 'admin' && nextRole === 'admin')
+    if (roleChangingToOrFromAdmin && !isOwnerEmail(user!.email)) {
+      err('Vain pääkäyttäjä (Jussi Heimonen) voi lisätä tai poistaa ylläpitäjiä')
+    }
+    if (isOwnerEmail(target!.email) && nextRole !== 'admin') {
+      err('Pääkäyttäjän ylläpito-oikeutta ei voi poistaa')
+    }
+    if (isOwnerEmail(target!.email) && !isOwnerEmail(user!.email)) {
+      err('Pääkäyttäjän tietoja voi muokata vain hän itse')
+    }
     if (wasAdmin && !staysAdmin) {
       const admins = db.users.filter((u) => u.role === 'admin' && u.active).length
       if (admins <= 1) err('Viimeistä ylläpitäjää ei voi poistaa tai alentaa')
@@ -743,6 +761,55 @@ export async function localApi<T = unknown>(
     saveDb(db)
     return ok({ user: publicUser(target!) })
   }
+  if (userPatch && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const target = db.users.find((u) => u.id === userPatch[1])
+    if (!target) err('Käyttäjää ei löydy')
+    if (target!.id === user!.id) err('Et voi poistaa omaa tiliäsi')
+    if (isOwnerEmail(target!.email)) err('Pääkäyttäjää ei voi poistaa')
+    if (target!.role === 'admin' && target!.active && !isOwnerEmail(user!.email)) {
+      err('Vain pääkäyttäjä voi poistaa ylläpitäjän')
+    }
+    if (target!.role === 'admin' && target!.active) {
+      const admins = db.users.filter((u) => u.role === 'admin' && u.active).length
+      if (admins <= 1) err('Viimeistä ylläpitäjää ei voi poistaa')
+    }
+    const id = target!.id
+    for (const p of db.pihavuorot) {
+      p.assignments = p.assignments.filter((a) => a.userId !== id)
+      for (const t of p.tasks) {
+        if (t.assigneeUserId === id) t.assigneeUserId = null
+        if (t.doneByUserId === id) t.doneByUserId = null
+      }
+    }
+    db.messages = (db.messages || []).filter((m) => m.authorUserId !== id)
+    db.weekBlocks = db.weekBlocks.filter((b) => b.userId !== id)
+    db.notifications = db.notifications.filter((n) => n.userId !== id)
+    db.swaps = (db.swaps || []).filter((s) => s.fromUserId !== id)
+    for (const s of db.swaps || []) {
+      if (s.toUserId === id) s.toUserId = null
+      if (s.acceptedByUserId === id) s.acceptedByUserId = null
+    }
+    db.extraTasks = (db.extraTasks || []).filter((t) => t.createdByUserId !== id)
+    for (const t of db.extraTasks || []) {
+      t.signups = (t.signups || []).filter((s) => s.userId !== id)
+    }
+    db.notices = (db.notices || []).filter((n) => n.authorUserId !== id)
+    for (const n of db.notices || []) {
+      n.replies = (n.replies || []).filter((r) => r.authorUserId !== id)
+      if (n.acknowledgedByUserId === id) n.acknowledgedByUserId = null
+    }
+    for (const h of db.hub || []) {
+      if (h.completedByUserId === id) {
+        h.completedByUserId = null
+        h.completedAt = null
+      }
+    }
+    db.invites = (db.invites || []).filter((i) => i.createdByUserId !== id)
+    db.users = db.users.filter((u) => u.id !== id)
+    saveDb(db)
+    return ok({ ok: true })
+  }
   if (pathname === '/api/invites' && method === 'GET') {
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
     const pending = db.invites.filter((i) => !i.acceptedAt && !i.revokedAt)
@@ -757,6 +824,10 @@ export async function localApi<T = unknown>(
     const name = String(body.name || '').trim()
     const email = String(body.email || '').trim().toLowerCase()
     if (!name || !email) err('Nimi ja sähköposti vaaditaan')
+    const nextRole = body.role === 'admin' ? 'admin' : 'member'
+    if (nextRole === 'admin' && !isOwnerEmail(user!.email)) {
+      err('Vain pääkäyttäjä (Jussi Heimonen) voi kutsua ylläpitäjiä')
+    }
     if (db.users.some((u) => u.email.toLowerCase() === email)) {
       err('Käyttäjä on jo olemassa tällä sähköpostilla')
     }
@@ -773,7 +844,7 @@ export async function localApi<T = unknown>(
       token: uid().replace(/-/g, '') + uid().replace(/-/g, ''),
       name,
       email,
-      role: body.role === 'admin' ? 'admin' : 'member',
+      role: nextRole,
       constraints: Array.isArray(body.constraints) ? (body.constraints as string[]) : [],
       createdByUserId: user!.id,
       createdAt: new Date().toISOString(),
@@ -1189,7 +1260,7 @@ export async function localApi<T = unknown>(
         db,
         p.assignments.map((a) => a.userId),
         'Pihavuoro julkaistu',
-        `${p.weekStart} – ${addDays(p.weekStart, 6)}: vuorosi on valmis katsottavaksi.`,
+        `${formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))}: vuorosi on valmis katsottavaksi.`,
         `/pihavuoro/${p.id}`,
         'shift',
       )
@@ -1282,7 +1353,7 @@ export async function localApi<T = unknown>(
         db,
         recipients,
         toUserId ? 'Sinulle tarjottiin vuoronvaihtoa' : 'Avoin vuoronvaihto',
-        `${user!.name} etsii sijaisia viikolle ${p.weekStart}.`,
+        `${user!.name} etsii sijaisia viikolle ${formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))}.`,
         '/vaihdot',
         'swap',
       )

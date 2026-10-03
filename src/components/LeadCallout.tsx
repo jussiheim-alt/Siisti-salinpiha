@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { formatWeekRangeFi } from '../shared/datetime'
 import { DEFAULT_LEAD_GUIDE, type LeadGuide } from '../shared/leadGuide'
 
 export function LeadCallout({
@@ -29,7 +30,7 @@ export function LeadCallout({
         <div className="lead-callout-badge">Vastuuveli</div>
         <h2>{guide.calloutTitle}</h2>
         <p>
-          {guide.calloutBody} Viikko {weekStart} – {weekEnd}.
+          {guide.calloutBody} Viikko {formatWeekRangeFi(weekStart, weekEnd)}.
         </p>
         <div className="lead-callout-actions">
           <button type="button" className="btn primary" onClick={() => setOpen(true)}>

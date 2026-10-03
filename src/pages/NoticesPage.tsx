@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type Notice } from '../api'
 import { useAuth } from '../auth'
+import { formatDateTimeFi } from '../shared/datetime'
 
 export function NoticesPage() {
   const { user } = useAuth()
@@ -173,7 +174,7 @@ export function NoticesPage() {
                 <img className="notice-photo" src={n.photoUrl} alt="Huomion kuva" />
               )}
               {ackText && <p className="ack-banner">{ackText}</p>}
-              <p className="muted">{new Date(n.createdAt).toLocaleString('fi-FI')}</p>
+              <p className="muted">{formatDateTimeFi(n.createdAt)}</p>
               {n.replies.length > 0 && (
                 <ul className="replies">
                   {n.replies.map((r) => (

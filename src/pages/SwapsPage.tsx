@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type SwapOffer } from '../api'
+import { formatWeekRangeFi } from '../shared/datetime'
 
 function roleLabel(role: string) {
   return role === 'lead' ? 'vastuuveli' : 'avustaja'
@@ -73,7 +74,7 @@ export function SwapsPage() {
               <li key={s.id} className="swap-card">
                 <div>
                   <strong>
-                    {s.weekStart} – {s.weekEnd}
+                    {formatWeekRangeFi(s.weekStart, s.weekEnd)}
                   </strong>
                   <p className="muted">
                     {s.fromUserName} · {roleLabel(s.role)}
@@ -112,7 +113,7 @@ export function SwapsPage() {
               <li key={s.id} className="swap-card">
                 <div>
                   <strong>
-                    {s.weekStart} – {s.weekEnd}
+                    {formatWeekRangeFi(s.weekStart, s.weekEnd)}
                   </strong>
                   <p className="muted">
                     {roleLabel(s.role)}
