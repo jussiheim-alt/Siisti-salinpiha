@@ -26,7 +26,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
       'Kytke ilmoitukset päälle etusivulta, jotta apukutsut ja chat näkyvät lukitusnäytöllä. Sovelluksessa uudet chat-viestit näkyvät chat-kuvakkeen punaisessa numerossa (eivät Ilmo-listassa). iPhonella sovellus pitää olla kotivalikossa.',
-      'Pikavalinnoista pääset käytettävyyteen, vuoronvaihtoihin, apukutsuihin ja huomioihin.',
+      'Pikavalinnoista pääset käytettävyyteen, apukutsuihin ja huomioihin.',
     ],
     to: '/',
     linkLabel: 'Avaa etusivu',
@@ -47,20 +47,11 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Käytettävyys',
     body: [
       'Merkitse viikot, joilla et ole käytettävissä pihavuoroon.',
-      'Estetyt viikot auttavat vuorojen suunnittelussa — merkitse ne ajoissa.',
+      'Lista näyttää aina seuraavat viikot eteenpäin: joka maanantai vanhin viikko poistuu ja uusi tulee listan loppuun.',
+      'Pidä esteviikot ajan tasalla — suositus ohittaa ne vuorojen suunnittelussa.',
     ],
     to: '/kaytettavyys',
     linkLabel: 'Muokkaa käytettävyyttä',
-  },
-  {
-    id: 'vaihdot',
-    title: 'Vuoronvaihdot',
-    body: [
-      'Jos et pääse omaan vuoroosi, voit tarjota paikkaasi vaihtoon Pihavuoro-sivulta.',
-      'Vuoronvaihdot-sivulla näet tarjolla olevat vaihdot ja omat avoimet tarjouksesi.',
-    ],
-    to: '/vaihdot',
-    linkLabel: 'Avaa vuoronvaihdot',
   },
   {
     id: 'apu',

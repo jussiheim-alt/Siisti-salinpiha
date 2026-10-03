@@ -40,8 +40,6 @@ export function HomePage() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [blockedCount, setBlockedCount] = useState(0)
-  const [swapsAvailable, setSwapsAvailable] = useState(0)
-  const [myOpenSwaps, setMyOpenSwaps] = useState(0)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -53,7 +51,6 @@ export function HomePage() {
       recentNotifications: AppNotification[]
       unreadNotifications: number
       availability?: { weeksAhead: number; blockedCount: number }
-      swaps?: { availableCount: number; myOpenCount: number }
     }>('/api/home')
       .then((d) => {
         setNext(d.nextPihavuoro)
@@ -63,8 +60,6 @@ export function HomePage() {
         setNotifications(d.recentNotifications || [])
         setUnreadNotifications(d.unreadNotifications || 0)
         setBlockedCount(d.availability?.blockedCount ?? 0)
-        setSwapsAvailable(d.swaps?.availableCount ?? 0)
-        setMyOpenSwaps(d.swaps?.myOpenCount ?? 0)
       })
       .catch((e) => setError(e.message))
   }, [])
@@ -180,20 +175,6 @@ export function HomePage() {
               }
               to="/kaytettavyys"
               action="Muokkaa"
-            />
-            <QuickLink
-              title="Vuoronvaihdot"
-              body={
-                swapsAvailable === 0 && myOpenSwaps === 0
-                  ? 'Ei avoimia vaihtoja'
-                  : [
-                      swapsAvailable ? `${swapsAvailable} tarjolla` : null,
-                      myOpenSwaps ? `${myOpenSwaps} omaa` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')
-              }
-              to="/vaihdot"
             />
             <QuickLink
               title="Apukutsut"

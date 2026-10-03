@@ -86,18 +86,6 @@ type Notice = {
   resolvedAt?: string | null
   replies: { id: string; authorUserId: string; body: string; createdAt: string }[]
 }
-type SwapOffer = {
-  id: string
-  pihavuoroId: string
-  fromUserId: string
-  toUserId?: string | null
-  role: 'lead' | 'helper'
-  message?: string | null
-  status: 'open' | 'accepted' | 'cancelled'
-  createdAt: string
-  resolvedAt?: string | null
-  acceptedByUserId?: string | null
-}
 type ShiftMessage = {
   id: string
   pihavuoroId: string
@@ -163,7 +151,6 @@ type Db = {
   invites: Invite[]
   pihavuorot: Pihavuoro[]
   notices: Notice[]
-  swaps: SwapOffer[]
   messages: ShiftMessage[]
   weekBlocks: WeekBlock[]
   notifications: Notification[]
@@ -217,6 +204,15 @@ async function hashPassword(password: string) {
 
 function normalizeDb(db: Db): Db {
   if (!db.invites) db.invites = []
+  // Vuoronvaihto poistettu — siivoa vanha data
+  delete (db as Db & { swaps?: unknown }).swaps
+  if (Array.isArray(db.notifications)) {
+    db.notifications = db.notifications.filter((n) => n.kind !== 'swap')
+  }
+  if (Array.isArray(db.weekBlocks)) {
+    const start = mondayOf()
+    db.weekBlocks = db.weekBlocks.filter((b) => b.weekStart >= start)
+  }
   if (!Array.isArray(db.taskCards) || db.taskCards.length === 0) {
     db.taskCards = seedTaskCardsFromCatalog()
   }
@@ -268,7 +264,6 @@ function loadDb(): Db {
     invites: [],
     pihavuorot: [],
     notices: [],
-    swaps: [],
     messages: [],
     weekBlocks: [],
     notifications: [],
@@ -805,11 +800,6 @@ export async function localApi<T = unknown>(
     db.messages = (db.messages || []).filter((m) => m.authorUserId !== id)
     db.weekBlocks = db.weekBlocks.filter((b) => b.userId !== id)
     db.notifications = db.notifications.filter((n) => n.userId !== id)
-    db.swaps = (db.swaps || []).filter((s) => s.fromUserId !== id)
-    for (const s of db.swaps || []) {
-      if (s.toUserId === id) s.toUserId = null
-      if (s.acceptedByUserId === id) s.acceptedByUserId = null
-    }
     db.extraTasks = (db.extraTasks || []).filter((t) => t.createdByUserId !== id)
     for (const t of db.extraTasks || []) {
       t.signups = (t.signups || []).filter((s) => s.userId !== id)
@@ -1018,16 +1008,6 @@ export async function localApi<T = unknown>(
     const blockedCount = db.weekBlocks.filter(
       (b) => b.userId === user!.id && b.weekStart >= window[0]! && b.weekStart <= window[window.length - 1]!,
     ).length
-    const openSwapOffers = db.swaps.filter((s) => {
-      if (s.status !== 'open') return false
-      const p = db.pihavuorot.find((x) => x.id === s.pihavuoroId)
-      if (!p || p.status !== 'published') return false
-      if (s.fromUserId === user!.id) return false
-      if (s.toUserId && s.toUserId !== user!.id) return false
-      if (p.assignments.some((a) => a.userId === user!.id)) return false
-      return true
-    }).length
-    const myOpenSwaps = db.swaps.filter((s) => s.fromUserId === user!.id && s.status === 'open').length
     const hubOpen = db.hub.filter((h) => h.status !== 'done')
     const hubDue = hubOpen.filter((h) => h.windowStart <= today() && h.windowEnd >= today())
     return ok({
@@ -1051,7 +1031,6 @@ export async function localApi<T = unknown>(
         ),
       },
       availability: { weeksAhead: 10, blockedCount },
-      swaps: { availableCount: openSwapOffers, myOpenCount: myOpenSwaps },
       chat: next
         ? {
             pihavuoroId: next.id,
@@ -1315,7 +1294,6 @@ export async function localApi<T = unknown>(
       if (user!.role !== 'admin') err('Vain ylläpitäjälle')
       const weekStart = p.weekStart
       db.pihavuorot = db.pihavuorot.filter((x) => x.id !== p.id)
-      db.swaps = db.swaps.filter((s) => s.pihavuoroId !== p.id)
       db.messages = db.messages.filter((m) => m.pihavuoroId !== p.id)
       saveDb(db)
       return ok({ ok: true, message: 'Pihavuoro poistettu', weekStart })
@@ -1365,113 +1343,24 @@ export async function localApi<T = unknown>(
         },
       })
     }
-    if (rest === '/swaps' && method === 'GET' && p) {
-      const swaps = db.swaps
-        .filter((s) => s.pihavuoroId === p.id && s.status === 'open')
-        .map((s) => hydrateSwap(db, s))
-      return ok({ swaps })
-    }
-    if (rest === '/swaps' && method === 'POST' && p) {
-      if (p.status !== 'published') err('Vaihto vain julkaistulle vuorolle')
-      const assignment = p.assignments.find((a) => a.userId === user!.id)
-      if (!assignment) err('Et ole tässä vuorossa')
-      if (db.swaps.some((s) => s.pihavuoroId === p.id && s.fromUserId === user!.id && s.status === 'open')) {
-        err('Sinulla on jo avoin vaihtotarjous tälle viikolle')
-      }
-      const toUserId = body.toUserId ? String(body.toUserId) : null
-      const swap: SwapOffer = {
-        id: uid(),
-        pihavuoroId: p.id,
-        fromUserId: user!.id,
-        toUserId,
-        role: assignment!.role,
-        message: String(body.message || '').trim() || null,
-        status: 'open',
-        createdAt: new Date().toISOString(),
-      }
-      db.swaps.push(swap)
-      const recipients = toUserId
-        ? [toUserId]
-        : db.users
-            .filter((u) => u.active && u.id !== user!.id && !p.assignments.some((a) => a.userId === u.id))
-            .map((u) => u.id)
-      notify(
-        db,
-        recipients,
-        toUserId ? 'Sinulle tarjottiin vuoronvaihtoa' : 'Avoin vuoronvaihto',
-        `${user!.name} etsii sijaisia viikolle ${formatWeekRangeFi(p.weekStart, addDays(p.weekStart, 6))}.`,
-        '/vaihdot',
-        'swap',
-      )
-      saveDb(db)
-      return ok({ swap: hydrateSwap(db, swap) })
-    }
-  }
-
-  if (pathname === '/api/swaps' && method === 'GET') {
-    const mine = db.swaps
-      .filter((s) => s.fromUserId === user!.id && s.status === 'open')
-      .map((s) => hydrateSwap(db, s))
-    const available = db.swaps
-      .filter((s) => {
-        if (s.status !== 'open' || s.fromUserId === user!.id) return false
-        const p = db.pihavuorot.find((x) => x.id === s.pihavuoroId)
-        if (!p || p.status !== 'published') return false
-        if (s.toUserId && s.toUserId !== user!.id) return false
-        if (p.assignments.some((a) => a.userId === user!.id)) return false
-        return true
-      })
-      .map((s) => hydrateSwap(db, s))
-    return ok({ mine, available })
-  }
-
-  const swapAccept = pathname.match(/^\/api\/swaps\/([^/]+)\/accept$/)
-  if (swapAccept && method === 'POST') {
-    const swap = db.swaps.find((s) => s.id === swapAccept[1])
-    if (!swap || swap.status !== 'open') err('Tarjous ei ole enää auki')
-    if (swap!.fromUserId === user!.id) err('Et voi hyväksyä omaa tarjoustasi')
-    if (swap!.toUserId && swap!.toUserId !== user!.id) err('Tarjous on suunnattu toiselle')
-    const p = db.pihavuorot.find((x) => x.id === swap!.pihavuoroId)
-    if (!p || p.status !== 'published') err('Vuoro ei ole enää vaihdettavissa')
-    if (p!.assignments.some((a) => a.userId === user!.id)) err('Olet jo tässä vuorossa')
-    const assignment = p!.assignments.find((a) => a.userId === swap!.fromUserId && a.role === swap!.role)
-    if (!assignment) err('Alkuperäistä vuoropaikkaa ei löydy')
-    assignment!.userId = user!.id
-    for (const t of p!.tasks) {
-      if (t.assigneeUserId === swap!.fromUserId && t.status === 'open') {
-        const me = db.users.find((u) => u.id === user!.id)
-        if (t.effort === 'heavy' && me?.constraints.includes('no_heavy')) t.assigneeUserId = null
-        else t.assigneeUserId = user!.id
-      }
-    }
-    swap!.status = 'accepted'
-    swap!.resolvedAt = new Date().toISOString()
-    swap!.acceptedByUserId = user!.id
-    notify(db, [swap!.fromUserId], 'Vuoronvaihto hyväksytty', `${user!.name} otti paikkasi.`, `/pihavuoro/${p!.id}`, 'swap')
-    saveDb(db)
-    return ok({ swap: hydrateSwap(db, swap!), pihavuoro: hydratePihavuoro(db, p!) })
-  }
-
-  const swapCancel = pathname.match(/^\/api\/swaps\/([^/]+)\/cancel$/)
-  if (swapCancel && method === 'POST') {
-    const swap = db.swaps.find((s) => s.id === swapCancel[1])
-    if (!swap || swap.status !== 'open') err('Tarjous ei ole enää auki')
-    if (swap!.fromUserId !== user!.id && user!.role !== 'admin') err('Ei oikeutta')
-    swap!.status = 'cancelled'
-    swap!.resolvedAt = new Date().toISOString()
-    saveDb(db)
-    return ok({ swap: hydrateSwap(db, swap!) })
   }
 
   if (pathname === '/api/availability' && method === 'GET') {
-    const weeks = upcomingMondays(Number(params.get('weeks') || 10))
+    const count = Math.min(16, Math.max(4, Number(params.get('weeks') || 10)))
+    const weeks = upcomingMondays(count)
     const targetId =
       user!.role === 'admin' && params.get('userId') ? String(params.get('userId')) : user!.id
+    const start = mondayOf()
+    db.weekBlocks = db.weekBlocks.filter((b) => !(b.userId === targetId && b.weekStart < start))
     const blocked = new Set(
       db.weekBlocks.filter((b) => b.userId === targetId).map((b) => b.weekStart),
     )
+    saveDb(db)
     return ok({
       userId: targetId,
+      weeksAhead: count,
+      windowStart: weeks[0],
+      windowEnd: weeks[weeks.length - 1],
       weeks: weeks.map((weekStart) => {
         const p = db.pihavuorot.find((x) => x.weekStart === weekStart)
         const myRole = p?.assignments.find((a) => a.userId === targetId)?.role || null
@@ -1486,14 +1375,20 @@ export async function localApi<T = unknown>(
     })
   }
   if (pathname === '/api/availability' && method === 'PUT') {
-    const weeks = upcomingMondays(Number(body.weeks || 10))
+    const count = Math.min(16, Math.max(4, Number(body.weeks || 10)))
+    const weeks = upcomingMondays(count)
     const windowSet = new Set(weeks)
     const blockedWeeks = Array.isArray(body.blockedWeeks)
       ? (body.blockedWeeks as string[]).filter((w) => windowSet.has(w))
       : []
+    const start = mondayOf()
     db.weekBlocks = db.weekBlocks.filter(
       (b) =>
-        !(b.userId === user!.id && b.weekStart >= weeks[0]! && b.weekStart <= weeks[weeks.length - 1]!),
+        !(
+          b.userId === user!.id &&
+          (b.weekStart < start ||
+            (b.weekStart >= weeks[0]! && b.weekStart <= weeks[weeks.length - 1]!))
+        ),
     )
     for (const weekStart of blockedWeeks) {
       const p = db.pihavuorot.find((x) => x.weekStart === weekStart)
@@ -1993,30 +1888,6 @@ export async function localApi<T = unknown>(
 
   err(`Paikallinen tila: reittiä ei tueta (${method} ${pathname})`)
   return ok({})
-}
-
-function hydrateSwap(db: Db, s: SwapOffer) {
-  const p = db.pihavuorot.find((x) => x.id === s.pihavuoroId)
-  return {
-    id: s.id,
-    pihavuoroId: s.pihavuoroId,
-    weekStart: p?.weekStart || '',
-    weekEnd: p ? addDays(p.weekStart, 6) : '',
-    pihavuoroStatus: p?.status || null,
-    fromUserId: s.fromUserId,
-    fromUserName: db.users.find((u) => u.id === s.fromUserId)?.name || '—',
-    toUserId: s.toUserId ?? null,
-    toUserName: s.toUserId ? db.users.find((u) => u.id === s.toUserId)?.name || '—' : null,
-    role: s.role,
-    message: s.message ?? null,
-    status: s.status,
-    createdAt: s.createdAt,
-    resolvedAt: s.resolvedAt ?? null,
-    acceptedByUserId: s.acceptedByUserId ?? null,
-    acceptedByUserName: s.acceptedByUserId
-      ? db.users.find((u) => u.id === s.acceptedByUserId)?.name || '—'
-      : null,
-  }
 }
 
 function hydrateHub(h: HubInspection, db?: Db) {

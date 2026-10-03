@@ -278,25 +278,6 @@ export type AvailabilityWeek = {
   myRole: string | null
 }
 
-export type SwapOffer = {
-  id: string
-  pihavuoroId: string
-  weekStart: string
-  weekEnd: string
-  pihavuoroStatus?: string | null
-  fromUserId: string
-  fromUserName: string
-  toUserId?: string | null
-  toUserName?: string | null
-  role: 'lead' | 'helper'
-  message?: string | null
-  status: 'open' | 'accepted' | 'cancelled'
-  createdAt: string
-  resolvedAt?: string | null
-  acceptedByUserId?: string | null
-  acceptedByUserName?: string | null
-}
-
 export type ShiftMessage = {
   id: string
   pihavuoroId: string

@@ -16,7 +16,6 @@ import { LoginPage } from './pages/LoginPage'
 import { NoticesPage } from './pages/NoticesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { PihavuoroPage } from './pages/PihavuoroPage'
-import { SwapsPage } from './pages/SwapsPage'
 import { LeadGuideAdminPage } from './pages/LeadGuideAdminPage'
 import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UserGuidePage } from './pages/UserGuidePage'
@@ -194,7 +193,7 @@ export default function App() {
           <Route path="/asetukset" element={<AppSettingsPage />} />
           <Route path="/kaytettavyys" element={<AvailabilityPage />} />
           <Route path="/esteet" element={<Navigate to="/kaytettavyys" replace />} />
-          <Route path="/vaihdot" element={<SwapsPage />} />
+          <Route path="/vaihdot" element={<Navigate to="/kaytettavyys" replace />} />
           <Route path="/ohjeet" element={<UserGuidePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
