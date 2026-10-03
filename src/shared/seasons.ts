@@ -18,11 +18,18 @@ export function mapLegacySeason(season: string): SeasonKey | 'all' {
   return 'kesa'
 }
 
+/**
+ * Vuodenaika viikon maanantain kuukauden mukaan:
+ * - Kevät: huhti–touko
+ * - Kesä: kesä–elo
+ * - Syksy: syys–loka
+ * - Talvi: marras–maalis
+ */
 export function seasonForWeekStart(weekStart: string): SeasonKey {
   const m = new Date(`${weekStart}T12:00:00`).getMonth() + 1
-  if (m >= 3 && m <= 5) return 'kevat'
+  if (m === 4 || m === 5) return 'kevat'
   if (m >= 6 && m <= 8) return 'kesa'
-  if (m >= 9 && m <= 11) return 'syksy'
+  if (m === 9 || m === 10) return 'syksy'
   return 'talvi'
 }
 

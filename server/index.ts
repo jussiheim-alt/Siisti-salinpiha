@@ -29,7 +29,12 @@ import {
   updateHubItem,
 } from './hub.ts'
 import { dataDir, root, uploadsDir } from './paths.ts'
-import { isCadenceKey, isSeasonKey, publicTaskCard } from './taskCards.ts'
+import { isCadenceKey, isSeasonKey, publicTaskCard, type TaskCard } from './taskCards.ts'
+import {
+  SEASON_LABELS,
+  seasonForWeekStart,
+  type SeasonKey,
+} from '../src/shared/seasons.ts'
 import { ensureLeadGuideTable, getLeadGuide, saveLeadGuide } from './leadGuide.ts'
 import { ensureAppSettings, getAppSettings, saveAppSettings } from './appSettings.ts'
 import { formatWeekRangeFi } from '../src/shared/datetime.ts'
@@ -153,9 +158,8 @@ function mondayOf(dateStr?: string) {
   return format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd')
 }
 
-function seasonForDate(weekStart: string): 'talvi' | 'sulankausi' {
-  const m = parseISO(weekStart).getMonth() + 1
-  return m >= 11 || m <= 3 ? 'talvi' : 'sulankausi'
+function seasonForDate(weekStart: string): SeasonKey {
+  return seasonForWeekStart(weekStart)
 }
 
 function getAssignments(pihavuoroId: string) {
@@ -216,12 +220,14 @@ function getTasks(pihavuoroId: string) {
 
 function hydratePihavuoro(row: Record<string, unknown>) {
   const id = String(row.id)
+  const season = isSeasonKey(row.season) ? row.season : seasonForWeekStart(String(row.week_start))
   return {
     id,
     weekStart: row.week_start,
     weekEnd: format(addDays(parseISO(String(row.week_start)), 6), 'yyyy-MM-dd'),
     status: row.status,
-    season: row.season,
+    season,
+    seasonLabel: SEASON_LABELS[season],
     notes: row.notes,
     createdAt: row.created_at,
     assignments: getAssignments(id),
@@ -229,27 +235,37 @@ function hydratePihavuoro(row: Record<string, unknown>) {
   }
 }
 
-function defaultTemplateIdsForSeason(season: 'talvi' | 'sulankausi'): string[] {
-  return TASK_CATALOG_V1.filter(
-    (t) => (t.season === season || t.season === 'all') && t.cadence === 'every_week',
-  ).map((t) => t.id)
+function defaultTemplateIdsForSeason(season: SeasonKey): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT id FROM task_cards WHERE active = 1 AND season = ? AND cadence = 'weekly'
+         ORDER BY sort_order ASC, title ASC`,
+      )
+      .all(season) as { id: string }[]
+  ).map((r) => r.id)
 }
 
 function resolveTemplatesForSeason(
-  season: 'talvi' | 'sulankausi',
+  season: SeasonKey,
   templateIds?: string[] | null,
-) {
-  const seasonTemplates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+): TaskCard[] {
+  const rows = db
+    .prepare(
+      `SELECT * FROM task_cards WHERE active = 1 AND season = ? ORDER BY sort_order ASC, title ASC`,
+    )
+    .all(season) as Record<string, unknown>[]
+  const seasonTemplates = rows.map(publicTaskCard)
   if (!templateIds || templateIds.length === 0) {
-    return seasonTemplates.filter((t) => t.cadence === 'every_week')
+    return seasonTemplates.filter((t) => t.cadence === 'weekly')
   }
   const wanted = new Set(templateIds)
-  return seasonTemplates.filter((t) => wanted.has(t.id)).sort((a, b) => a.sortOrder - b.sortOrder)
+  return seasonTemplates.filter((t) => wanted.has(t.id))
 }
 
 function createTasksForPihavuoro(
   pihavuoroId: string,
-  season: 'talvi' | 'sulankausi',
+  season: SeasonKey,
   assignments: { userId: string; role: string }[],
   templateIds?: string[] | null,
 ) {
@@ -1145,7 +1161,7 @@ app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
       }
     }
   }
-  const season = (req.body.season as 'talvi' | 'sulankausi') || seasonForDate(weekStart)
+  const season = isSeasonKey(req.body.season) ? req.body.season : seasonForDate(weekStart)
   const helperCount = Number(req.body.helperCount ?? 4)
   const useRecommend = req.body.recommend !== false
   const id = crypto.randomUUID()
@@ -1211,7 +1227,11 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
     | undefined
   if (!row) return res.status(404).json({ error: 'Ei löydy' })
   const status = req.body.status ?? row.status
-  const season = req.body.season ?? row.season
+  const season: SeasonKey = isSeasonKey(req.body.season)
+    ? req.body.season
+    : isSeasonKey(row.season)
+      ? row.season
+      : seasonForDate(String(row.week_start))
   const notes = req.body.notes !== undefined ? req.body.notes : row.notes
   db.prepare('UPDATE pihavuorot SET status=?, season=?, notes=? WHERE id=?').run(
     status,
@@ -1244,7 +1264,7 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
       ? (req.body.templateIds as unknown[]).map(String)
       : existingTemplateIds.length
         ? existingTemplateIds
-        : defaultTemplateIdsForSeason(season as 'talvi' | 'sulankausi')
+        : defaultTemplateIdsForSeason(season)
     const tx = db.transaction(() => {
       db.prepare('DELETE FROM assignments WHERE pihavuoro_id = ?').run(req.params.id)
       db.prepare('DELETE FROM shift_tasks WHERE pihavuoro_id = ?').run(req.params.id)
@@ -1258,7 +1278,7 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
       }
       createTasksForPihavuoro(
         String(req.params.id),
-        season as 'talvi' | 'sulankausi',
+        season,
         [
           { userId: leadId, role: 'lead' },
           ...helperIds.map((userId) => ({ userId, role: 'helper' })),
@@ -1285,7 +1305,9 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
   if (!Array.isArray(req.body.templateIds)) {
     return res.status(400).json({ error: 'templateIds vaaditaan' })
   }
-  const season = row.season as 'talvi' | 'sulankausi'
+  const season = isSeasonKey(row.season)
+    ? row.season
+    : seasonForDate(String(row.week_start))
   const templateIds = (req.body.templateIds as unknown[]).map(String)
   const templates = resolveTemplatesForSeason(season, templateIds)
   if (!templates.length) {

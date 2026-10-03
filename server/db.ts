@@ -5,6 +5,7 @@ import { TASK_CATALOG_V1 } from './catalog.ts'
 import { ensureFoundingAdmins } from './foundingAdmins.ts'
 import { dataDir } from './paths.ts'
 import { seedTaskCardsFromCatalog, type TaskCard } from './taskCards.ts'
+import { seasonForWeekStart } from '../src/shared/seasons.ts'
 
 export const dbPath = path.join(dataDir, 'siisti-piha.sqlite')
 
@@ -49,6 +50,46 @@ export function replaceDatabaseFromFile(sourceSqlitePath: string) {
   dbInstance = openDatabase()
 }
 
+/** Upgrade legacy talvi/sulankausi → kevät/kesä/syksy/talvi (recomputed from week_start). */
+function migratePihavuoroSeasons() {
+  const row = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'pihavuorot'`)
+    .get() as { sql?: string } | undefined
+  const sql = row?.sql || ''
+  if (!sql || sql.includes("'kevat'")) return
+
+  const existing = db.prepare(`SELECT * FROM pihavuorot`).all() as Record<string, unknown>[]
+  db.pragma('foreign_keys = OFF')
+  db.exec(`
+    CREATE TABLE pihavuorot_v2 (
+      id TEXT PRIMARY KEY,
+      week_start TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL CHECK(status IN ('draft','published','done')),
+      season TEXT NOT NULL CHECK(season IN ('kevat','kesa','syksy','talvi')),
+      notes TEXT,
+      created_at TEXT NOT NULL
+    );
+  `)
+  const insert = db.prepare(
+    `INSERT INTO pihavuorot_v2 (id, week_start, status, season, notes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+  for (const p of existing) {
+    const weekStart = String(p.week_start)
+    insert.run(
+      String(p.id),
+      weekStart,
+      String(p.status),
+      seasonForWeekStart(weekStart),
+      p.notes ?? null,
+      String(p.created_at),
+    )
+  }
+  db.exec(`DROP TABLE pihavuorot`)
+  db.exec(`ALTER TABLE pihavuorot_v2 RENAME TO pihavuorot`)
+  db.pragma('foreign_keys = ON')
+}
+
 export function initDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -68,7 +109,7 @@ export function initDb() {
       id TEXT PRIMARY KEY,
       week_start TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL CHECK(status IN ('draft','published','done')),
-      season TEXT NOT NULL CHECK(season IN ('talvi','sulankausi')),
+      season TEXT NOT NULL CHECK(season IN ('kevat','kesa','syksy','talvi')),
       notes TEXT,
       created_at TEXT NOT NULL
     );
@@ -247,6 +288,8 @@ export function initDb() {
       sort_order INTEGER NOT NULL DEFAULT 0
     );
   `)
+
+  migratePihavuoroSeasons()
 
   const notifCols = db.prepare(`PRAGMA table_info(notifications)`).all() as { name: string }[]
   if (!notifCols.some((c) => c.name === 'kind')) {

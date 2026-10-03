@@ -9,6 +9,8 @@ import { DEFAULT_LEAD_GUIDE, normalizeLeadGuide, type LeadGuide } from '../share
 import {
   isCadenceKey,
   isSeasonKey,
+  SEASON_LABELS,
+  seasonForWeekStart,
   type SeasonKey,
   type TaskCadence,
 } from '../shared/seasons'
@@ -59,7 +61,7 @@ type Pihavuoro = {
   id: string
   weekStart: string
   status: 'draft' | 'published' | 'done'
-  season: 'talvi' | 'sulankausi'
+  season: SeasonKey
   notes?: string | null
   createdAt: string
   assignments: Assignment[]
@@ -196,9 +198,8 @@ function addDays(iso: string, n: number) {
   return d.toISOString().slice(0, 10)
 }
 
-function seasonFor(weekStart: string): 'talvi' | 'sulankausi' {
-  const m = new Date(`${weekStart}T12:00:00`).getMonth() + 1
-  return m >= 11 || m <= 3 ? 'talvi' : 'sulankausi'
+function seasonFor(weekStart: string): SeasonKey {
+  return seasonForWeekStart(weekStart)
 }
 
 async function hashPassword(password: string) {
@@ -218,6 +219,11 @@ function normalizeDb(db: Db): Db {
   )
   db.leadGuide = normalizeLeadGuide(db.leadGuide || DEFAULT_LEAD_GUIDE)
   db.appSettings = normalizeAppSettings(db.appSettings || DEFAULT_APP_SETTINGS)
+  for (const p of db.pihavuorot) {
+    if (!isSeasonKey(p.season)) {
+      p.season = seasonForWeekStart(p.weekStart)
+    }
+  }
   for (const n of db.notices) {
     if (n.audience !== 'all' && n.audience !== 'leads') n.audience = 'all'
     if (n.acknowledgedAt === undefined) n.acknowledgedAt = null
@@ -408,12 +414,14 @@ function publicUser(u: User) {
 }
 
 function hydratePihavuoro(db: Db, p: Pihavuoro) {
+  const season = isSeasonKey(p.season) ? p.season : seasonForWeekStart(p.weekStart)
   return {
     id: p.id,
     weekStart: p.weekStart,
     weekEnd: addDays(p.weekStart, 6),
     status: p.status,
-    season: p.season,
+    season,
+    seasonLabel: SEASON_LABELS[season],
     notes: p.notes ?? null,
     createdAt: p.createdAt,
     assignments: p.assignments
@@ -454,31 +462,35 @@ function hydratePihavuoro(db: Db, p: Pihavuoro) {
   }
 }
 
-function defaultTemplateIdsForSeason(season: 'talvi' | 'sulankausi'): string[] {
-  return TASK_CATALOG_V1.filter(
-    (t) => (t.season === season || t.season === 'all') && t.cadence === 'every_week',
-  ).map((t) => t.id)
+function defaultTemplateIdsForSeason(season: SeasonKey, db: Db): string[] {
+  return db.taskCards
+    .filter((t) => t.active && t.season === season && t.cadence === 'weekly')
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((t) => t.id)
 }
 
 function resolveTemplatesForSeason(
-  season: 'talvi' | 'sulankausi',
+  season: SeasonKey,
+  db: Db,
   templateIds?: string[] | null,
-) {
-  const seasonTemplates = TASK_CATALOG_V1.filter((t) => t.season === season || t.season === 'all')
+): TaskCard[] {
+  const seasonTemplates = db.taskCards
+    .filter((t) => t.active && t.season === season)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
   if (!templateIds || templateIds.length === 0) {
-    return seasonTemplates.filter((t) => t.cadence === 'every_week')
+    return seasonTemplates.filter((t) => t.cadence === 'weekly')
   }
   const wanted = new Set(templateIds)
-  return seasonTemplates.filter((t) => wanted.has(t.id)).sort((a, b) => a.sortOrder - b.sortOrder)
+  return seasonTemplates.filter((t) => wanted.has(t.id))
 }
 
 function createTasks(
-  season: 'talvi' | 'sulankausi',
+  season: SeasonKey,
   assignments: Assignment[],
   db: Db,
   templateIds?: string[] | null,
 ): ShiftTask[] {
-  const templates = resolveTemplatesForSeason(season, templateIds)
+  const templates = resolveTemplatesForSeason(season, db, templateIds)
   const lead = assignments.find((a) => a.role === 'lead')
   const helpers = assignments.filter((a) => a.role === 'helper')
   let helperCursor = 0
@@ -1131,7 +1143,7 @@ export async function localApi<T = unknown>(
         db,
         Array.isArray(body.templateIds)
           ? (body.templateIds as unknown[]).map(String)
-          : defaultTemplateIdsForSeason(season),
+          : defaultTemplateIdsForSeason(season, db),
       ),
     }
     db.pihavuorot.push(p)
@@ -1200,7 +1212,7 @@ export async function localApi<T = unknown>(
       if (body.status === 'draft' || body.status === 'published' || body.status === 'done') {
         p.status = body.status
       }
-      if (body.season === 'talvi' || body.season === 'sulankausi') p.season = body.season
+      if (isSeasonKey(body.season)) p.season = body.season
       if (body.notes !== undefined) p.notes = String(body.notes || '') || null
       if (body.leadUserId || body.helperUserIds) {
         const leadId = String(body.leadUserId || '')
@@ -1220,7 +1232,7 @@ export async function localApi<T = unknown>(
           ? (body.templateIds as unknown[]).map(String)
           : existingIds.length
             ? existingIds
-            : defaultTemplateIdsForSeason(p.season)
+            : defaultTemplateIdsForSeason(p.season, db)
         p.assignments = assignments
         p.tasks = createTasks(p.season, assignments, db, templateIds)
       }
@@ -1231,7 +1243,7 @@ export async function localApi<T = unknown>(
       if (user!.role !== 'admin') err('Vain ylläpitäjälle')
       if (!Array.isArray(body.templateIds)) err('templateIds vaaditaan')
       const templateIds = (body.templateIds as unknown[]).map(String)
-      const templates = resolveTemplatesForSeason(p.season, templateIds)
+      const templates = resolveTemplatesForSeason(p.season, db, templateIds)
       if (!templates.length) err('Valitse ainakin yksi huoltotehtävä')
       const keep = new Map(p.tasks.filter((t) => t.templateId).map((t) => [t.templateId!, t]))
       const next: ShiftTask[] = []
