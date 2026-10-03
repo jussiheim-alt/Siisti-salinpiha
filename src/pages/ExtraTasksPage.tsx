@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type ExtraTask } from '../api'
 import { useAuth } from '../auth'
-import { disablePushNotifications, enablePushNotifications, getPushStatus } from '../push'
 
 const STATUS_FI: Record<ExtraTask['status'], string> = {
   open: 'Kerää ilmoittautumisia',
@@ -20,10 +20,6 @@ export function ExtraTasksPage() {
   const [description, setDescription] = useState('')
   const [minRequired, setMinRequired] = useState(2)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [pushSupported, setPushSupported] = useState(false)
-  const [pushOn, setPushOn] = useState(false)
-  const [pushBusy, setPushBusy] = useState(false)
-  const [pushMsg, setPushMsg] = useState('')
 
   async function load() {
     const data = await api<{ tasks: ExtraTask[]; canCreate: boolean }>('/api/extra-tasks')
@@ -31,36 +27,9 @@ export function ExtraTasksPage() {
     setCanCreate(Boolean(data.canCreate))
   }
 
-  async function refreshPush() {
-    const status = await getPushStatus()
-    setPushSupported(status.supported)
-    setPushOn(status.subscribed && status.permission === 'granted')
-  }
-
   useEffect(() => {
     load().catch((e) => setError(e.message))
-    refreshPush().catch(() => undefined)
   }, [])
-
-  async function togglePush() {
-    setPushBusy(true)
-    setPushMsg('')
-    setError('')
-    try {
-      if (pushOn) {
-        await disablePushNotifications()
-        setPushMsg('Ilmoitukset pois päältä')
-      } else {
-        await enablePushNotifications()
-        setPushMsg('Ilmoitukset päällä — saat tiedon uusista apukutsuista')
-      }
-      await refreshPush()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ilmoitusasetus epäonnistui')
-    } finally {
-      setPushBusy(false)
-    }
-  }
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
@@ -119,78 +88,9 @@ export function ExtraTasksPage() {
 
       {error && <p className="error">{error}</p>}
 
-      {pushSupported && (
-        <section className={`surface-card push-card ${pushOn ? 'is-on' : ''}`}>
-          <div className="push-card-main">
-            <span className="push-card-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 3.5c-2.8 0-5 2.1-5 4.8v2.2c0 .7-.2 1.4-.6 2L5.2 14a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6l-1.2-1.5c-.4-.6-.6-1.3-.6-2V8.3c0-2.7-2.2-4.8-5-4.8Z"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M10 17.2a2 2 0 0 0 4 0"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            <div className="push-card-copy">
-              <p className="kicker">Push-ilmoitukset</p>
-              <strong>{pushOn ? 'Päällä' : 'Pois päältä'}</strong>
-              <p>
-                {pushOn
-                  ? 'Uudet apukutsut tulevat myös sovelluksen ulkopuolelle.'
-                  : 'Ota käyttöön, jotta et missaa kutsuja.'}
-              </p>
-              {pushMsg && <p className="hint">{pushMsg}</p>}
-            </div>
-          </div>
-          <button
-            className={`btn small ${pushOn ? '' : 'primary'}`}
-            type="button"
-            disabled={pushBusy}
-            onClick={() => void togglePush()}
-          >
-            {pushBusy ? '…' : pushOn ? 'Poista' : 'Ota käyttöön'}
-          </button>
-        </section>
-      )}
-
-      {!pushSupported && (
-        <section className="surface-card push-card is-muted">
-          <div className="push-card-main">
-            <span className="push-card-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 3.5c-2.8 0-5 2.1-5 4.8v2.2c0 .7-.2 1.4-.6 2L5.2 14a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6l-1.2-1.5c-.4-.6-.6-1.3-.6-2V8.3c0-2.7-2.2-4.8-5-4.8Z"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M10 17.2a2 2 0 0 0 4 0"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            <div className="push-card-copy">
-              <p className="kicker">Push-ilmoitukset</p>
-              <strong>Ei käytössä tällä laitteella</strong>
-              <p>
-                {import.meta.env.VITE_DATA_MODE === 'local'
-                  ? 'Demossa uudet kutsut näkyvät Ilmo-välilehdellä.'
-                  : 'Vaativat modernin selaimen. iPhonella: Lisää Koti-valikkoon, avaa siitä ja salli ilmoitukset.'}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
+      <p className="hint push-home-hint">
+        Push-ilmoitukset kytketään <Link to="/">etusivulta</Link> (päällä / pois).
+      </p>
 
       {canCreate && (
         <section className="panel">

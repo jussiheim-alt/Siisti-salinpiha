@@ -45,10 +45,20 @@ export async function enablePushNotifications() {
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     throw new Error('Tämä selain/laite ei tue push-ilmoituksia')
   }
-  const permission = await Notification.requestPermission()
-  if (permission !== 'granted') {
-    throw new Error('Ilmoituslupa evättiin')
+
+  // Once the OS/browser has denied permission, requestPermission() will not
+  // show a prompt again — user must flip it in system settings.
+  let permission = Notification.permission
+  if (permission === 'denied') {
+    throw new Error('DENIED')
   }
+  if (permission === 'default') {
+    permission = await Notification.requestPermission()
+  }
+  if (permission !== 'granted') {
+    throw new Error('DENIED')
+  }
+
   const { publicKey } = await api<{ publicKey: string | null }>('/api/push/vapid-public-key')
   if (!publicKey) {
     throw new Error('Push-ilmoitukset eivät ole käytössä tässä ympäristössä')

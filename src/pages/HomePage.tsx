@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type AppNotification, type HubSummary, type Pihavuoro, type WeatherPayload } from '../api'
 import { useAuth } from '../auth'
 import { NotificationStrip } from '../components/NotificationStrip'
+import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
 
 function QuickLink({
@@ -102,6 +103,8 @@ export function HomePage() {
       {error && <p className="error">{error}</p>}
 
       <div className="home-stack">
+        <PushToggle />
+
         <div className="surface-card" style={{ animationDelay: '0.05s' }}>
           <NotificationStrip items={notifications} unreadCount={unreadNotifications} />
         </div>
