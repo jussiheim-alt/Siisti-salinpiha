@@ -107,7 +107,7 @@ export function CalendarPage() {
                   </span>
                 </div>
                 <p>
-                  {p.season === 'talvi' ? 'Talvi' : 'Sulankausi'} · Vastuu: {lead?.userName || '—'}
+                  {p.seasonLabel || p.season} · Vastuu: {lead?.userName || '—'}
                 </p>
                 <p className="muted">
                   {openCount} avointa tehtävää

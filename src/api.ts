@@ -132,7 +132,7 @@ export type Pihavuoro = {
   weekStart: string
   weekEnd: string
   status: 'draft' | 'published' | 'done'
-  season: 'talvi' | 'sulankausi'
+  season: SeasonKey
   seasonLabel?: string
   notes?: string | null
   assignments: Assignment[]

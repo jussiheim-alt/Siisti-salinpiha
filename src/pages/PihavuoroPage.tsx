@@ -5,18 +5,19 @@ import {
   type HubInspection,
   type Pihavuoro,
   type SwapOffer,
-  type TaskTemplate,
+  type TaskCard,
   type User,
 } from '../api'
 import { useAuth } from '../auth'
 import { formatWeekRangeFi } from '../shared/datetime'
+import { CADENCE_LABELS, SEASON_LABELS } from '../shared/seasons'
 
 export function PihavuoroPage() {
   const { id } = useParams()
   const { user } = useAuth()
   const [p, setP] = useState<Pihavuoro | null>(null)
   const [users, setUsers] = useState<User[]>([])
-  const [catalog, setCatalog] = useState<TaskTemplate[]>([])
+  const [catalog, setCatalog] = useState<TaskCard[]>([])
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   const [editingTasks, setEditingTasks] = useState(false)
   const [savingTasks, setSavingTasks] = useState(false)
@@ -93,8 +94,8 @@ export function PihavuoroPage() {
     api<{ users: User[] }>('/api/users')
       .then((d) => setUsers(d.users.filter((u) => u.active)))
       .catch(() => undefined)
-    api<{ templates: TaskTemplate[] }>('/api/catalog')
-      .then((d) => setCatalog(Array.isArray(d.templates) ? d.templates : []))
+    api<{ cards: TaskCard[] }>('/api/task-cards')
+      .then((d) => setCatalog(Array.isArray(d.cards) ? d.cards.filter((c) => c.active) : []))
       .catch(() => undefined)
   }, [user?.role])
 
@@ -172,7 +173,7 @@ export function PihavuoroPage() {
   const seasonCatalog = useMemo(() => {
     if (!p) return []
     return catalog
-      .filter((t) => t.season === p.season || t.season === 'all')
+      .filter((t) => t.season === p.season)
       .sort((a, b) => a.sortOrder - b.sortOrder)
   }, [catalog, p])
 
@@ -373,7 +374,7 @@ export function PihavuoroPage() {
           {formatWeekRangeFi(p.weekStart, p.weekEnd)}
         </h1>
         <p className="lede">
-          {p.season === 'talvi' ? 'Talvi' : 'Sulankausi'} ·{' '}
+          {p.seasonLabel || SEASON_LABELS[p.season] || p.season} ·{' '}
           {p.status === 'draft' ? 'Luonnos' : p.status === 'published' ? 'Julkaistu' : 'Valmis'}
           {' · '}
           {doneCount}/{p.tasks.length} hoidettu
@@ -634,7 +635,7 @@ export function PihavuoroPage() {
                         <span className="template-pick-body">
                           <strong>{t.title}</strong>
                           <span>
-                            {t.cadence === 'every_week' ? 'Joka viikko' : 'Tarpeen mukaan'}
+                            {CADENCE_LABELS[t.cadence] || t.cadence}
                             {' · '}
                             {t.effort === 'heavy' ? 'raskas' : 'kevyt'}
                           </span>

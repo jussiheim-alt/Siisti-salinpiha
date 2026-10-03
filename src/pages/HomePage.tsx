@@ -7,6 +7,7 @@ import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
 import { formatWeekRangeFi } from '../shared/datetime'
+import { SEASON_LABELS, type SeasonKey } from '../shared/seasons'
 
 function QuickLink({
   title,
@@ -139,7 +140,7 @@ export function HomePage() {
                 <span className="quick-link-text">
                   <strong>{formatWeekRangeFi(next.weekStart, next.weekEnd)}</strong>
                   <span>
-                    {next.season === 'talvi' ? 'Talvi' : 'Sulankausi'}
+                    {SEASON_LABELS[next.season as SeasonKey] || next.seasonLabel || next.season}
                     {myAssignment
                       ? ` · ${myAssignment.role === 'lead' ? 'vastuuveli' : 'avustaja'}`
                       : ''}
