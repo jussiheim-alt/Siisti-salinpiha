@@ -281,48 +281,17 @@ function resolveTemplatesForSeason(
 function createTasksForPihavuoro(
   pihavuoroId: string,
   season: SeasonKey,
-  assignments: { userId: string; role: string }[],
+  _assignments: { userId: string; role: string }[],
   templateIds?: string[] | null,
 ) {
   const templates = resolveTemplatesForSeason(season, templateIds)
-  const lead = assignments.find((a) => a.role === 'lead')
-  const helpers = assignments.filter((a) => a.role === 'helper')
   const insert = db.prepare(
     `INSERT INTO shift_tasks (id, pihavuoro_id, template_id, title, instructions, effort, assignee_user_id, status, sort_order)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, NULL, 'open', ?)`,
   )
 
-  let helperCursor = 0
-  let allCursor = 0
+  // Tehtävät ovat koko vuoron yhteisiä — ei henkilökohtaista nimeämistä
   for (const t of templates) {
-    let assignee: string | null = null
-    if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
-    else if (t.defaultAssignee === 'helpers' || t.defaultAssignee === 'all') {
-      const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
-      const eligible = pool.filter((h) => {
-        const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(h.userId) as
-          | { constraints_json: string }
-          | undefined
-        const c = parseConstraints(u?.constraints_json ?? '[]')
-        if (t.effort === 'heavy' && c.includes('no_heavy')) return false
-        return true
-      })
-      if (eligible.length) {
-        const cursor = t.defaultAssignee === 'all' ? allCursor : helperCursor
-        assignee = eligible[cursor % eligible.length]!.userId
-        if (t.defaultAssignee === 'all') allCursor += 1
-        else helperCursor += 1
-      } else {
-        assignee = lead?.userId ?? helpers[0]?.userId ?? null
-      }
-    }
-    if (assignee) {
-      const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(assignee) as
-        | { constraints_json: string }
-        | undefined
-      const c = parseConstraints(u?.constraints_json ?? '[]')
-      if (t.effort === 'heavy' && c.includes('no_heavy')) assignee = lead?.userId ?? null
-    }
     insert.run(
       crypto.randomUUID(),
       pihavuoroId,
@@ -330,7 +299,6 @@ function createTasksForPihavuoro(
       t.title,
       t.instructions,
       t.effort,
-      assignee,
       t.sortOrder,
     )
   }
@@ -1350,12 +1318,6 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
     return res.status(400).json({ error: 'Valitse ainakin yksi huoltotehtävä' })
   }
 
-  const assignments = (
-    db
-      .prepare('SELECT user_id as userId, role FROM assignments WHERE pihavuoro_id = ?')
-      .all(req.params.id) as { userId: string; role: string }[]
-  )
-
   const existing = db
     .prepare(
       `SELECT id, template_id, status, skip_reason, done_by_user_id, done_at, assignee_user_id
@@ -1374,11 +1336,9 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
   const keepByTemplate = new Map(existing.map((t) => [t.template_id, t]))
   const wanted = new Set(templates.map((t) => t.id))
 
-  const lead = assignments.find((a) => a.role === 'lead')
-  const helpers = assignments.filter((a) => a.role === 'helper')
   const insert = db.prepare(
     `INSERT INTO shift_tasks (id, pihavuoro_id, template_id, title, instructions, effort, assignee_user_id, status, sort_order, skip_reason, done_by_user_id, done_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
   )
 
   const tx = db.transaction(() => {
@@ -1388,42 +1348,15 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
       }
     }
 
-    let helperCursor = 0
-    let allCursor = 0
     for (const t of templates) {
       const prev = keepByTemplate.get(t.id)
       if (prev) {
-        db.prepare('UPDATE shift_tasks SET title=?, instructions=?, effort=?, sort_order=? WHERE id=?').run(
-          t.title,
-          t.instructions,
-          t.effort,
-          t.sortOrder,
-          prev.id,
-        )
+        db.prepare(
+          'UPDATE shift_tasks SET title=?, instructions=?, effort=?, sort_order=?, assignee_user_id=NULL WHERE id=?',
+        ).run(t.title, t.instructions, t.effort, t.sortOrder, prev.id)
         continue
       }
 
-      let assignee: string | null = null
-      if (t.defaultAssignee === 'lead') assignee = lead?.userId ?? null
-      else if (t.defaultAssignee === 'helpers' || t.defaultAssignee === 'all') {
-        const pool = t.defaultAssignee === 'all' ? [...(lead ? [lead] : []), ...helpers] : helpers
-        const eligible = pool.filter((h) => {
-          const u = db.prepare('SELECT constraints_json FROM users WHERE id = ?').get(h.userId) as
-            | { constraints_json: string }
-            | undefined
-          const c = parseConstraints(u?.constraints_json ?? '[]')
-          if (t.effort === 'heavy' && c.includes('no_heavy')) return false
-          return true
-        })
-        if (eligible.length) {
-          const cursor = t.defaultAssignee === 'all' ? allCursor : helperCursor
-          assignee = eligible[cursor % eligible.length]!.userId
-          if (t.defaultAssignee === 'all') allCursor += 1
-          else helperCursor += 1
-        } else {
-          assignee = lead?.userId ?? helpers[0]?.userId ?? null
-        }
-      }
       insert.run(
         crypto.randomUUID(),
         req.params.id,
@@ -1431,7 +1364,6 @@ app.put('/api/pihavuorot/:id/tasks', authMiddleware, requireAdmin, (req, res) =>
         t.title,
         t.instructions,
         t.effort,
-        assignee,
         'open',
         t.sortOrder,
         null,
@@ -1509,17 +1441,9 @@ app.post('/api/tasks/:id/complete', authMiddleware, (req, res) => {
     return res.status(403).json({ error: 'Et ole tässä Pihavuorossa' })
   }
 
-  const isLead = assignment?.role === 'lead'
-  const isAssignee = task.assignee_user_id === user.id
-  const unassigned = !task.assignee_user_id
-
-  if (!isLead && !isAssignee && !(unassigned && assignment) && user.role !== 'admin') {
-    return res.status(403).json({ error: 'Voit kuitata vain oman tehtäväsi (vastuuhenkilö kaikkien)' })
-  }
-
-  // heavy restriction for self-complete
-  if (task.effort === 'heavy' && user.constraints.includes('no_heavy') && !isLead) {
-    return res.status(403).json({ error: 'Rajoitus: ei raskaisiin töihin' })
+  // Kuka tahansa vuorossa oleva (tai admin) voi kuitata — tehtävät ovat yhteisiä
+  if (!assignment && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Et ole tässä Pihavuorossa' })
   }
 
   const status = req.body.status === 'skipped' ? 'skipped' : 'done'
