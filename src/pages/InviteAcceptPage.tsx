@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { api, setToken } from '../api'
 import { useAuth } from '../auth'
+import { InstallTips } from '../components/InstallTips'
 
 type InviteInfo = {
   name: string
@@ -94,10 +95,16 @@ export function InviteAcceptPage() {
                 />
               </label>
               {error && <p className="error">{error}</p>}
+              <p className="hint">
+                Salasanassa vähintään 8 merkkiä. Säilytä se itselläsi — sillä kirjaudut jatkossa.
+              </p>
               <button className="btn primary" disabled={busy} type="submit">
                 {busy ? 'Luodaan tiliä…' : 'Luo tili ja kirjaudu'}
               </button>
             </form>
+            <section className="invite-install-block" aria-label="Asennusohje">
+              <InstallTips compact />
+            </section>
           </>
         ) : (
           <>

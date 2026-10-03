@@ -2872,3 +2872,58 @@ select:focus {
   justify-self: start;
   margin-top: 0.15rem;
 }
+
+/* Invite + install tips */
+.invite-install-block {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.install-tips-lede {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.install-tips h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.install-tips-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.install-tip-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--mist) 55%, white);
+}
+
+.install-tip-card h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.98rem;
+  color: var(--moss-deep);
+}
+
+.install-tip-card ol {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.install-tip-card .hint {
+  margin: 0.55rem 0 0;
+}
+
+.install-tips.is-compact h2 {
+  font-size: 1.05rem;
+}
