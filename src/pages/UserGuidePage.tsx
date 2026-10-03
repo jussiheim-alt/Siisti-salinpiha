@@ -1,12 +1,23 @@
 import { Link } from 'react-router-dom'
+import { InstallTips } from '../components/InstallTips'
 
 const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLabel?: string }[] = [
   {
     id: 'alku',
     title: 'Miten pääsen alkuun?',
     body: [
-      'Saat ylläpitäjältä kutsulinkin. Avaa linkki puhelimessa, aseta salasana ja kirjaudu.',
-      'Kirjautumisen jälkeen alapalkista löydät kaikki tärkeimmät näkymät: Etusivu, Vuorot, Apu, Ilmo, Huomiot ja Ulos.',
+      'Saat ylläpitäjältä kutsulinkin (tekstiviesti, WhatsApp tai sähköposti). Avaa linkki puhelimen selaimessa.',
+      'Valitse salasana (vähintään 8 merkkiä), vahvista se ja napauta “Luo tili ja kirjaudu”.',
+      'Kirjautumisen jälkeen alapalkista löydät Etusivun, Vuorot, Apu, Ilmo, Huomiot ja Ulos.',
+    ],
+  },
+  {
+    id: 'asennus',
+    title: 'Lisää kotivalikkoon (iPhone / Android)',
+    body: [
+      'Kun tili on luotu, lisää sovellus kotivalikkoon — se aukeaa sitten kuin normaali app.',
+      'iPhone: Safari → Jaa → Lisää Koti-valikkoon.',
+      'Android: Chrome → ⋮ → Asenna sovellus / Lisää aloitusnäytölle.',
     ],
   },
   {
@@ -113,7 +124,7 @@ export function UserGuidePage() {
 
       <div className="guide-list">
         {SECTIONS.map((s, index) => (
-          <details key={s.id} className="guide-item" open={index === 0}>
+          <details key={s.id} className="guide-item" open={index < 2} id={s.id}>
             <summary>
               <span className="guide-step">{index + 1}</span>
               <span>{s.title}</span>
@@ -122,6 +133,7 @@ export function UserGuidePage() {
               {s.body.map((p) => (
                 <p key={p}>{p}</p>
               ))}
+              {s.id === 'asennus' && <InstallTips compact />}
               {s.to && (
                 <Link className="btn ghost small" to={s.to}>
                   {s.linkLabel || 'Avaa'}
