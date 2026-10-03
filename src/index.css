@@ -63,9 +63,9 @@ body {
 }
 
 #root:has(.app-shell-bottom-nav) {
-  height: 100%;
+  /* Fixed viewport shell: avoid -webkit-fill-available (clips tabbar on iOS). */
   height: 100dvh;
-  height: -webkit-fill-available;
+  max-height: 100dvh;
   overflow: hidden;
   /* Reserve the notch/Dynamic Island outside the scrolling main. */
   padding-top: constant(safe-area-inset-top);
@@ -130,16 +130,14 @@ a {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  /* Safe-area is applied on the locked shell below so it cannot collapse to 0. */
   padding-top: 0;
 }
 
-.app-shell-bottom-nav {
-  /* Lock shell to the visible viewport and scroll only main content.
-     Sticky/document-scroll let the tabbar slip under the iOS visual viewport. */
+.app-shell.app-shell-bottom-nav {
+  /* Fill #root’s content box exactly — never taller than the viewport. */
   height: 100%;
   min-height: 0;
-  max-height: none;
+  max-height: 100%;
   overflow: hidden;
   padding-bottom: 0;
   box-sizing: border-box;
@@ -154,8 +152,9 @@ a {
   width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
