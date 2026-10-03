@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification } from '../api'
+import { useAuth } from '../auth'
 
 function formatWhen(iso: string) {
   try {
@@ -23,6 +24,7 @@ function kindLabel(kind: string) {
 }
 
 export function NotificationsPage() {
+  const { user } = useAuth()
   const [items, setItems] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [error, setError] = useState('')
@@ -50,6 +52,23 @@ export function NotificationsPage() {
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Merkintä epäonnistui')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function wipeAll() {
+    if (!window.confirm('Poistetaanko KAIKKI ilmoitukset kaikilta käyttäjiltä? Tätä ei voi perua.')) {
+      return
+    }
+    if (!window.confirm('Vahvista vielä kerran: poista kaikki ilmoitukset.')) return
+    setBusy(true)
+    setError('')
+    try {
+      await api('/api/notifications', { method: 'DELETE' })
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Poisto epäonnistui')
     } finally {
       setBusy(false)
     }
@@ -83,6 +102,16 @@ export function NotificationsPage() {
             onClick={() => void markAll()}
           >
             Merkitse luetuiksi
+          </button>
+        )}
+        {user?.role === 'admin' && items.length > 0 && (
+          <button
+            className="btn ghost small"
+            type="button"
+            disabled={busy}
+            onClick={() => void wipeAll()}
+          >
+            Poista kaikki
           </button>
         )}
       </header>

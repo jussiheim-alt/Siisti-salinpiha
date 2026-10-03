@@ -29,6 +29,26 @@ function IconClose() {
   )
 }
 
+function IconSend() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12h12M13 6l6 6-6 6" />
+    </svg>
+  )
+}
+
+function formatChatTime(iso: string) {
+  try {
+    return new Intl.DateTimeFormat('fi-FI', {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(iso))
+  } catch {
+    return iso
+  }
+}
+
 export function ShiftChatFab() {
   const { user } = useAuth()
   const location = useLocation()
@@ -142,9 +162,20 @@ export function ShiftChatFab() {
   if (!user || !chat) return null
 
   const unread = Math.max(0, chat.messageCount - seenCount)
+  const roleLabel =
+    chat.myRole === 'lead' ? 'Vastuuveli' : chat.myRole === 'helper' ? 'Avustaja' : null
 
   return (
     <>
+      {open && (
+        <button
+          type="button"
+          className="chat-backdrop"
+          aria-label="Sulje keskustelu"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
       <button
         type="button"
         className={`chat-fab${open ? ' is-open' : ''}`}
@@ -157,52 +188,71 @@ export function ShiftChatFab() {
       </button>
 
       {open && (
-        <div className="chat-sheet" role="dialog" aria-label="Vuorokeskustelu">
+        <div className="chat-sheet chat-sheet-modern" role="dialog" aria-label="Vuorokeskustelu">
           <header className="chat-sheet-head">
             <div>
-              <p className="chat-sheet-kicker">Vuorokeskustelu</p>
+              <p className="chat-sheet-kicker">Vuoron chat</p>
               <strong>
                 {chat.weekStart} – {chat.weekEnd}
               </strong>
-              <p className="muted">Vain tämän viikon vuorossa oleville</p>
+              <p className="muted">
+                Yksityinen viikkokeskustelu
+                {roleLabel ? ` · ${roleLabel}` : ''}
+              </p>
             </div>
-            <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
-              Sulje
+            <button
+              type="button"
+              className="chat-icon-btn"
+              aria-label="Sulje"
+              onClick={() => setOpen(false)}
+            >
+              <IconClose />
             </button>
           </header>
 
           <div className="chat-sheet-list" ref={listRef}>
             {loadingMsgs && messages.length === 0 && <p className="muted">Ladataan…</p>}
             {!loadingMsgs && messages.length === 0 && (
-              <p className="muted">Ei viestejä vielä — sovi järjestelyt tässä.</p>
-            )}
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`chat-bubble${m.authorUserId === user.id ? ' mine' : ''}`}
-              >
-                <div className="chat-meta">
-                  <strong>{m.authorName}</strong>
-                  <span>{new Date(m.createdAt).toLocaleString('fi-FI')}</span>
-                </div>
-                <p>{m.body}</p>
+              <div className="chat-empty">
+                <p>Ei viestejä vielä</p>
+                <span>Sovi lumityöt, aikataulut ja apu tässä ketjussa.</span>
               </div>
-            ))}
+            )}
+            {messages.map((m) => {
+              const mine = m.authorUserId === user.id
+              return (
+                <div key={m.id} className={`chat-row${mine ? ' mine' : ''}`}>
+                  {!mine && <span className="chat-avatar">{m.authorName.slice(0, 1)}</span>}
+                  <div className={`chat-bubble${mine ? ' mine' : ''}`}>
+                    {!mine && <strong className="chat-name">{m.authorName}</strong>}
+                    <p>{m.body}</p>
+                    <time dateTime={m.createdAt}>{formatChatTime(m.createdAt)}</time>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
-          <form className="chat-sheet-compose" onSubmit={(e) => void send(e)}>
+          <form className="chat-sheet-compose chat-compose-modern" onSubmit={(e) => void send(e)}>
             {error && <p className="error">{error}</p>}
-            <textarea
-              rows={2}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Kirjoita viesti vuorolle…"
-              maxLength={2000}
-              required
-            />
-            <button className="btn primary" type="submit" disabled={sending || !body.trim()}>
-              {sending ? 'Lähetetään…' : 'Lähetä'}
-            </button>
+            <div className="chat-input-row">
+              <textarea
+                rows={1}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Viesti vuorolle…"
+                maxLength={2000}
+                required
+              />
+              <button
+                className="chat-send-btn"
+                type="submit"
+                disabled={sending || !body.trim()}
+                aria-label="Lähetä"
+              >
+                <IconSend />
+              </button>
+            </div>
           </form>
         </div>
       )}

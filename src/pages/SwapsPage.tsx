@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type SwapOffer } from '../api'
 
 function roleLabel(role: string) {
-  return role === 'lead' ? 'vastuuhenkilö' : 'avustaja'
+  return role === 'lead' ? 'vastuuveli' : 'avustaja'
 }
 
 export function SwapsPage() {

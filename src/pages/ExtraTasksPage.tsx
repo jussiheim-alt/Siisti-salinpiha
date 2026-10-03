@@ -92,12 +92,29 @@ export function ExtraTasksPage() {
     }
   }
 
+  async function wipeAllExtras() {
+    if (!window.confirm('Poistetaanko KAIKKI apukutsut? Tätä ei voi perua.')) return
+    if (!window.confirm('Vahvista vielä kerran: poista kaikki apukutsut.')) return
+    setError('')
+    try {
+      await api('/api/extra-tasks', { method: 'DELETE' })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Poisto epäonnistui')
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Apukutsut</h1>
         <p className="lede">Yllättävä tarve — ilmoittaudu, kun minimi täyttyy tehtävä aktivoituu.</p>
+        {user?.role === 'admin' && tasks.length > 0 && (
+          <button className="btn ghost small" type="button" onClick={() => void wipeAllExtras()}>
+            Poista kaikki apukutsut
+          </button>
+        )}
       </header>
 
       {error && <p className="error">{error}</p>}
@@ -216,7 +233,7 @@ export function ExtraTasksPage() {
 
       {!canCreate && (
         <p className="hint">
-          Apukutsun voi luoda ylläpitäjä tai julkaistun viikon vastuuhenkilö.
+          Apukutsun voi luoda ylläpitäjä tai julkaistun viikon vastuuveli.
         </p>
       )}
 

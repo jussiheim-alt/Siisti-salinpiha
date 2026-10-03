@@ -99,6 +99,7 @@ export type ShiftTask = {
   doneAt?: string | null
 }
 
+/** Legacy locked catalog used by the weekly task picker. */
 export type TaskTemplate = {
   id: string
   title: string
@@ -110,12 +111,29 @@ export type TaskTemplate = {
   sortOrder: number
 }
 
+export type SeasonKey = 'kevat' | 'kesa' | 'syksy' | 'talvi'
+export type TaskCadence = 'weekly' | 'biweekly' | 'triweekly' | 'monthly' | 'yearly'
+
+/** Admin-editable seasonal task card (Tehtävät). */
+export type TaskCard = {
+  id: string
+  title: string
+  instructions: string
+  effort: 'light' | 'heavy'
+  season: SeasonKey
+  cadence: TaskCadence
+  defaultAssignee: 'lead' | 'helpers' | 'all'
+  active: boolean
+  sortOrder: number
+}
+
 export type Pihavuoro = {
   id: string
   weekStart: string
   weekEnd: string
   status: 'draft' | 'published' | 'done'
   season: 'talvi' | 'sulankausi'
+  seasonLabel?: string
   notes?: string | null
   assignments: Assignment[]
   tasks: ShiftTask[]
@@ -126,6 +144,9 @@ export type Notice = {
   body: string
   photoUrl?: string | null
   status: 'open' | 'in_progress' | 'resolved'
+  audience: 'all' | 'leads'
+  acknowledgedAt?: string | null
+  acknowledgedByName?: string | null
   authorName: string
   authorUserId: string
   createdAt: string

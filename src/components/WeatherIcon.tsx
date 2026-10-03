@@ -1,6 +1,15 @@
 /** FMI WeatherSymbol3 → simple SVG icons for the home weather strip */
 
-type IconKind = 'clear' | 'partly' | 'cloudy' | 'rain' | 'sleet' | 'snow' | 'thunder' | 'unknown'
+type IconKind =
+  | 'clear'
+  | 'partly'
+  | 'cloudy'
+  | 'rain'
+  | 'sleet'
+  | 'snow'
+  | 'thunder'
+  | 'fog'
+  | 'unknown'
 
 const SUN = '#E5A51B'
 const CLOUD = '#8B9EAE'
@@ -8,6 +17,7 @@ const CLOUD_DARK = '#6F8496'
 const RAIN = '#4F86A8'
 const SNOW = '#9CB6C8'
 const BOLT = '#E0A21A'
+const FOG = '#A8B8C4'
 
 function kindFromSymbol(symbol: number | null | undefined): IconKind {
   if (symbol == null || Number.isNaN(symbol)) return 'unknown'
@@ -15,10 +25,11 @@ function kindFromSymbol(symbol: number | null | undefined): IconKind {
   if (s === 1) return 'clear'
   if (s === 2) return 'partly'
   if (s === 3) return 'cloudy'
-  if ((s >= 21 && s <= 23) || (s >= 51 && s <= 53) || (s >= 81 && s <= 83)) return 'rain'
-  if ((s >= 31 && s <= 33) || (s >= 61 && s <= 63)) return 'sleet'
-  if ((s >= 41 && s <= 43) || (s >= 71 && s <= 73)) return 'snow'
-  if (s === 91 || s === 92) return 'thunder'
+  if ((s >= 21 && s <= 23) || (s >= 31 && s <= 33)) return 'rain'
+  if ((s >= 41 && s <= 43) || (s >= 51 && s <= 53)) return 'snow'
+  if (s >= 61 && s <= 64) return 'thunder'
+  if (s >= 71 && s <= 83) return 'sleet'
+  if (s === 91 || s === 92) return 'fog'
   return 'unknown'
 }
 
@@ -143,6 +154,18 @@ export function WeatherIcon({
             d="M11.2 14.2h2.4l-1.5 3.2h1.8L10.8 22l.7-3.4H9.6L11.2 14.2z"
             fill={BOLT}
           />
+        </g>
+      )}
+
+      {kind === 'fog' && (
+        <g>
+          <g transform="translate(0 -2.6)">
+            <Cloud size={size} />
+          </g>
+          <g stroke={FOG} strokeWidth={stroke + 0.4} strokeLinecap="round">
+            <line x1="5.5" y1="17.4" x2="18.5" y2="17.4" />
+            <line x1="7" y1="20" x2="17" y2="20" />
+          </g>
         </g>
       )}
 

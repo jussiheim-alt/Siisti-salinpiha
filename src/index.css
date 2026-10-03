@@ -1935,22 +1935,235 @@ select:focus {
   overflow: auto;
 }
 
+.chat-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  border: 0;
+  background: rgba(10, 28, 20, 0.28);
+  backdrop-filter: blur(2px);
+  animation: chat-fade 0.2s var(--ease) both;
+}
+
+@keyframes chat-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  max-width: 92%;
+}
+
+.chat-row.mine {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.chat-avatar {
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--moss) 18%, white);
+  color: var(--moss-deep);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
 .chat-bubble {
-  padding: 0.7rem 0.85rem;
-  border-radius: 0.95rem;
-  background: color-mix(in srgb, var(--birch) 78%, white);
-  border: 1px solid var(--line);
+  padding: 0.65rem 0.85rem 0.45rem;
+  border-radius: 1.1rem 1.1rem 1.1rem 0.35rem;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: 0 4px 14px rgba(13, 36, 25, 0.06);
+  min-width: 0;
 }
 
 .chat-bubble.mine {
-  background: color-mix(in srgb, var(--lichen) 55%, white);
-  border-color: color-mix(in srgb, var(--moss) 22%, var(--line));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--moss) 88%, #1a3c2e),
+    var(--moss-deep)
+  );
+  color: var(--birch);
+  border: 0;
+  border-radius: 1.1rem 1.1rem 0.35rem 1.1rem;
+  box-shadow: 0 8px 20px rgba(13, 36, 25, 0.18);
+}
+
+.chat-bubble .chat-name {
+  display: block;
+  font-size: 0.78rem;
+  margin-bottom: 0.15rem;
+  color: var(--moss-deep);
 }
 
 .chat-bubble p {
-  margin: 0.25rem 0 0;
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.35;
+}
+
+.chat-bubble time {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.68rem;
+  opacity: 0.72;
+  text-align: right;
+}
+
+.chat-empty {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--muted);
+}
+
+.chat-empty p {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chat-empty span {
+  font-size: 0.88rem;
+}
+
+.chat-icon-btn {
+  border: 0;
+  background: color-mix(in srgb, var(--mist) 80%, white);
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.chat-icon-btn svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.chat-sheet-compose.chat-compose-modern {
+  background: #fff;
+}
+
+.chat-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.chat-input-row textarea {
+  border-radius: 1.1rem;
+  min-height: 2.6rem;
+  max-height: 7rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--line);
+  resize: none;
+  font: inherit;
+}
+
+.chat-send-btn {
+  width: 2.7rem;
+  height: 2.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--moss);
+  color: var(--birch);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-send-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.season-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.season-tab {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--birch) 70%, white);
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.35rem;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.season-tab.active {
+  background: var(--moss);
+  color: var(--birch);
+  border-color: transparent;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+}
+
+.audience-fieldset {
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.audience-fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+}
+
+.ack-banner {
+  margin: 0.65rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--lichen) 45%, white);
+  color: var(--moss-deep);
+  font-weight: 650;
+}
+
+.success-hint {
+  color: var(--moss-deep);
+  font-weight: 650;
 }
 
 .chat-meta {

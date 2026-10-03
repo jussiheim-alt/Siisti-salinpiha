@@ -18,7 +18,7 @@ type Invite = {
 }
 
 function roleLabel(role: string) {
-  return role === 'admin' ? 'Ylläpitäjä' : 'Jäsen'
+  return role === 'admin' ? 'Ylläpitäjä' : 'Käyttäjä'
 }
 
 export function UsersPage() {
@@ -138,7 +138,7 @@ export function UsersPage() {
           <label>
             Käyttöoikeustaso
             <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'member')}>
-              <option value="member">Jäsen — vuorot, tehtävät, huomiot</option>
+              <option value="member">Käyttäjä — vuorot, tehtävät, huomiot</option>
               <option value="admin">Ylläpitäjä — täydet oikeudet</option>
             </select>
           </label>
@@ -266,7 +266,7 @@ export function UsersPage() {
                   setEditing({ ...editing, role: e.target.value as 'admin' | 'member' })
                 }
               >
-                <option value="member">Jäsen</option>
+                <option value="member">Käyttäjä</option>
                 <option value="admin">Ylläpitäjä (täydet oikeudet)</option>
               </select>
             </label>

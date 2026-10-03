@@ -3,6 +3,7 @@ import path from 'node:path'
 import { TASK_CATALOG_V1 } from './catalog.ts'
 import { ensureFoundingAdmins } from './foundingAdmins.ts'
 import { dataDir } from './paths.ts'
+import { seedTaskCardsFromCatalog, type TaskCard } from './taskCards.ts'
 
 const dbPath = path.join(dataDir, 'siisti-piha.sqlite')
 
@@ -195,12 +196,37 @@ export function initDb() {
       accepted_at TEXT,
       revoked_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS task_cards (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      instructions TEXT NOT NULL DEFAULT '',
+      effort TEXT NOT NULL CHECK(effort IN ('light','heavy')) DEFAULT 'light',
+      season TEXT NOT NULL CHECK(season IN ('kevat','kesa','syksy','talvi')),
+      cadence TEXT NOT NULL CHECK(cadence IN ('weekly','biweekly','triweekly','monthly','yearly')),
+      default_assignee TEXT NOT NULL CHECK(default_assignee IN ('lead','helpers','all')),
+      active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
   `)
 
   const notifCols = db.prepare(`PRAGMA table_info(notifications)`).all() as { name: string }[]
   if (!notifCols.some((c) => c.name === 'kind')) {
     db.exec(`ALTER TABLE notifications ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'`)
   }
+
+  const noticeCols = db.prepare(`PRAGMA table_info(notices)`).all() as { name: string }[]
+  if (!noticeCols.some((c) => c.name === 'audience')) {
+    db.exec(`ALTER TABLE notices ADD COLUMN audience TEXT NOT NULL DEFAULT 'all'`)
+  }
+  if (!noticeCols.some((c) => c.name === 'acknowledged_at')) {
+    db.exec(`ALTER TABLE notices ADD COLUMN acknowledged_at TEXT`)
+  }
+  if (!noticeCols.some((c) => c.name === 'acknowledged_by_user_id')) {
+    db.exec(`ALTER TABLE notices ADD COLUMN acknowledged_by_user_id TEXT`)
+  }
+
+  seedTaskCards()
 
   ensureFoundingAdmins(db)
 
@@ -210,6 +236,31 @@ export function initDb() {
       'Tietokanta tyhjä — aseta ADMIN_PASSWORD (ja tarvittaessa JONI_EMAIL + JONI_PASSWORD)',
     )
   }
+}
+
+/** First boot: fill the admin-editable task cards from the locked catalog. */
+function seedTaskCards() {
+  const count = (db.prepare('SELECT COUNT(*) AS c FROM task_cards').get() as { c: number }).c
+  if (count > 0) return
+  const insert = db.prepare(
+    `INSERT INTO task_cards (id, title, instructions, effort, season, cadence, default_assignee, active, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+  )
+  const seed = db.transaction((cards: TaskCard[]) => {
+    for (const c of cards) {
+      insert.run(
+        c.id,
+        c.title,
+        c.instructions,
+        c.effort,
+        c.season,
+        c.cadence,
+        c.defaultAssignee,
+        c.sortOrder,
+      )
+    }
+  })
+  seed(seedTaskCardsFromCatalog())
 }
 
 export function parseConstraints(json: string): string[] {

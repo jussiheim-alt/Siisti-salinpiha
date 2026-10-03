@@ -26,6 +26,7 @@ import {
   updateHubItem,
 } from './hub.ts'
 import { dataDir, root, uploadsDir } from './paths.ts'
+import { isCadenceKey, isSeasonKey, publicTaskCard } from './taskCards.ts'
 
 const PORT = Number(process.env.PORT || 8787)
 
@@ -655,6 +656,90 @@ app.get('/api/catalog', authMiddleware, (_req, res) => {
   res.json({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
 })
 
+// ——— Tehtäväkortit (admin) ———
+app.get('/api/task-cards', authMiddleware, requireAdmin, (_req, res) => {
+  const rows = db
+    .prepare(`SELECT * FROM task_cards ORDER BY sort_order ASC, title ASC`)
+    .all() as Record<string, unknown>[]
+  res.json({ cards: rows.map(publicTaskCard) })
+})
+
+app.post('/api/task-cards', authMiddleware, requireAdmin, (req, res) => {
+  const title = String(req.body.title || '').trim()
+  if (!title) return res.status(400).json({ error: 'Anna otsikko' })
+  const instructions = String(req.body.instructions || '').trim()
+  const effort = req.body.effort === 'heavy' ? 'heavy' : 'light'
+  const season = isSeasonKey(req.body.season) ? req.body.season : 'kesa'
+  const cadence = isCadenceKey(req.body.cadence) ? req.body.cadence : 'weekly'
+  const defaultAssignee =
+    req.body.defaultAssignee === 'lead' || req.body.defaultAssignee === 'all'
+      ? req.body.defaultAssignee
+      : 'helpers'
+  const maxOrder = (
+    db.prepare(`SELECT COALESCE(MAX(sort_order), 0) AS m FROM task_cards`).get() as { m: number }
+  ).m
+  const id = crypto.randomUUID()
+  db.prepare(
+    `INSERT INTO task_cards (id, title, instructions, effort, season, cadence, default_assignee, active, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+  ).run(id, title, instructions, effort, season, cadence, defaultAssignee, maxOrder + 10)
+  const row = db.prepare('SELECT * FROM task_cards WHERE id = ?').get(id) as Record<string, unknown>
+  res.status(201).json({ card: publicTaskCard(row) })
+})
+
+app.patch('/api/task-cards/:id', authMiddleware, requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM task_cards WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!row) return res.status(404).json({ error: 'Korttia ei löydy' })
+  const current = publicTaskCard(row)
+  const title =
+    req.body.title !== undefined ? String(req.body.title).trim() || current.title : current.title
+  const instructions =
+    req.body.instructions !== undefined
+      ? String(req.body.instructions || '')
+      : current.instructions
+  const effort =
+    req.body.effort === 'light' || req.body.effort === 'heavy' ? req.body.effort : current.effort
+  const season = isSeasonKey(req.body.season) ? req.body.season : current.season
+  const cadence = isCadenceKey(req.body.cadence) ? req.body.cadence : current.cadence
+  const defaultAssignee =
+    req.body.defaultAssignee === 'lead' ||
+    req.body.defaultAssignee === 'helpers' ||
+    req.body.defaultAssignee === 'all'
+      ? req.body.defaultAssignee
+      : current.defaultAssignee
+  const active = typeof req.body.active === 'boolean' ? req.body.active : current.active
+  const sortOrder =
+    typeof req.body.sortOrder === 'number' ? req.body.sortOrder : current.sortOrder
+  db.prepare(
+    `UPDATE task_cards
+     SET title=?, instructions=?, effort=?, season=?, cadence=?, default_assignee=?, active=?, sort_order=?
+     WHERE id=?`,
+  ).run(
+    title,
+    instructions,
+    effort,
+    season,
+    cadence,
+    defaultAssignee,
+    active ? 1 : 0,
+    sortOrder,
+    req.params.id,
+  )
+  const next = db.prepare('SELECT * FROM task_cards WHERE id = ?').get(req.params.id) as Record<
+    string,
+    unknown
+  >
+  res.json({ card: publicTaskCard(next) })
+})
+
+app.delete('/api/task-cards/:id', authMiddleware, requireAdmin, (req, res) => {
+  const info = db.prepare('DELETE FROM task_cards WHERE id = ?').run(req.params.id)
+  if (info.changes === 0) return res.status(404).json({ error: 'Korttia ei löydy' })
+  res.json({ ok: true })
+})
+
 /** Julkinen build-tieto — varmista että Render deploy on uusin (ei välimuistia). */
 app.get('/api/meta/app', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store')
@@ -666,7 +751,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'hub-checklist-light-2026-10',
+    uiVersion: 'siisti-merge-roles-notices-2026-10',
   })
 })
 
@@ -1655,46 +1740,115 @@ app.get('/api/chat/current', authMiddleware, (req, res) => {
   })
 })
 
-// ——— Notices ———
-app.get('/api/notices', authMiddleware, (_req, res) => {
-  const notices = db
+function currentPublishedWeekLeadIds(): string[] {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const covering = db
     .prepare(
-      `SELECT n.*, u.name AS author_name FROM notices n
-       JOIN users u ON u.id = n.author_user_id
-       ORDER BY n.created_at DESC`,
+      `SELECT p.id FROM pihavuorot p
+       WHERE p.status = 'published'
+         AND p.week_start <= ?
+         AND date(p.week_start, '+6 days') >= ?
+       ORDER BY p.week_start DESC`,
     )
-    .all()
-    .map((row) => {
-      const r = row as Record<string, unknown>
-      const replies = db
-        .prepare(
-          `SELECT r.*, u.name AS author_name FROM notice_replies r
-           JOIN users u ON u.id = r.author_user_id
-           WHERE r.notice_id = ? ORDER BY r.created_at`,
-        )
-        .all(r.id)
-        .map((rr) => {
-          const x = rr as Record<string, unknown>
-          return {
-            id: x.id,
-            body: x.body,
-            authorName: x.author_name,
-            authorUserId: x.author_user_id,
-            createdAt: x.created_at,
-          }
-        })
+    .all(today, today) as { id: string }[]
+  let weekIds = covering.map((r) => r.id)
+  if (weekIds.length === 0) {
+    const next = db
+      .prepare(
+        `SELECT id FROM pihavuorot
+         WHERE status = 'published' AND week_start >= ?
+         ORDER BY week_start ASC LIMIT 1`,
+      )
+      .get(mondayOf()) as { id: string } | undefined
+    if (next) weekIds = [next.id]
+  }
+  if (weekIds.length === 0) return []
+  const placeholders = weekIds.map(() => '?').join(',')
+  return (
+    db
+      .prepare(
+        `SELECT DISTINCT user_id FROM assignments
+         WHERE role = 'lead' AND pihavuoro_id IN (${placeholders})`,
+      )
+      .all(...weekIds) as { user_id: string }[]
+  ).map((r) => r.user_id)
+}
+
+function noticeVisibleToUser(
+  notice: { audience?: unknown; author_user_id: unknown },
+  user: AuthUser,
+): boolean {
+  if (user.role === 'admin' || String(notice.author_user_id) === user.id) return true
+  const audience = notice.audience === 'leads' ? 'leads' : 'all'
+  if (audience === 'all') return true
+  const isLead = Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM assignments a
+         JOIN pihavuorot p ON p.id = a.pihavuoro_id
+         WHERE a.user_id = ? AND a.role = 'lead' AND p.status = 'published'
+         LIMIT 1`,
+      )
+      .get(user.id),
+  )
+  return isLead
+}
+
+function hydrateNoticeRow(r: Record<string, unknown>) {
+  const replies = db
+    .prepare(
+      `SELECT r.*, u.name AS author_name FROM notice_replies r
+       JOIN users u ON u.id = r.author_user_id
+       WHERE r.notice_id = ? ORDER BY r.created_at`,
+    )
+    .all(r.id)
+    .map((rr) => {
+      const x = rr as Record<string, unknown>
       return {
-        id: r.id,
-        body: r.body,
-        photoUrl: r.photo_path ? `/uploads/${path.basename(String(r.photo_path))}` : null,
-        status: r.status,
-        authorName: r.author_name,
-        authorUserId: r.author_user_id,
-        createdAt: r.created_at,
-        resolvedAt: r.resolved_at,
-        replies,
+        id: x.id,
+        body: x.body,
+        authorName: x.author_name,
+        authorUserId: x.author_user_id,
+        createdAt: x.created_at,
       }
     })
+  const ackName = r.acknowledged_by_user_id
+    ? (
+        db
+          .prepare('SELECT name FROM users WHERE id = ?')
+          .get(r.acknowledged_by_user_id) as { name: string } | undefined
+      )?.name ?? null
+    : null
+  return {
+    id: r.id,
+    body: r.body,
+    photoUrl: r.photo_path ? `/uploads/${path.basename(String(r.photo_path))}` : null,
+    status: r.status,
+    audience: r.audience === 'leads' ? 'leads' : 'all',
+    acknowledgedAt: r.acknowledged_at ?? null,
+    acknowledgedByName: ackName,
+    authorName: r.author_name,
+    authorUserId: r.author_user_id,
+    createdAt: r.created_at,
+    resolvedAt: r.resolved_at,
+    replies,
+  }
+}
+
+// ——— Notices ———
+app.get('/api/notices', authMiddleware, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const notices = (
+    db
+      .prepare(
+        `SELECT n.*, u.name AS author_name FROM notices n
+         JOIN users u ON u.id = n.author_user_id
+         ORDER BY n.created_at DESC`,
+      )
+      .all() as Record<string, unknown>[]
+  )
+    .filter((r) => noticeVisibleToUser(r, user))
+    .map(hydrateNoticeRow)
   res.json({ notices })
 })
 
@@ -1702,15 +1856,31 @@ app.post('/api/notices', authMiddleware, upload.single('photo'), (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const body = String(req.body.body || '').trim()
   if (!body) return res.status(400).json({ error: 'Kirjoita viesti' })
+  const audience = String(req.body.audience || 'all') === 'leads' ? 'leads' : 'all'
   const id = crypto.randomUUID()
   const photoPath = req.file ? req.file.path : null
   db.prepare(
-    `INSERT INTO notices (id, author_user_id, body, photo_path, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)`,
-  ).run(id, user.id, body, photoPath, new Date().toISOString())
+    `INSERT INTO notices (id, author_user_id, body, photo_path, status, audience, created_at)
+     VALUES (?, ?, ?, ?, 'open', ?, ?)`,
+  ).run(id, user.id, body, photoPath, audience, new Date().toISOString())
 
-  const recipients = (
-    db.prepare(`SELECT id FROM users WHERE active = 1 AND id != ?`).all(user.id) as { id: string }[]
-  ).map((u) => u.id)
+  let recipients: string[]
+  if (audience === 'all') {
+    recipients = (
+      db.prepare(`SELECT id FROM users WHERE active = 1 AND id != ?`).all(user.id) as {
+        id: string
+      }[]
+    ).map((u) => u.id)
+  } else {
+    const adminIds = (
+      db
+        .prepare(`SELECT id FROM users WHERE active = 1 AND role = 'admin'`)
+        .all() as { id: string }[]
+    ).map((u) => u.id)
+    recipients = [...new Set([...adminIds, ...currentPublishedWeekLeadIds()])].filter(
+      (id) => id !== user.id,
+    )
+  }
   notifyUsers(
     recipients,
     'Uusi huomio',
@@ -1720,6 +1890,38 @@ app.post('/api/notices', authMiddleware, upload.single('photo'), (req, res) => {
   )
 
   res.status(201).json({ id })
+})
+
+app.post('/api/notices/:id/ack', authMiddleware, requireAdmin, (req, res) => {
+  const user = (req as express.Request & { user: AuthUser }).user
+  const notice = db.prepare('SELECT * FROM notices WHERE id = ?').get(req.params.id) as
+    | Record<string, unknown>
+    | undefined
+  if (!notice) return res.status(404).json({ error: 'Ei löydy' })
+  const now = new Date().toISOString()
+  db.prepare(
+    `UPDATE notices
+     SET acknowledged_at = ?, acknowledged_by_user_id = ?,
+         status = CASE WHEN status = 'open' THEN 'in_progress' ELSE status END
+     WHERE id = ?`,
+  ).run(now, user.id, req.params.id)
+  const authorId = String(notice.author_user_id)
+  if (authorId && authorId !== user.id) {
+    notifyUsers(
+      [authorId],
+      'Huomio kuitattu',
+      `${user.name} kuitasi huomiosi.`,
+      '/huomiot',
+      'notice',
+    )
+  }
+  const row = db
+    .prepare(
+      `SELECT n.*, u.name AS author_name FROM notices n
+       JOIN users u ON u.id = n.author_user_id WHERE n.id = ?`,
+    )
+    .get(req.params.id) as Record<string, unknown>
+  res.json({ notice: hydrateNoticeRow(row) })
 })
 
 app.post('/api/notices/:id/replies', authMiddleware, requireAdmin, (req, res) => {
@@ -1739,6 +1941,8 @@ app.post('/api/notices/:id/replies', authMiddleware, requireAdmin, (req, res) =>
       req.body.status === 'resolved' ? new Date().toISOString() : null,
       req.params.id,
     )
+  } else if (notice.status === 'open') {
+    db.prepare(`UPDATE notices SET status = 'in_progress' WHERE id = ?`).run(req.params.id)
   }
   const authorId = String(notice.author_user_id)
   if (authorId && authorId !== user.id) {
@@ -1766,6 +1970,12 @@ app.patch('/api/notices/:id', authMiddleware, requireAdmin, (req, res) => {
   res.json({ ok: true })
 })
 
+app.delete('/api/notices/:id', authMiddleware, requireAdmin, (req, res) => {
+  const info = db.prepare('DELETE FROM notices WHERE id = ?').run(req.params.id)
+  if (info.changes === 0) return res.status(404).json({ error: 'Ei löydy' })
+  res.json({ ok: true })
+})
+
 // ——— Home summary ———
 app.get('/api/home', authMiddleware, async (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
@@ -1780,8 +1990,14 @@ app.get('/api/home', authMiddleware, async (req, res) => {
     .get(user.id, weekStart) as Record<string, unknown> | undefined
 
   const openNotices = (
-    db.prepare(`SELECT COUNT(*) AS c FROM notices WHERE status != 'resolved'`).get() as { c: number }
-  ).c
+    db
+      .prepare(
+        `SELECT n.*, u.name AS author_name FROM notices n
+         JOIN users u ON u.id = n.author_user_id
+         WHERE n.status != 'resolved'`,
+      )
+      .all() as Record<string, unknown>[]
+  ).filter((r) => noticeVisibleToUser(r, user)).length
 
   const openExtras = (
     db
@@ -1958,6 +2174,11 @@ app.post('/api/notifications/:id/read', authMiddleware, (req, res) => {
   db.prepare(
     `UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL`,
   ).run(new Date().toISOString(), req.params.id, user.id)
+  res.json({ ok: true })
+})
+
+app.delete('/api/notifications', authMiddleware, requireAdmin, (_req, res) => {
+  db.prepare(`DELETE FROM notifications`).run()
   res.json({ ok: true })
 })
 
@@ -2148,6 +2369,12 @@ app.post('/api/extra-tasks', authMiddleware, (req, res) => {
   notifyAllActive('Uusi apukutsu', title, '/apukutsut')
   const row = db.prepare('SELECT * FROM extra_tasks WHERE id = ?').get(id) as Record<string, unknown>
   res.status(201).json({ task: hydrateExtraTask(row, user.id) })
+})
+
+app.delete('/api/extra-tasks', authMiddleware, requireAdmin, (_req, res) => {
+  db.prepare(`DELETE FROM extra_task_signups`).run()
+  db.prepare(`DELETE FROM extra_tasks`).run()
+  res.json({ ok: true })
 })
 
 app.post('/api/extra-tasks/:id/signup', authMiddleware, (req, res) => {

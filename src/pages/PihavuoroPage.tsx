@@ -390,7 +390,7 @@ export function PihavuoroPage() {
                   <strong>{a.userName}</strong>
                   <span className="muted">
                     {' '}
-                    · {a.role === 'lead' ? 'Vastuuhenkilö' : 'Avustaja'}
+                    · {a.role === 'lead' ? 'Vastuuveli' : 'Avustaja'}
                   </span>
                 </div>
                 {a.constraintLabels.length > 0 && (isLead || isAdmin || a.userId === user?.id) && (

@@ -121,7 +121,7 @@ export function HomePage() {
             <p className="role-line">
               {next.season === 'talvi' ? 'Talvi' : 'Sulankausi'}
               {myAssignment
-                ? ` · ${myAssignment.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'}`
+                ? ` · ${myAssignment.role === 'lead' ? 'vastuuveli' : 'avustaja'}`
                 : ''}
               {openTasks.length ? ` · ${openTasks.length} avointa tehtävää` : ''}
             </p>

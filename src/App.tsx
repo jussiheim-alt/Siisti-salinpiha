@@ -15,8 +15,17 @@ import { NoticesPage } from './pages/NoticesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { PihavuoroPage } from './pages/PihavuoroPage'
 import { SwapsPage } from './pages/SwapsPage'
+import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UsersPage } from './pages/UsersPage'
 
+function IconTasks() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 6h12M7 12h12M7 18h8" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
+    </svg>
+  )
+}
 function IconHome() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -102,7 +111,7 @@ function Shell() {
   if (loading) return <div className="boot">Ladataan…</div>
   if (!user) return <Navigate to="/kirjaudu" replace />
 
-  const cols = user.role === 'admin' ? 7 : 6
+  const cols = user.role === 'admin' ? 8 : 6
 
   return (
     <div className="app-shell app-shell-bottom-nav">
@@ -142,6 +151,12 @@ function Shell() {
           Huomiot
         </NavLink>
         {user.role === 'admin' && (
+          <NavLink to="/tehtavat">
+            <IconTasks />
+            Tehtävät
+          </NavLink>
+        )}
+        {user.role === 'admin' && (
           <NavLink to="/kayttajat">
             <IconUsers />
             Jäsenet
@@ -173,6 +188,7 @@ export default function App() {
           <Route path="/huolto" element={<HubPage />} />
           <Route path="/huolto/:id" element={<HubDetailPage />} />
           <Route path="/kayttajat" element={<UsersPage />} />
+          <Route path="/tehtavat" element={<TaskCardsPage />} />
           <Route path="/esteet" element={<AvailabilityPage />} />
           <Route path="/vaihdot" element={<SwapsPage />} />
         </Route>

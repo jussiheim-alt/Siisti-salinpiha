@@ -111,7 +111,7 @@ export function CalendarPage() {
                 <p className="muted">
                   {openCount} avointa tehtävää
                   {mine
-                    ? ` · sinä: ${mine.role === 'lead' ? 'vastuuhenkilö' : 'avustaja'}`
+                    ? ` · sinä: ${mine.role === 'lead' ? 'vastuuveli' : 'avustaja'}`
                     : ''}
                 </p>
               </Link>

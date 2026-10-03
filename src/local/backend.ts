@@ -1,6 +1,15 @@
 import { CONSTRAINT_LABELS, TASK_CATALOG_V1 } from '../shared/catalog'
+import { getWeather } from '../shared/fmiWeather'
+import {
+  isCadenceKey,
+  isSeasonKey,
+  type SeasonKey,
+  type TaskCadence,
+} from '../shared/seasons'
+import { seedTaskCardsFromCatalog, type TaskCard } from '../shared/taskCards'
 
-const DB_KEY = 'siisti-piha-local-db-v2'
+
+const DB_KEY = 'siisti-piha-local-db-v3'
 const SESSION_KEY = 'siisti-piha-local-session'
 
 const HUB_ISSUE_PROTOCOL = [
@@ -54,6 +63,9 @@ type Notice = {
   body: string
   photoDataUrl?: string | null
   status: 'open' | 'in_progress' | 'resolved'
+  audience: 'all' | 'leads'
+  acknowledgedAt?: string | null
+  acknowledgedByUserId?: string | null
   createdAt: string
   resolvedAt?: string | null
   replies: { id: string; authorUserId: string; body: string; createdAt: string }[]
@@ -137,6 +149,7 @@ type Db = {
   weekBlocks: WeekBlock[]
   notifications: Notification[]
   hub: HubInspection[]
+  taskCards: TaskCard[]
   extraTasks: {
     id: string
     createdByUserId: string
@@ -182,14 +195,38 @@ async function hashPassword(password: string) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+function normalizeDb(db: Db): Db {
+  if (!db.invites) db.invites = []
+  if (!Array.isArray(db.taskCards) || db.taskCards.length === 0) {
+    db.taskCards = seedTaskCardsFromCatalog()
+  }
+  for (const n of db.notices) {
+    if (n.audience !== 'all' && n.audience !== 'leads') n.audience = 'all'
+    if (n.acknowledgedAt === undefined) n.acknowledgedAt = null
+    if (n.acknowledgedByUserId === undefined) n.acknowledgedByUserId = null
+  }
+  return db
+}
+
 function loadDb(): Db {
   const raw = localStorage.getItem(DB_KEY)
   if (raw) {
     const parsed = JSON.parse(raw) as Db
-    if (!parsed.invites) parsed.invites = []
-    return parsed
+    return normalizeDb(parsed)
   }
-  return {
+  // Migrate previous local key if present
+  const legacy = localStorage.getItem('siisti-piha-local-db-v2')
+  if (legacy) {
+    try {
+      const parsed = JSON.parse(legacy) as Db
+      const next = normalizeDb(parsed)
+      localStorage.setItem(DB_KEY, JSON.stringify(next))
+      return next
+    } catch {
+      /* fall through */
+    }
+  }
+  return normalizeDb({
     users: [],
     invites: [],
     pihavuorot: [],
@@ -199,8 +236,9 @@ function loadDb(): Db {
     weekBlocks: [],
     notifications: [],
     hub: [],
+    taskCards: seedTaskCardsFromCatalog(),
     extraTasks: [],
-  }
+  })
 }
 
 function saveDb(db: Db) {
@@ -495,47 +533,74 @@ function upcomingMondays(count = 10) {
   return Array.from({ length: count }, (_, i) => addDays(start, i * 7))
 }
 
-function stubWeather() {
-  return {
-    place: 'Vääksy',
-    updatedAt: new Date().toISOString(),
-    current: {
-      time: new Date().toISOString(),
-      temperature: 8,
-      symbol: 1,
-      symbolLabel: 'Selkeää',
-      windMs: 2,
-      precipitationMm: 0,
-    },
-    days: [0, 1, 2].map((i) => {
-      const date = addDays(today(), i)
-      const symbols = [
-        { symbol: 1, symbolLabel: 'Selkeää' },
-        { symbol: 2, symbolLabel: 'Puolipilvistä' },
-        { symbol: 3, symbolLabel: 'Pilvistä' },
-      ] as const
-      const day = symbols[i]!
-      return {
-        date,
-        label: i === 0 ? 'Tänään' : i === 1 ? 'Huomenna' : date.slice(5),
-        symbol: day.symbol,
-        symbolLabel: day.symbolLabel,
-        tempMin: 5,
-        tempMax: 12,
-        precipMm: 0,
-        windMaxMs: 3,
-      }
-    }),
-    tips: [],
-    source: 'fmi-edited',
-    warnings: [],
-  }
-}
-
 function parsePath(path: string) {
   const [pathname, search = ''] = path.split('?')
   const params = new URLSearchParams(search)
   return { pathname: pathname || '/', params }
+}
+
+function publishedCoveringToday(db: Db) {
+  const todayStr = today()
+  return db.pihavuorot.filter(
+    (p) =>
+      p.status === 'published' &&
+      p.weekStart <= todayStr &&
+      addDays(p.weekStart, 6) >= todayStr,
+  )
+}
+
+function currentPublishedWeekLeads(db: Db): string[] {
+  const covering = publishedCoveringToday(db)
+  const weeks =
+    covering.length > 0
+      ? covering
+      : (() => {
+          const next = db.pihavuorot
+            .filter((p) => p.status === 'published' && p.weekStart >= mondayOf())
+            .sort((a, b) => a.weekStart.localeCompare(b.weekStart))[0]
+          return next ? [next] : []
+        })()
+  return weeks.flatMap((p) =>
+    p.assignments.filter((a) => a.role === 'lead').map((a) => a.userId),
+  )
+}
+
+function noticeVisibleTo(db: Db, n: Notice, user: User) {
+  if (user.role === 'admin' || n.authorUserId === user.id) return true
+  if (n.audience === 'all') return true
+  if (n.audience === 'leads') {
+    return db.pihavuorot.some(
+      (p) =>
+        p.status === 'published' &&
+        p.assignments.some((a) => a.userId === user.id && a.role === 'lead'),
+    )
+  }
+  return false
+}
+
+function hydrateNotice(db: Db, n: Notice) {
+  const ackUser = n.acknowledgedByUserId
+    ? db.users.find((u) => u.id === n.acknowledgedByUserId)
+    : null
+  return {
+    id: n.id,
+    body: n.body,
+    photoUrl: n.photoDataUrl || null,
+    status: n.status,
+    audience: n.audience || 'all',
+    acknowledgedAt: n.acknowledgedAt ?? null,
+    acknowledgedByName: ackUser?.name ?? null,
+    authorName: db.users.find((u) => u.id === n.authorUserId)?.name || '—',
+    authorUserId: n.authorUserId,
+    createdAt: n.createdAt,
+    replies: n.replies.map((r) => ({
+      id: r.id,
+      body: r.body,
+      authorName: db.users.find((u) => u.id === r.authorUserId)?.name || '—',
+      authorUserId: r.authorUserId,
+      createdAt: r.createdAt,
+    })),
+  }
 }
 
 export async function localApi<T = unknown>(
@@ -729,6 +794,72 @@ export async function localApi<T = unknown>(
     return ok({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
   }
 
+  if (pathname === '/api/task-cards' && method === 'GET') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const cards = (db.taskCards || [])
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'fi'))
+    return ok({ cards })
+  }
+  if (pathname === '/api/task-cards' && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const title = String(body.title || '').trim()
+    const instructions = String(body.instructions || '').trim()
+    if (!title) err('Anna otsikko')
+    const effort = body.effort === 'heavy' ? 'heavy' : 'light'
+    const season: SeasonKey = isSeasonKey(body.season) ? body.season : 'kesa'
+    const cadence: TaskCadence = isCadenceKey(body.cadence) ? body.cadence : 'weekly'
+    const defaultAssignee =
+      body.defaultAssignee === 'lead' || body.defaultAssignee === 'all'
+        ? body.defaultAssignee
+        : 'helpers'
+    const maxOrder = (db.taskCards || []).reduce((m, c) => Math.max(m, c.sortOrder), 0)
+    const card: TaskCard = {
+      id: uid(),
+      title,
+      instructions,
+      effort,
+      season,
+      cadence,
+      defaultAssignee,
+      active: true,
+      sortOrder: maxOrder + 10,
+    }
+    db.taskCards.push(card)
+    saveDb(db)
+    return ok({ card })
+  }
+  const taskCardMatch = pathname.match(/^\/api\/task-cards\/([^/]+)$/)
+  if (taskCardMatch && method === 'PATCH') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const card = db.taskCards.find((c) => c.id === taskCardMatch[1])
+    if (!card) err('Korttia ei löydy')
+    if (body.title !== undefined) card!.title = String(body.title).trim() || card!.title
+    if (body.instructions !== undefined) card!.instructions = String(body.instructions || '')
+    if (body.effort === 'light' || body.effort === 'heavy') card!.effort = body.effort
+    if (isSeasonKey(body.season)) card!.season = body.season
+    if (isCadenceKey(body.cadence)) card!.cadence = body.cadence
+    if (
+      body.defaultAssignee === 'lead' ||
+      body.defaultAssignee === 'helpers' ||
+      body.defaultAssignee === 'all'
+    ) {
+      card!.defaultAssignee = body.defaultAssignee
+    }
+    if (typeof body.active === 'boolean') card!.active = body.active
+    if (typeof body.sortOrder === 'number') card!.sortOrder = body.sortOrder
+    saveDb(db)
+    return ok({ card })
+  }
+  if (taskCardMatch && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const idx = db.taskCards.findIndex((c) => c.id === taskCardMatch[1])
+    if (idx < 0) err('Korttia ei löydy')
+    db.taskCards.splice(idx, 1)
+    saveDb(db)
+    return ok({ ok: true })
+  }
+
   if (pathname === '/api/meta/app' && method === 'GET') {
     return ok({ commit: 'local', commitFull: null, uiVersion: 'hub-checklist-light-2026-10' })
   }
@@ -743,7 +874,9 @@ export async function localApi<T = unknown>(
           p.assignments.some((a) => a.userId === user!.id),
       )
       .sort((a, b) => a.weekStart.localeCompare(b.weekStart))[0]
-    const openNotices = db.notices.filter((n) => n.status !== 'resolved').length
+    const openNotices = db.notices.filter(
+      (n) => n.status !== 'resolved' && noticeVisibleTo(db, n, user!),
+    ).length
     const openExtras = db.extraTasks.filter((t) =>
       ['open', 'ready', 'in_progress'].includes(t.status),
     ).length
@@ -782,7 +915,7 @@ export async function localApi<T = unknown>(
       openExtraTasks: openExtras,
       canCreateExtraTask: user!.role === 'admin',
       constraintLabels: CONSTRAINT_LABELS,
-      weather: stubWeather(),
+      weather: await getWeather(),
       unreadNotifications: unread,
       recentNotifications: recent,
       hub: {
@@ -805,7 +938,9 @@ export async function localApi<T = unknown>(
     })
   }
 
-  if (pathname === '/api/weather' && method === 'GET') return ok(stubWeather())
+  if (pathname === '/api/weather' && method === 'GET') {
+    return ok(await getWeather())
+  }
 
   if (pathname === '/api/chat/current' && method === 'GET') {
     const t = today()
@@ -1271,35 +1406,26 @@ export async function localApi<T = unknown>(
   if (pathname === '/api/notices' && method === 'GET') {
     return ok({
       notices: db.notices
+        .filter((n) => noticeVisibleTo(db, n, user!))
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((n) => ({
-          id: n.id,
-          body: n.body,
-          photoUrl: n.photoDataUrl || null,
-          status: n.status,
-          authorName: db.users.find((u) => u.id === n.authorUserId)?.name || '—',
-          authorUserId: n.authorUserId,
-          createdAt: n.createdAt,
-          replies: n.replies.map((r) => ({
-            id: r.id,
-            body: r.body,
-            authorName: db.users.find((u) => u.id === r.authorUserId)?.name || '—',
-            authorUserId: r.authorUserId,
-            createdAt: r.createdAt,
-          })),
-        })),
+        .map((n) => hydrateNotice(db, n)),
     })
   }
   if (pathname === '/api/notices' && method === 'POST') {
     let text = String(body.body || '').trim()
     let photoDataUrl: string | null = null
+    let audience: 'all' | 'leads' = 'all'
     if (options.formData) {
       text = String(options.formData.get('body') || '').trim()
+      const aud = String(options.formData.get('audience') || 'all')
+      audience = aud === 'leads' ? 'leads' : 'all'
       const file = options.formData.get('photo')
       if (file instanceof File) {
         photoDataUrl = await fileToDataUrl(file)
       }
+    } else if (body.audience === 'leads') {
+      audience = 'leads'
     }
     if (!text) err('Kirjoita viesti')
     const notice: Notice = {
@@ -1308,20 +1434,42 @@ export async function localApi<T = unknown>(
       body: text,
       photoDataUrl,
       status: 'open',
+      audience,
+      acknowledgedAt: null,
+      acknowledgedByUserId: null,
       createdAt: new Date().toISOString(),
       replies: [],
     }
     db.notices.unshift(notice)
+    const recipients =
+      audience === 'all'
+        ? db.users.filter((u) => u.active && u.id !== user!.id).map((u) => u.id)
+        : [
+            ...db.users.filter((u) => u.active && u.role === 'admin').map((u) => u.id),
+            ...currentPublishedWeekLeads(db),
+          ].filter((id) => id !== user!.id)
+    notify(db, recipients, 'Uusi huomio', text.slice(0, 120), '/huomiot', 'notice')
+    saveDb(db)
+    return ok({ ok: true, notice: hydrateNotice(db, notice) })
+  }
+  const noticeAck = pathname.match(/^\/api\/notices\/([^/]+)\/ack$/)
+  if (noticeAck && method === 'POST') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const notice = db.notices.find((n) => n.id === noticeAck[1])
+    if (!notice) err('Huomiota ei löydy')
+    notice!.acknowledgedAt = new Date().toISOString()
+    notice!.acknowledgedByUserId = user!.id
+    if (notice!.status === 'open') notice!.status = 'in_progress'
     notify(
       db,
-      db.users.filter((u) => u.id !== user!.id && u.active).map((u) => u.id),
-      'Uusi huomio',
-      text.slice(0, 120),
+      [notice!.authorUserId],
+      'Huomio kuitattu',
+      `${user!.name} kuitasi huomiosi.`,
       '/huomiot',
       'notice',
     )
     saveDb(db)
-    return ok({ ok: true })
+    return ok({ notice: hydrateNotice(db, notice!) })
   }
   const noticeReply = pathname.match(/^\/api\/notices\/([^/]+)\/replies$/)
   if (noticeReply && method === 'POST') {
@@ -1353,6 +1501,14 @@ export async function localApi<T = unknown>(
     saveDb(db)
     return ok({ ok: true })
   }
+  if (noticePatch && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const idx = db.notices.findIndex((n) => n.id === noticePatch[1])
+    if (idx < 0) err('Huomiota ei löydy')
+    db.notices.splice(idx, 1)
+    saveDb(db)
+    return ok({ ok: true })
+  }
 
   if (pathname === '/api/notifications' && method === 'GET') {
     const items = db.notifications
@@ -1377,6 +1533,12 @@ export async function localApi<T = unknown>(
     for (const n of db.notifications) {
       if (n.userId === user!.id && !n.readAt) n.readAt = now
     }
+    saveDb(db)
+    return ok({ ok: true })
+  }
+  if (pathname === '/api/notifications' && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    db.notifications = []
     saveDb(db)
     return ok({ ok: true })
   }
@@ -1515,6 +1677,12 @@ export async function localApi<T = unknown>(
     )
     saveDb(db)
     return ok({ task: hydrateExtra(db, task, user!.id) })
+  }
+  if (pathname === '/api/extra-tasks' && method === 'DELETE') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    db.extraTasks = []
+    saveDb(db)
+    return ok({ ok: true })
   }
   const extraAct = pathname.match(/^\/api\/extra-tasks\/([^/]+)\/(signup|start|complete|cancel)$/)
   if (extraAct) {
