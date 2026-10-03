@@ -751,7 +751,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'siisti-merge-roles-notices-2026-10',
+    uiVersion: 'huomiot-kenelle-layout-2026-10',
   })
 })
 
