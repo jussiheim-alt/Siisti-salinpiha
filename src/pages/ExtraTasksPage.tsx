@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type ExtraTask } from '../api'
 import { useAuth } from '../auth'
@@ -11,6 +11,17 @@ const STATUS_FI: Record<ExtraTask['status'], string> = {
   cancelled: 'Peruttu',
 }
 
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="btn-icon">
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M7 7l1 13h8l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+
 export function ExtraTasksPage() {
   const { user } = useAuth()
   const [tasks, setTasks] = useState<ExtraTask[]>([])
@@ -20,6 +31,15 @@ export function ExtraTasksPage() {
   const [description, setDescription] = useState('')
   const [minRequired, setMinRequired] = useState(2)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [confirmWipe, setConfirmWipe] = useState(false)
+  const [wiping, setWiping] = useState(false)
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
+  const cancelConfirmRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!confirmCancelId) return
+    cancelConfirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [confirmCancelId])
 
   async function load() {
     const data = await api<{ tasks: ExtraTask[]; canCreate: boolean }>('/api/extra-tasks')
@@ -53,6 +73,7 @@ export function ExtraTasksPage() {
     setError('')
     try {
       await api(`/api/extra-tasks/${id}/${path}`, { method })
+      setConfirmCancelId(null)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Toiminto epäonnistui')
@@ -62,14 +83,16 @@ export function ExtraTasksPage() {
   }
 
   async function wipeAllExtras() {
-    if (!window.confirm('Poistetaanko KAIKKI apukutsut? Tätä ei voi perua.')) return
-    if (!window.confirm('Vahvista vielä kerran: poista kaikki apukutsut.')) return
+    setWiping(true)
     setError('')
     try {
       await api('/api/extra-tasks', { method: 'DELETE' })
+      setConfirmWipe(false)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Poisto epäonnistui')
+    } finally {
+      setWiping(false)
     }
   }
 
@@ -79,12 +102,52 @@ export function ExtraTasksPage() {
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Apukutsut</h1>
         <p className="lede">Yllättävä tarve — ilmoittaudu, kun minimi täyttyy tehtävä aktivoituu.</p>
-        {user?.role === 'admin' && tasks.length > 0 && (
-          <button className="btn ghost small" type="button" onClick={() => void wipeAllExtras()}>
-            Poista kaikki apukutsut
-          </button>
-        )}
       </header>
+
+      {user?.role === 'admin' && tasks.length > 0 && (
+        <section className="danger-zone" aria-label="Apukutsujen poisto">
+          {!confirmWipe ? (
+            <button
+              className="btn danger small"
+              type="button"
+              onClick={() => setConfirmWipe(true)}
+            >
+              <IconTrash />
+              Poista kaikki apukutsut
+            </button>
+          ) : (
+            <div className="danger-confirm">
+              <div className="danger-confirm-copy">
+                <strong>
+                  {tasks.length === 1
+                    ? 'Poistetaanko ainoa apukutsu?'
+                    : `Poistetaanko kaikki ${tasks.length} apukutsua?`}
+                </strong>
+                <p>Kutsut, ilmoittautumiset ja tilat poistuvat pysyvästi. Tätä ei voi perua.</p>
+              </div>
+              <div className="row-actions danger-confirm-actions">
+                <button
+                  className="btn danger-solid"
+                  type="button"
+                  disabled={wiping}
+                  onClick={() => void wipeAllExtras()}
+                >
+                  <IconTrash />
+                  {wiping ? 'Poistetaan…' : 'Kyllä, poista kaikki'}
+                </button>
+                <button
+                  className="btn ghost small"
+                  type="button"
+                  disabled={wiping}
+                  onClick={() => setConfirmWipe(false)}
+                >
+                  Peru
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {error && <p className="error">{error}</p>}
 
@@ -140,8 +203,12 @@ export function ExtraTasksPage() {
       <div className="card-list">
         {tasks.map((t) => {
           const isCreator = t.createdByUserId === user?.id || user?.role === 'admin'
+          const cancelling = confirmCancelId === t.id
           return (
-            <article key={t.id} className="notice-card">
+            <article
+              key={t.id}
+              className={`notice-card${t.status === 'cancelled' ? ' is-cancelled' : ''}`}
+            >
               <div className="week-card-top">
                 <strong>{t.title}</strong>
                 <span className={`pill status-${t.status}`}>{STATUS_FI[t.status]}</span>
@@ -160,54 +227,89 @@ export function ExtraTasksPage() {
                   ))}
                 </ul>
               )}
-              <div className="row-actions">
-                {(t.status === 'open' || t.status === 'ready') && !t.iSignedUp && (
-                  <button
-                    className="btn primary small"
-                    disabled={busyId === t.id}
-                    onClick={() => void act(t.id, 'signup')}
-                  >
-                    Ilmoittaudu
-                  </button>
-                )}
-                {(t.status === 'open' || t.status === 'ready') && t.iSignedUp && (
-                  <button
-                    className="btn small"
-                    disabled={busyId === t.id}
-                    onClick={() => void act(t.id, 'signup', 'DELETE')}
-                  >
-                    Peru ilmoittautuminen
-                  </button>
-                )}
-                {t.status === 'ready' && isCreator && (
-                  <button
-                    className="btn primary small"
-                    disabled={busyId === t.id}
-                    onClick={() => void act(t.id, 'start')}
-                  >
-                    Aloita
-                  </button>
-                )}
-                {(t.status === 'ready' || t.status === 'in_progress') &&
-                  (isCreator || t.iSignedUp) && (
+              {cancelling ? (
+                <div
+                  className="danger-confirm danger-confirm-inline"
+                  ref={cancelConfirmRef}
+                >
+                  <div className="danger-confirm-copy">
+                    <strong>Perutaanko tämä apukutsu?</strong>
+                    <p>Ilmoittautuneet näkevät kutsun peruttuna.</p>
+                  </div>
+                  <div className="row-actions danger-confirm-actions">
+                    <button
+                      className="btn danger-solid small"
+                      type="button"
+                      disabled={busyId === t.id}
+                      onClick={() => void act(t.id, 'cancel')}
+                    >
+                      {busyId === t.id ? 'Perutaan…' : 'Kyllä, peruuta'}
+                    </button>
+                    <button
+                      className="btn ghost small"
+                      type="button"
+                      disabled={busyId === t.id}
+                      onClick={() => setConfirmCancelId(null)}
+                    >
+                      Älä peru
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="row-actions">
+                  {(t.status === 'open' || t.status === 'ready') && !t.iSignedUp && (
+                    <button
+                      className="btn primary small"
+                      disabled={busyId === t.id}
+                      onClick={() => void act(t.id, 'signup')}
+                    >
+                      Ilmoittaudu
+                    </button>
+                  )}
+                  {(t.status === 'open' || t.status === 'ready') && t.iSignedUp && (
                     <button
                       className="btn small"
                       disabled={busyId === t.id}
-                      onClick={() => void act(t.id, 'complete')}
+                      onClick={() => void act(t.id, 'signup', 'DELETE')}
                     >
-                      Merkitse valmiiksi
+                      Peru ilmoittautuminen
                     </button>
                   )}
-                {isCreator && t.status !== 'done' && t.status !== 'cancelled' && (
-                  <button
-                    className="btn small"
-                    disabled={busyId === t.id}
-                    onClick={() => void act(t.id, 'cancel')}
-                  >
-                    Peruuta kutsu
-                  </button>
-                )}
-              </div>
+                  {t.status === 'ready' && isCreator && (
+                    <button
+                      className="btn primary small"
+                      disabled={busyId === t.id}
+                      onClick={() => void act(t.id, 'start')}
+                    >
+                      Aloita
+                    </button>
+                  )}
+                  {(t.status === 'ready' || t.status === 'in_progress') &&
+                    (isCreator || t.iSignedUp) && (
+                      <button
+                        className="btn small"
+                        disabled={busyId === t.id}
+                        onClick={() => void act(t.id, 'complete')}
+                      >
+                        Merkitse valmiiksi
+                      </button>
+                    )}
+                  {isCreator && t.status !== 'done' && t.status !== 'cancelled' && (
+                    <button
+                      className="btn danger small"
+                      type="button"
+                      disabled={busyId === t.id}
+                      onClick={() => {
+                        setConfirmWipe(false)
+                        setConfirmCancelId(t.id)
+                      }}
+                    >
+                      <IconTrash />
+                      Peruuta kutsu
+                    </button>
+                  )}
+                </div>
+              )}
             </article>
           )
         })}
