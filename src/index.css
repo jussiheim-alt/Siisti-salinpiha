@@ -2133,6 +2133,98 @@ select:focus {
   background: color-mix(in srgb, var(--danger) 18%, white);
 }
 
+.btn.danger-solid {
+  background: var(--danger);
+  border: 1px solid var(--danger);
+  color: #fff;
+}
+
+.btn.danger-solid:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 88%, #000);
+  border-color: color-mix(in srgb, var(--danger) 88%, #000);
+  color: #fff;
+}
+
+.btn-icon {
+  width: 1rem;
+  height: 1rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.btn.danger,
+.btn.danger-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.danger-zone {
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--danger) 8%, white),
+      color-mix(in srgb, var(--danger) 3%, var(--birch))
+    );
+}
+
+.danger-confirm {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.danger-confirm-copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.danger-confirm-copy strong {
+  color: var(--danger);
+  font-size: 0.98rem;
+}
+
+.danger-confirm-copy p {
+  margin: 0;
+  color: color-mix(in srgb, var(--danger) 55%, var(--ink));
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.danger-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.danger-confirm-inline {
+  margin-top: 0.65rem;
+  padding: 0.75rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line));
+  background: color-mix(in srgb, var(--danger) 7%, white);
+}
+
+.notice-card.is-cancelled {
+  opacity: 0.78;
+  border-color: color-mix(in srgb, var(--danger) 22%, var(--line));
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--danger) 10%, transparent) 0,
+      color-mix(in srgb, var(--danger) 10%, transparent) 3px,
+      white 3px
+    );
+}
+
 .notice-photo {
   width: 100%;
   border-radius: 0.9rem;
