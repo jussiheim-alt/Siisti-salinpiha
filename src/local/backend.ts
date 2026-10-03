@@ -1,5 +1,6 @@
 import { CONSTRAINT_LABELS, TASK_CATALOG_V1 } from '../shared/catalog'
 import { getWeather } from '../shared/fmiWeather'
+import { DEFAULT_LEAD_GUIDE, normalizeLeadGuide, type LeadGuide } from '../shared/leadGuide'
 import {
   isCadenceKey,
   isSeasonKey,
@@ -152,6 +153,7 @@ type Db = {
   notifications: Notification[]
   hub: HubInspection[]
   taskCards: TaskCard[]
+  leadGuide?: LeadGuide
   extraTasks: {
     id: string
     createdByUserId: string
@@ -202,6 +204,11 @@ function normalizeDb(db: Db): Db {
   if (!Array.isArray(db.taskCards) || db.taskCards.length === 0) {
     db.taskCards = seedTaskCardsFromCatalog()
   }
+  // Vastuuveli-ohjeet eivät ole tehtäväkortti
+  db.taskCards = db.taskCards.filter(
+    (c) => c.id !== 'T5' && !c.title.startsWith('Vastuuveli: viikon tilanne'),
+  )
+  db.leadGuide = normalizeLeadGuide(db.leadGuide || DEFAULT_LEAD_GUIDE)
   for (const n of db.notices) {
     if (n.audience !== 'all' && n.audience !== 'leads') n.audience = 'all'
     if (n.acknowledgedAt === undefined) n.acknowledgedAt = null
@@ -863,6 +870,16 @@ export async function localApi<T = unknown>(
   }
   if (pathname === '/api/catalog' && method === 'GET') {
     return ok({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
+  }
+
+  if (pathname === '/api/lead-guide' && method === 'GET') {
+    return ok({ guide: normalizeLeadGuide(db.leadGuide || DEFAULT_LEAD_GUIDE) })
+  }
+  if (pathname === '/api/lead-guide' && method === 'PUT') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    db.leadGuide = normalizeLeadGuide(body.guide ?? body)
+    saveDb(db)
+    return ok({ guide: db.leadGuide })
   }
 
   if (pathname === '/api/task-cards' && method === 'GET') {

@@ -27,6 +27,7 @@ import {
 } from './hub.ts'
 import { dataDir, root, uploadsDir } from './paths.ts'
 import { isCadenceKey, isSeasonKey, publicTaskCard } from './taskCards.ts'
+import { ensureLeadGuideTable, getLeadGuide, saveLeadGuide } from './leadGuide.ts'
 import { formatWeekRangeFi } from '../src/shared/datetime.ts'
 import {
   assertCanDeleteUser,
@@ -55,6 +56,7 @@ function loadJwtSecret() {
 const EFFECTIVE_JWT = loadJwtSecret()
 
 initDb()
+ensureLeadGuideTable()
 
 const app = express()
 app.set('trust proxy', 1)
@@ -719,6 +721,16 @@ app.get('/api/catalog', authMiddleware, (_req, res) => {
   res.json({ templates: TASK_CATALOG_V1, constraintLabels: CONSTRAINT_LABELS })
 })
 
+// ——— Vastuuveljen ohjeet ———
+app.get('/api/lead-guide', authMiddleware, (_req, res) => {
+  res.json({ guide: getLeadGuide() })
+})
+
+app.put('/api/lead-guide', authMiddleware, requireAdmin, (req, res) => {
+  const guide = saveLeadGuide(req.body?.guide ?? req.body)
+  res.json({ guide })
+})
+
 // ——— Tehtäväkortit (admin) ———
 app.get('/api/task-cards', authMiddleware, requireAdmin, (_req, res) => {
   const rows = db
@@ -814,7 +826,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'fix-hub-nav-layout-2026-10',
+    uiVersion: 'vastuuveli-home-guide-2026-10',
   })
 })
 

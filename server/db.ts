@@ -227,6 +227,16 @@ export function initDb() {
   }
 
   seedTaskCards()
+  // Vastuuveli-ohjeet eivät ole tehtäväkortti — poista vanha T5-kortti jos löytyy.
+  db.prepare(
+    `DELETE FROM task_cards WHERE id = 'T5' OR title LIKE 'Vastuuveli: viikon tilanne%'`,
+  ).run()
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `)
 
   ensureFoundingAdmins(db)
 

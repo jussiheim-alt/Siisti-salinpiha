@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification, type HubSummary, type Pihavuoro, type WeatherPayload } from '../api'
 import { useAuth } from '../auth'
+import { LeadCallout } from '../components/LeadCallout'
 import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
@@ -71,6 +72,7 @@ export function HomePage() {
   }, [])
 
   const myAssignment = next?.assignments.find((a) => a.userId === user?.id)
+  const isLead = myAssignment?.role === 'lead'
   const openTasks = next?.tasks.filter((t) => t.status === 'open') ?? []
   const firstName = user?.name.split(' ')[0]
 
@@ -78,11 +80,19 @@ export function HomePage() {
     <div className="page home-page">
       <header className="page-hero home-hero">
         <p className="brand-mark">Siisti salin piha</p>
-        <h1>{next ? 'Seuraava vuorosi odottaa' : `Hei, ${firstName}`}</h1>
+        <h1>
+          {isLead
+            ? 'Olet viikon vastuuveli'
+            : next
+              ? 'Seuraava vuorosi odottaa'
+              : `Hei, ${firstName}`}
+        </h1>
         <p className="lede">
-          {next
-            ? 'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
-            : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
+          {isLead
+            ? 'Sinulla on vastuu viikon töistä — katso ohjeet alta.'
+            : next
+              ? 'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
+              : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
         </p>
         <div className="hero-cta">
           {next ? (
@@ -104,6 +114,14 @@ export function HomePage() {
       {error && <p className="error">{error}</p>}
 
       <div className="home-stack">
+        {next && isLead && (
+          <LeadCallout
+            weekStart={next.weekStart}
+            weekEnd={next.weekEnd}
+            pihavuoroId={next.id}
+          />
+        )}
+
         <PushToggle />
 
         <div className="surface-card" style={{ animationDelay: '0.05s' }}>
