@@ -265,8 +265,8 @@ export function PihavuoroPage() {
       setError('Valitse vastuuhenkilö')
       return
     }
-    if (helperIds.length < 3 || helperIds.length > 5) {
-      setError('Valitse 3–5 avustajaa')
+    if (helperIds.length < 1 || helperIds.length > 5) {
+      setError('Valitse 1–5 avustajaa')
       return
     }
     if (helperIds.includes(leadId)) {
@@ -452,7 +452,7 @@ export function PihavuoroPage() {
             </label>
 
             <fieldset className="checks">
-              <legend>Avustajat ({helperIds.length}/3–5)</legend>
+              <legend>Avustajat ({helperIds.length}/1–5)</legend>
               {candidateUsers
                 .filter((u) => u.id !== leadId)
                 .map((u) => (

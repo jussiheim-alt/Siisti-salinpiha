@@ -1108,7 +1108,11 @@ export async function localApi<T = unknown>(
     const lead = available.find((u) => !u.constraints.includes('no_lead')) || available[0]
     if (!lead) err('Vastuuhenkilöä ei löytynyt')
     const helpers = available.filter((u) => u.id !== lead!.id).slice(0, 4)
-    if (helpers.length < 3) err('Vain vähän saatavilla olevia jäseniä tälle viikolle')
+    if (helpers.length < 1) {
+      err(
+        'Vain 0 saatavilla olevaa jäsentä tälle viikolle (tarvitaan 1–5 avustajaa). Tarkista esteviikot.',
+      )
+    }
     const assignments: Assignment[] = [
       { id: uid(), userId: lead!.id, role: 'lead' },
       ...helpers.map((h) => ({ id: uid(), userId: h.id, role: 'helper' as const })),
@@ -1143,7 +1147,7 @@ export async function localApi<T = unknown>(
     if (id === 'meta' && rest.startsWith('/recommend') && method === 'GET') {
       if (user!.role !== 'admin') err('Vain ylläpitäjälle')
       const weekStart = mondayOf(params.get('weekStart') || undefined)
-      const helperCount = Math.min(5, Math.max(3, Number(params.get('helperCount') || 4)))
+      const helperCount = Math.min(5, Math.max(1, Number(params.get('helperCount') || 4)))
       const ignoreCurrent = params.get('fresh') === '1'
       const blocked = new Set(
         db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId),
@@ -1203,8 +1207,8 @@ export async function localApi<T = unknown>(
         const helperIds = Array.isArray(body.helperUserIds)
           ? (body.helperUserIds as string[]).map(String)
           : []
-        if (!leadId || helperIds.length < 3 || helperIds.length > 5) {
-          err('Kokoonpano: 1 vastuu + 3–5 avustajaa')
+        if (!leadId || helperIds.length < 1 || helperIds.length > 5) {
+          err('Kokoonpano: 1 vastuu + 1–5 avustajaa')
         }
         if (helperIds.includes(leadId)) err('Vastuuhenkilö ei voi olla samalla avustaja')
         const assignments: Assignment[] = [
