@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type AppNotification } from '../api'
 import { useAuth } from '../auth'
 import { formatDateTimeFi } from '../shared/datetime'
+import { onServiceWorkerPush, startLiveRefresh } from '../shared/liveRefresh'
 
 function formatWhen(iso: string) {
   return formatDateTimeFi(iso)
@@ -14,6 +15,7 @@ function kindLabel(kind: string) {
   if (kind === 'notice') return 'Huomio'
   if (kind === 'hub') return 'Hub'
   if (kind === 'shift') return 'Vuoro'
+  if (kind === 'chat') return 'Chat'
   return 'Ilmoitus'
 }
 
@@ -35,7 +37,15 @@ export function NotificationsPage() {
   }
 
   useEffect(() => {
-    load().catch((e) => setError(e.message))
+    const refresh = () => {
+      load().catch((e) => setError(e instanceof Error ? e.message : 'Lataus epäonnistui'))
+    }
+    const stopRefresh = startLiveRefresh(refresh, 15_000)
+    const stopPush = onServiceWorkerPush(() => refresh())
+    return () => {
+      stopRefresh()
+      stopPush()
+    }
   }, [])
 
   async function markAll() {
@@ -86,7 +96,7 @@ export function NotificationsPage() {
         <p className="lede">
           {unreadCount === 0
             ? 'Kaikki ilmoitukset on luettu.'
-            : `${unreadCount} lukematonta — sää, apukutsut ja muut.`}
+            : `${unreadCount} lukematonta — chat, sää, apukutsut ja muut.`}
         </p>
         {unreadCount > 0 && (
           <button
@@ -113,7 +123,9 @@ export function NotificationsPage() {
       {error && <p className="error">{error}</p>}
 
       {items.length === 0 ? (
-        <p className="empty-state">Ei ilmoituksia vielä. Uudet sää- ja apukutsut ilmestyvät tänne.</p>
+        <p className="empty-state">
+          Ei ilmoituksia vielä. Vuorokeskustelun viestit, sää ja apukutsut ilmestyvät tänne.
+        </p>
       ) : (
         <ul className="notif-list">
           {items.map((n) => (

@@ -1954,21 +1954,26 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   ).map((r) => r.user_id)
   const weekStart = String(piha.week_start)
   const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
+  const weekLabel = formatWeekRangeFi(weekStart, weekEnd)
   if (recipients.length) {
-    notifyUsers(
-      recipients,
-      'Viesti Pihavuorossa',
-      `${user.name}: ${body.length > 100 ? `${body.slice(0, 97)}…` : body}`,
-      `/pihavuoro/${req.params.id}?chat=1`,
-      'chat',
-    )
+    try {
+      notifyUsers(
+        recipients,
+        'Uusi viesti vuorokeskustelussa',
+        `${user.name} (${weekLabel}): ${body.length > 80 ? `${body.slice(0, 77)}…` : body}`,
+        `/pihavuoro/${req.params.id}?chat=1`,
+        'chat',
+      )
+    } catch (err) {
+      console.warn('Chat notification failed', err)
+    }
   }
 
   res.status(201).json({
     message: hydrateMessage(
       db.prepare('SELECT * FROM shift_messages WHERE id = ?').get(id) as Record<string, unknown>,
     ),
-    weekLabel: formatWeekRangeFi(weekStart, weekEnd),
+    weekLabel,
   })
 })
 

@@ -19,20 +19,44 @@ registerRoute(
 )
 
 self.addEventListener('push', (event) => {
-  let payload: { title?: string; body?: string; url?: string } = {}
+  let payload: {
+    title?: string
+    body?: string
+    url?: string
+    kind?: string
+    tag?: string
+    renotify?: boolean
+  } = {}
   try {
     payload = event.data?.json() ?? {}
   } catch {
     payload = { body: event.data?.text() }
   }
   const title = payload.title || 'Siisti salin piha'
-  const options: NotificationOptions = {
+  const url = payload.url || '/'
+  const options: NotificationOptions & { renotify?: boolean } = {
     body: payload.body || 'Uusi ilmoitus',
     icon: '/favicon.svg',
     badge: '/favicon.svg',
-    data: { url: payload.url || '/' },
+    tag: payload.tag || payload.kind || 'general',
+    renotify: Boolean(payload.renotify),
+    data: { url, kind: payload.kind || 'general' },
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(title, options)
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const client of windows) {
+        client.postMessage({
+          type: 'siisti-push',
+          title,
+          body: options.body,
+          url,
+          kind: payload.kind || 'general',
+        })
+      }
+    })(),
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {
