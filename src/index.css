@@ -16,7 +16,7 @@
   --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
-  --nav-h: 4.35rem;
+  --nav-h: 4.85rem;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
@@ -31,7 +31,6 @@
 }
 
 html {
-  overflow-x: clip;
   width: 100%;
 }
 
@@ -41,7 +40,6 @@ body,
   min-height: 100%;
   margin: 0;
   max-width: 100%;
-  overflow-x: clip;
 }
 
 body {
@@ -51,14 +49,14 @@ body {
     linear-gradient(180deg, #f3f7f5 0%, #edf2ef 55%, #e7eeea 100%);
   background-attachment: scroll;
   width: 100%;
-  overflow-x: clip;
+  /* Avoid overflow-x on html/body — on iOS it can break position:fixed nav. */
+  overflow-x: hidden;
 }
 
 #root,
 .app-shell {
   width: 100%;
   max-width: 100%;
-  overflow-x: clip;
 }
 
 img,
@@ -115,28 +113,31 @@ a {
 
 .app-shell {
   min-height: 100dvh;
-  display: block;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
   padding-top: env(safe-area-inset-top);
 }
 
 .app-shell-bottom-nav {
-  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  /* Nav sits in document flow (sticky) — no fake spacer padding needed. */
+  padding-bottom: 0;
 }
 
 .app-main {
   --page-pad-x: clamp(1rem, 4.5vw, 1.4rem);
+  flex: 1 1 auto;
   padding: 0.75rem var(--page-pad-x) 1.5rem;
   max-width: min(720px, 100%);
   margin: 0 auto;
   width: 100%;
-  overflow-x: clip;
+  overflow-x: hidden;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
+  position: sticky;
   z-index: 40;
   display: grid;
   gap: 0.08rem;
@@ -144,14 +145,15 @@ a {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: clip;
+  flex-shrink: 0;
 }
 
 .tabbar-bottom {
   top: auto;
   bottom: 0;
-  padding: 0.4rem 0.35rem calc(0.4rem + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.88);
+  margin-top: auto;
+  padding: 0.4rem 0.35rem calc(0.45rem + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border-top: 1px solid rgba(18, 35, 28, 0.08);
@@ -1312,9 +1314,6 @@ select:focus {
 @media (min-width: 800px) {
   .tabbar {
     max-width: 720px;
-    left: 0;
-    right: 0;
-    transform: none;
     border-radius: 1.1rem 1.1rem 0 0;
   }
 
@@ -1610,6 +1609,12 @@ select:focus {
   letter-spacing: 0.02em;
 }
 
+.hub-card-list {
+  display: grid;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
 .hub-list-card {
   display: grid;
   gap: 0.4rem;
@@ -1618,11 +1623,10 @@ select:focus {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(18, 35, 28, 0.07);
   box-shadow: var(--shadow-soft);
-  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease);
+  transition: border-color 0.18s var(--ease);
 }
 
 .hub-list-card:hover {
-  transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--moss) 25%, var(--line));
 }
 
