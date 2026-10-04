@@ -970,7 +970,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'tabbar-standalone-lvh-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tabbar-invite-scroll-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
