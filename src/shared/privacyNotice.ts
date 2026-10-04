@@ -1,5 +1,5 @@
 /** Bump when the notice text changes so users must re-acknowledge. */
-export const PRIVACY_NOTICE_VERSION = '2026-10-04c'
+export const PRIVACY_NOTICE_VERSION = '2026-10-04d'
 
 export type PrivacySection = {
   id: string
