@@ -59,13 +59,21 @@ body {
   overflow-x: hidden;
 }
 
-/* Logged-in shell: lock document scroll so only .app-main moves. */
+/*
+ * Logged-in shell: fill the real standalone window.
+ * 100dvh alone is often SHORT on iOS PWAs → mist letterbox under the tab bar
+ * (manifest/body background shows through). Prefer -webkit-fill-available and
+ * the JS --app-height fallback from viewportShell.ts.
+ */
 html:has(.app-shell-bottom-nav),
 body:has(.app-shell-bottom-nav) {
   height: 100%;
-  height: 100dvh;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   overflow: hidden;
   overscroll-behavior: none;
+  background-color: #ffffff;
 }
 
 #root,
@@ -75,17 +83,15 @@ body:has(.app-shell-bottom-nav) {
 }
 
 #root:has(.app-shell-bottom-nav) {
-  /*
-   * Fill the visual viewport with an explicit flex column.
-   * inset alone + height:auto has left a mist gap under the tab bar on iOS.
-   */
   position: fixed;
   top: 0;
-  right: 0;
-  bottom: 0;
   left: 0;
+  right: 0;
   width: 100%;
+  /* Fallbacks first; JS viewportShell overwrites height to the real window. */
   height: 100%;
+  height: 100dvh;
+  height: -webkit-fill-available;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -157,14 +163,15 @@ a {
 }
 
 .app-shell.app-shell-bottom-nav {
+  position: relative;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: auto;
+  height: 100%;
   max-height: none;
   overflow: hidden;
-  /* Room for the fixed tab bar (out of normal flow). */
+  /* Room for the absolutely positioned tab bar. */
   padding-bottom: var(--nav-h);
   box-sizing: border-box;
 }
@@ -200,8 +207,8 @@ a {
 }
 
 .tabbar-bottom {
-  /* Physically pin to the screen bottom — survives iOS dvh/flex quirks. */
-  position: fixed;
+  /* Pin to the shell bottom (same box as --app-height), not a short 100dvh viewport. */
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
@@ -2667,9 +2674,9 @@ label.template-pick input[type='checkbox'] {
 }
 
 .chat-fab {
-  position: fixed;
+  position: absolute;
   right: max(1rem, env(safe-area-inset-right));
-  /* --nav-h already covers tab content + bottom inset */
+  /* Sit above the absolutely positioned tab bar inside the shell. */
   bottom: calc(var(--nav-h) + 0.75rem);
   z-index: 45;
   width: 3.4rem;

@@ -18,7 +18,8 @@ export default defineConfig({
         short_name: 'Salin piha',
         description: 'Pihavuorot ja pihanhoito',
         theme_color: '#0f3d2e',
-        background_color: '#eef4f1',
+        /* Match tab bar — avoids mist letterbox if the webview is briefly short. */
+        background_color: '#ffffff',
         display: 'standalone',
         lang: 'fi',
         start_url: '/',
