@@ -63,14 +63,21 @@ body {
 }
 
 #root:has(.app-shell-bottom-nav) {
-  /* Fixed viewport shell: avoid -webkit-fill-available (clips tabbar on iOS). */
-  height: 100dvh;
-  max-height: 100dvh;
+  /*
+   * Pin to the visual viewport edges. Relying on 100dvh alone can leave a
+   * mist-colored gap under the tab bar on iOS (dvh shorter than the screen).
+   */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: auto;
+  max-height: none;
   overflow: hidden;
   /* Reserve the notch/Dynamic Island outside the scrolling main. */
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
+  background: var(--mist);
 }
 
 img,
@@ -175,7 +182,8 @@ a {
 
 .tabbar-bottom {
   margin-top: 0;
-  padding: 0.4rem 0.35rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  /* Safe-area only — no extra gap under labels; bar sits on the screen edge. */
+  padding: 0.4rem 0.35rem max(0.35rem, env(safe-area-inset-bottom, 0px));
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
@@ -2638,7 +2646,8 @@ label.template-pick input[type='checkbox'] {
 .chat-fab {
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
-  bottom: calc(var(--nav-h) + 0.75rem + env(safe-area-inset-bottom));
+  /* --nav-h already covers tab content + bottom inset */
+  bottom: calc(var(--nav-h) + 0.75rem);
   z-index: 45;
   width: 3.4rem;
   height: 3.4rem;
