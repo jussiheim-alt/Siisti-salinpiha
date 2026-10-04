@@ -7,7 +7,7 @@ export function InstallTips({ compact = false }: Props) {
     <div className={`install-tips${compact ? ' is-compact' : ''}`}>
       {!compact && <h2>Lisää sovellus kotinäytölle</h2>}
       <p className="install-tips-lede">
-        Neljä napautusta – sen jälkeen kuvake aukeaa kuin tavallinen sovellus.
+        Neljä napautusta – sen jälkeen sovellus aukeaa kuin tavallinen sovellus.
       </p>
 
       <div className="install-tips-grid">
@@ -39,7 +39,7 @@ export function InstallTips({ compact = false }: Props) {
           <ol>
             <li>Avaa kutsulinkki <strong>Chromessa</strong>.</li>
             <li>
-              Napauta oikeassa yläkulmassa <strong>⋮-valikkoa</strong>.
+              Napauta oikean yläkulman valikkoa (<strong>⋮</strong>).
             </li>
             <li>
               Valitse <strong>Asenna sovellus</strong> tai{' '}
