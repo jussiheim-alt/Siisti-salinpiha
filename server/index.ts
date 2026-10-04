@@ -50,6 +50,7 @@ import {
   pickLeadAndHelpers,
   resolveHelperCount,
 } from '../src/shared/travelGroup.ts'
+import { rankForRoster } from '../src/shared/shiftFairness.ts'
 import {
   assertCanDeleteUser,
   assertCanInviteAdmin,
@@ -316,6 +317,42 @@ function lastShiftAt(userId: string): string | null {
   return row?.week_start ?? null
 }
 
+function shiftCountForUser(userId: string): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE a.user_id = ? AND p.status IN ('published','done')`,
+    )
+    .get(userId) as { c: number }
+  return Number(row?.c ?? 0)
+}
+
+/** How many published/done weeks fall strictly between last assignment and the target week. */
+function publishedWeeksSinceLast(last: string | null, weekStart: string): number {
+  if (!last) return 999
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM pihavuorot
+       WHERE status IN ('published','done') AND week_start > ? AND week_start < ?`,
+    )
+    .get(last, weekStart) as { c: number }
+  return Number(row?.c ?? 0)
+}
+
+function nextFreeWeekStart(from = mondayOf()): string {
+  let weekStart = from
+  for (let i = 0; i < 52; i++) {
+    const candidate = format(addDays(parseISO(from), i * 7), 'yyyy-MM-dd')
+    const exists = db.prepare('SELECT id FROM pihavuorot WHERE week_start = ?').get(candidate)
+    if (!exists) {
+      weekStart = candidate
+      break
+    }
+  }
+  return weekStart
+}
+
 function upcomingMondays(count = 10): string[] {
   const start = mondayOf()
   return Array.from({ length: count }, (_, i) =>
@@ -360,22 +397,28 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
         ).map((r) => r.user_id),
   )
 
-  const ranked = users
+  const people = users
     .filter((u) => !already.has(u.id))
-    .map((u) => ({ ...u, last: lastShiftAt(u.id) }))
-    .sort((a, b) => {
-      if (!a.last && !b.last) return a.name.localeCompare(b.name, 'fi')
-      if (!a.last) return -1
-      if (!b.last) return 1
-      return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
+    .map((u) => {
+      const last = lastShiftAt(u.id)
+      return {
+        ...u,
+        last,
+        shiftCount: shiftCountForUser(u.id),
+        sparseRotation: Boolean(u.sparseRotation),
+        publishedWeeksSinceLast: publishedWeeksSinceLast(last, weekStart),
+      }
     })
 
+  const needed = helperCount + 1
+  const { ranked, sparseDeferred } = rankForRoster(people, needed)
   const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
 
   return {
     lead,
     helpers,
     ranked,
+    sparseDeferred,
     blockedCount: blocked.size,
     availableCount: ranked.length,
   }
@@ -471,17 +514,27 @@ app.get('/api/directory', authMiddleware, (_req, res) => {
 
 app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
   const actor = (req as express.Request & { user: AuthUser }).user
-  const { name, email, password, role, constraints, constraintNote, snoozeUntil, travelGroup } =
-    req.body as {
-      name?: string
-      email?: string
-      password?: string
-      role?: 'admin' | 'member'
-      constraints?: string[]
-      constraintNote?: string
-      snoozeUntil?: string | null
-      travelGroup?: string | null
-    }
+  const {
+    name,
+    email,
+    password,
+    role,
+    constraints,
+    constraintNote,
+    snoozeUntil,
+    travelGroup,
+    sparseRotation,
+  } = req.body as {
+    name?: string
+    email?: string
+    password?: string
+    role?: 'admin' | 'member'
+    constraints?: string[]
+    constraintNote?: string
+    snoozeUntil?: string | null
+    travelGroup?: string | null
+    sparseRotation?: boolean
+  }
   if (!name?.trim() || !email?.trim() || !password) {
     return res.status(400).json({ error: 'Nimi, sähköposti ja salasana vaaditaan' })
   }
@@ -497,8 +550,8 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
   const id = crypto.randomUUID()
   try {
     db.prepare(
-      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, constraint_note, snooze_until, travel_group, created_at)
-       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+      `INSERT INTO users (id, name, email, password_hash, role, active, constraints_json, constraint_note, snooze_until, travel_group, sparse_rotation, created_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       name.trim(),
@@ -509,6 +562,7 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
       constraintNote ?? null,
       snoozeUntil || null,
       normalizeTravelGroup(travelGroup),
+      sparseRotation ? 1 : 0,
       new Date().toISOString(),
     )
   } catch {
@@ -557,8 +611,14 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
       : row.travel_group
         ? String(row.travel_group)
         : null
+  const sparseRotation =
+    body.sparseRotation !== undefined
+      ? body.sparseRotation
+        ? 1
+        : 0
+      : Number(row.sparse_rotation ?? 0)
   db.prepare(
-    `UPDATE users SET name=?, email=?, role=?, active=?, constraints_json=?, constraint_note=?, snooze_until=?, travel_group=? WHERE id=?`,
+    `UPDATE users SET name=?, email=?, role=?, active=?, constraints_json=?, constraint_note=?, snooze_until=?, travel_group=?, sparse_rotation=? WHERE id=?`,
   ).run(
     name,
     email,
@@ -568,6 +628,7 @@ app.patch('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
     constraintNote,
     snoozeUntil || null,
     travelGroup,
+    sparseRotation,
     req.params.id,
   )
   if (body.password) {
@@ -965,7 +1026,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'shift-calendar-export-2026-10-04',
+    uiVersion: 'publish-week-review-2026-10-04',
   })
 })
 
@@ -1025,11 +1086,16 @@ app.get('/api/availability', authMiddleware, (req, res) => {
     ).map((r) => [r.week_start, r.role]),
   )
 
+  const targetRow = db.prepare('SELECT sparse_rotation FROM users WHERE id = ?').get(targetId) as
+    | { sparse_rotation: number }
+    | undefined
+
   res.json({
     userId: targetId,
     weeksAhead: count,
     windowStart: weeks[0],
     windowEnd: weeks[weeks.length - 1],
+    sparseRotation: Boolean(targetRow?.sparse_rotation),
     weeks: weeks.map((weekStart) => ({
       weekStart,
       weekEnd: format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd'),
@@ -1058,6 +1124,12 @@ app.put('/api/availability', authMiddleware, (req, res) => {
   )
   const now = new Date().toISOString()
   const tx = db.transaction(() => {
+    if (typeof req.body?.sparseRotation === 'boolean') {
+      db.prepare(`UPDATE users SET sparse_rotation = ? WHERE id = ?`).run(
+        req.body.sparseRotation ? 1 : 0,
+        user.id,
+      )
+    }
     del.run(user.id, window[0], window[window.length - 1]!)
     for (const weekStart of blockedWeeks) {
       // Don't block a week you're already assigned to as published — admin should reassign first
@@ -1084,7 +1156,14 @@ app.put('/api/availability', authMiddleware, (req, res) => {
       .all(user.id, window[0], window[window.length - 1]!) as { week_start: string }[]
   ).map((r) => r.week_start)
 
-  res.json({ ok: true, blockedWeeks: saved })
+  const sparseRow = db.prepare('SELECT sparse_rotation FROM users WHERE id = ?').get(user.id) as
+    | { sparse_rotation: number }
+    | undefined
+  res.json({
+    ok: true,
+    blockedWeeks: saved,
+    sparseRotation: Boolean(sparseRow?.sparse_rotation),
+  })
 })
 
 app.get('/api/availability/summary', authMiddleware, requireAdmin, (req, res) => {
@@ -1151,6 +1230,44 @@ app.get('/api/pihavuorot/meta/recommend', authMiddleware, requireAdmin, (req, re
   })
 })
 
+/** Preview next free week with recommended roster + season task cards for review before publish. */
+app.get('/api/pihavuorot/meta/week-draft', authMiddleware, requireAdmin, (req, res) => {
+  const weekStart = req.query.weekStart
+    ? mondayOf(String(req.query.weekStart))
+    : nextFreeWeekStart()
+  const helperCount = resolveHelperCount({
+    totalPeople: req.query.totalPeople,
+    helperCount: req.query.helperCount,
+  })
+  const season = isSeasonKey(req.query.season)
+    ? (req.query.season as SeasonKey)
+    : seasonForDate(weekStart)
+  const rec = recommend(weekStart, helperCount, { ignoreCurrentWeek: true })
+  const templates = (
+    db
+      .prepare(
+        `SELECT * FROM task_cards WHERE active = 1 AND season = ? ORDER BY sort_order ASC, title ASC`,
+      )
+      .all(season) as Record<string, unknown>[]
+  ).map((row) => {
+    const card = publicTaskCard(row)
+    return {
+      ...card,
+      selected: card.cadence === 'weekly',
+    }
+  })
+  res.json({
+    weekStart,
+    weekEnd: format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd'),
+    season,
+    seasonLabel: SEASON_LABELS[season],
+    ...rec,
+    helperCount,
+    totalPeople: helperCount + 1,
+    templates,
+  })
+})
+
 app.get('/api/pihavuorot/:id', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   const row = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
@@ -1165,17 +1282,10 @@ app.get('/api/pihavuorot/:id', authMiddleware, (req, res) => {
 })
 
 app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
-  let weekStart = mondayOf(req.body.weekStart)
-  // Jos viikko on jo olemassa tai weekStart ei annettu, etsi seuraava vapaa maanantai
+  let weekStart = req.body.weekStart ? mondayOf(req.body.weekStart) : nextFreeWeekStart()
+  // Jos viikko on jo olemassa ilman weekStart-parametria, etsi seuraava vapaa maanantai
   if (!req.body.weekStart) {
-    for (let i = 0; i < 52; i++) {
-      const candidate = format(addDays(parseISO(weekStart), i * 7), 'yyyy-MM-dd')
-      const exists = db.prepare('SELECT id FROM pihavuorot WHERE week_start = ?').get(candidate)
-      if (!exists) {
-        weekStart = candidate
-        break
-      }
-    }
+    weekStart = nextFreeWeekStart()
   }
   const season = isSeasonKey(req.body.season) ? req.body.season : seasonForDate(weekStart)
   const helperCount = resolveHelperCount({

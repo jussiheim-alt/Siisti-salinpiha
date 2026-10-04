@@ -22,6 +22,7 @@ import {
   pickLeadAndHelpers,
   resolveHelperCount,
 } from '../shared/travelGroup'
+import { rankForRoster } from '../shared/shiftFairness'
 
 
 const DB_KEY = 'siisti-piha-local-db-v3'
@@ -46,6 +47,7 @@ type User = {
   constraintNote?: string | null
   snoozeUntil?: string | null
   travelGroup?: string | null
+  sparseRotation?: boolean
   createdAt: string
 }
 
@@ -234,6 +236,7 @@ function normalizeDb(db: Db): Db {
   }
   for (const u of db.users) {
     if (u.travelGroup === undefined) u.travelGroup = null
+    if (u.sparseRotation === undefined) u.sparseRotation = false
   }
   for (const inv of db.invites) {
     if (inv.travelGroup === undefined) inv.travelGroup = null
@@ -420,6 +423,85 @@ function publicUser(u: User) {
     constraintNote: u.constraintNote ?? null,
     snoozeUntil: u.snoozeUntil ?? null,
     travelGroup: u.travelGroup ?? null,
+    sparseRotation: Boolean(u.sparseRotation),
+  }
+}
+
+function lastPublishedShift(db: Db, userId: string): string | null {
+  return (
+    db.pihavuorot
+      .filter(
+        (p) =>
+          (p.status === 'published' || p.status === 'done') &&
+          p.assignments.some((a) => a.userId === userId),
+      )
+      .map((p) => p.weekStart)
+      .sort()
+      .at(-1) ?? null
+  )
+}
+
+function shiftCountLocal(db: Db, userId: string): number {
+  return db.pihavuorot.filter(
+    (p) =>
+      (p.status === 'published' || p.status === 'done') &&
+      p.assignments.some((a) => a.userId === userId),
+  ).length
+}
+
+function publishedWeeksSinceLocal(db: Db, last: string | null, weekStart: string): number {
+  if (!last) return 999
+  return db.pihavuorot.filter(
+    (p) =>
+      (p.status === 'published' || p.status === 'done') &&
+      p.weekStart > last &&
+      p.weekStart < weekStart,
+  ).length
+}
+
+function nextFreeWeekLocal(db: Db, from = mondayOf()): string {
+  for (let i = 0; i < 52; i++) {
+    const candidate = addDays(from, i * 7)
+    if (!db.pihavuorot.some((p) => p.weekStart === candidate)) return candidate
+  }
+  return from
+}
+
+function recommendLocal(
+  db: Db,
+  weekStart: string,
+  helperCount: number,
+  opts: { ignoreCurrentWeek?: boolean } = {},
+) {
+  const blocked = new Set(db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId))
+  const already = new Set(
+    opts.ignoreCurrentWeek
+      ? []
+      : (db.pihavuorot.find((x) => x.weekStart === weekStart)?.assignments.map((a) => a.userId) ??
+          []),
+  )
+  const people = db.users
+    .filter((u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()))
+    .filter((u) => !blocked.has(u.id) && !already.has(u.id))
+    .map((u) => {
+      const last = lastPublishedShift(db, u.id)
+      return {
+        ...publicUser(u),
+        last,
+        shiftCount: shiftCountLocal(db, u.id),
+        sparseRotation: Boolean(u.sparseRotation),
+        publishedWeeksSinceLast: publishedWeeksSinceLocal(db, last, weekStart),
+      }
+    })
+  const { ranked, sparseDeferred } = rankForRoster(people, helperCount + 1)
+  const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
+  return {
+    lead,
+    helpers,
+    ranked,
+    sparseDeferred,
+    blockedCount: blocked.size,
+    availableCount: ranked.length,
   }
 }
 
@@ -769,6 +851,7 @@ export async function localApi<T = unknown>(
     if (body.constraintNote !== undefined) target!.constraintNote = String(body.constraintNote || '') || null
     if (body.snoozeUntil !== undefined) target!.snoozeUntil = body.snoozeUntil ? String(body.snoozeUntil) : null
     if (body.travelGroup !== undefined) target!.travelGroup = normalizeTravelGroup(body.travelGroup)
+    if (typeof body.sparseRotation === 'boolean') target!.sparseRotation = body.sparseRotation
     if (body.password) {
       if (String(body.password).length < 8) err('Salasanan oltava vähintään 8 merkkiä')
       target!.passwordHash = await hashPassword(String(body.password))
@@ -970,7 +1053,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'shift-calendar-export-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'publish-week-review-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
@@ -1082,51 +1165,38 @@ export async function localApi<T = unknown>(
 
   if (pathname === '/api/pihavuorot' && method === 'POST') {
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
-    let weekStart = mondayOf(body.weekStart ? String(body.weekStart) : undefined)
-    if (!body.weekStart) {
-      for (let i = 0; i < 52; i++) {
-        const candidate = addDays(weekStart, i * 7)
-        if (!db.pihavuorot.some((p) => p.weekStart === candidate)) {
-          weekStart = candidate
-          break
-        }
-      }
-    }
+    let weekStart = body.weekStart
+      ? mondayOf(String(body.weekStart))
+      : nextFreeWeekLocal(db)
+    if (!body.weekStart) weekStart = nextFreeWeekLocal(db)
     if (db.pihavuorot.some((p) => p.weekStart === weekStart)) err('Viikolle on jo Pihavuoro')
     const helperCount = resolveHelperCount({
       totalPeople: body.totalPeople,
       helperCount: body.helperCount,
     })
-    const blocked = new Set(db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId))
-    const ranked = db.users
-      .filter((u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()))
-      .filter((u) => !blocked.has(u.id))
-      .map((u) => {
-        const last = db.pihavuorot
-          .filter((p) => p.assignments.some((a) => a.userId === u.id))
-          .map((p) => p.weekStart)
-          .sort()
-          .at(-1) as string | undefined
-        return { ...publicUser(u), last }
-      })
-      .sort((a, b) => {
-        if (!a.last && !b.last) return a.name.localeCompare(b.name, 'fi')
-        if (!a.last) return -1
-        if (!b.last) return 1
-        return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
-      })
-    const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
-    if (!lead) err('Vastuuhenkilöä ei löytynyt')
-    if (helpers.length < 1) {
+    const useRecommend = body.recommend !== false
+    let leadId = body.leadUserId ? String(body.leadUserId) : ''
+    let helperIds = Array.isArray(body.helperUserIds)
+      ? (body.helperUserIds as string[]).map(String)
+      : []
+    if (useRecommend && !leadId) {
+      const rec = recommendLocal(db, weekStart, helperCount)
+      leadId = rec.lead?.id || ''
+      helperIds = rec.helpers.map((h) => h.id)
+    }
+    if (!leadId) err('Vastuuhenkilöä ei löytynyt')
+    if (helperIds.length < 1 || helperIds.length > 5) {
       err(
-        `Vain ${helpers.length} saatavilla olevaa jäsentä tälle viikolle (tarvitaan 1–5 avustajaa). Tarkista esteviikot.`,
+        helperIds.length < 1
+          ? `Vain ${helperIds.length} saatavilla olevaa jäsentä tälle viikolle (tarvitaan 1–5 avustajaa). Tarkista esteviikot.`
+          : 'Avustajia tarvitaan 1–5',
       )
     }
     const assignments: Assignment[] = [
-      { id: uid(), userId: lead!.id, role: 'lead' },
-      ...helpers.map((h) => ({ id: uid(), userId: h.id, role: 'helper' as const })),
+      { id: uid(), userId: leadId, role: 'lead' },
+      ...helperIds.map((hid) => ({ id: uid(), userId: hid, role: 'helper' as const })),
     ]
-    const season = seasonFor(weekStart)
+    const season = isSeasonKey(body.season) ? body.season : seasonFor(weekStart)
     const p: Pihavuoro = {
       id: uid(),
       weekStart,
@@ -1161,43 +1231,42 @@ export async function localApi<T = unknown>(
         helperCount: params.get('helperCount'),
       })
       const ignoreCurrent = params.get('fresh') === '1'
-      const blocked = new Set(
-        db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId),
-      )
-      const already = new Set(
-        ignoreCurrent
-          ? []
-          : (db.pihavuorot.find((x) => x.weekStart === weekStart)?.assignments.map((a) => a.userId) ??
-              []),
-      )
-      const ranked = db.users
-        .filter((u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()))
-        .filter((u) => !blocked.has(u.id) && !already.has(u.id))
-        .map((u) => {
-          const last = db.pihavuorot
-            .filter((p) => p.assignments.some((a) => a.userId === u.id))
-            .map((p) => p.weekStart)
-            .sort()
-            .at(-1) as string | undefined
-          return { ...publicUser(u), last }
-        })
-        .sort((a, b) => {
-          if (!a.last && !b.last) return a.name.localeCompare(b.name, 'fi')
-          if (!a.last) return -1
-          if (!b.last) return 1
-          return a.last.localeCompare(b.last) || a.name.localeCompare(b.name, 'fi')
-        })
-      const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
+      const rec = recommendLocal(db, weekStart, helperCount, { ignoreCurrentWeek: ignoreCurrent })
       return ok({
         weekStart,
-        lead,
-        helpers,
-        ranked,
+        ...rec,
         helperCount,
         totalPeople: helperCount + 1,
-        blockedCount: blocked.size,
-        availableCount: ranked.length,
         season: seasonFor(weekStart),
+      })
+    }
+
+    if (id === 'meta' && rest.startsWith('/week-draft') && method === 'GET') {
+      if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+      const weekStart = params.get('weekStart')
+        ? mondayOf(params.get('weekStart') || undefined)
+        : nextFreeWeekLocal(db)
+      const helperCount = resolveHelperCount({
+        totalPeople: params.get('totalPeople'),
+        helperCount: params.get('helperCount'),
+      })
+      const season = isSeasonKey(params.get('season'))
+        ? (params.get('season') as SeasonKey)
+        : seasonFor(weekStart)
+      const rec = recommendLocal(db, weekStart, helperCount, { ignoreCurrentWeek: true })
+      const templates = db.taskCards
+        .filter((c) => c.active && c.season === season)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'fi'))
+        .map((c) => ({ ...c, selected: c.cadence === 'weekly' }))
+      return ok({
+        weekStart,
+        weekEnd: addDays(weekStart, 6),
+        season,
+        seasonLabel: SEASON_LABELS[season],
+        ...rec,
+        helperCount,
+        totalPeople: helperCount + 1,
+        templates,
       })
     }
 
@@ -1377,11 +1446,13 @@ export async function localApi<T = unknown>(
       db.weekBlocks.filter((b) => b.userId === targetId).map((b) => b.weekStart),
     )
     saveDb(db)
+    const targetUser = db.users.find((u) => u.id === targetId)
     return ok({
       userId: targetId,
       weeksAhead: count,
       windowStart: weeks[0],
       windowEnd: weeks[weeks.length - 1],
+      sparseRotation: Boolean(targetUser?.sparseRotation),
       weeks: weeks.map((weekStart) => {
         const p = db.pihavuorot.find((x) => x.weekStart === weekStart)
         const myRole = p?.assignments.find((a) => a.userId === targetId)?.role || null
@@ -1403,6 +1474,10 @@ export async function localApi<T = unknown>(
       ? (body.blockedWeeks as string[]).filter((w) => windowSet.has(w))
       : []
     const start = mondayOf()
+    if (typeof body.sparseRotation === 'boolean') {
+      const me = db.users.find((u) => u.id === user!.id)
+      if (me) me.sparseRotation = body.sparseRotation
+    }
     db.weekBlocks = db.weekBlocks.filter(
       (b) =>
         !(
@@ -1422,11 +1497,13 @@ export async function localApi<T = unknown>(
       })
     }
     saveDb(db)
+    const me = db.users.find((u) => u.id === user!.id)
     return ok({
       ok: true,
       blockedWeeks: db.weekBlocks
         .filter((b) => b.userId === user!.id && windowSet.has(b.weekStart))
         .map((b) => b.weekStart),
+      sparseRotation: Boolean(me?.sparseRotation),
     })
   }
   if (pathname === '/api/availability/summary' && method === 'GET') {

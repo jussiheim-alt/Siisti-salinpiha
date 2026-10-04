@@ -35,11 +35,15 @@ export function AvailabilityPage() {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [sparseRotation, setSparseRotation] = useState(false)
 
   async function load() {
-    const data = await api<{ weeks: WeekRow[] }>('/api/availability?weeks=10')
+    const data = await api<{ weeks: WeekRow[]; sparseRotation?: boolean }>(
+      '/api/availability?weeks=10',
+    )
     setWeeks(data.weeks)
     setSelected(new Set(data.weeks.filter((w) => w.blocked).map((w) => w.weekStart)))
+    setSparseRotation(Boolean(data.sparseRotation))
     setDirty(false)
     if (isAdmin) {
       const sum = await api<{ weeks: SummaryWeek[] }>('/api/availability/summary?weeks=10')
@@ -70,7 +74,7 @@ export function AvailabilityPage() {
     try {
       await api('/api/availability', {
         method: 'PUT',
-        json: { blockedWeeks: [...selected], weeks: 10 },
+        json: { blockedWeeks: [...selected], weeks: 10, sparseRotation },
       })
       await load()
       setSaved(true)
@@ -98,6 +102,26 @@ export function AvailabilityPage() {
 
       {error && <p className="error">{error}</p>}
       {saved && !dirty && <p className="ok-flash">Käytettävyys tallennettu.</p>}
+
+      <section className="panel">
+        <h2>Kierto</h2>
+        <label className="check" style={{ marginBottom: '0.65rem' }}>
+          <input
+            type="checkbox"
+            checked={sparseRotation}
+            onChange={(e) => {
+              setSparseRotation(e.target.checked)
+              setDirty(true)
+              setSaved(false)
+            }}
+          />
+          Käytä minua tavallista harvemmin (noin joka toinen kierros)
+        </label>
+        <p className="hint" style={{ marginTop: 0 }}>
+          Kun rasti on päällä, suositus jättää sinut väliin yhden julkaistun vuoron verran
+          edellisen vuorosi jälkeen — ellei vuorolle muuten jää liian vähän väkeä.
+        </p>
+      </section>
 
       <section className="panel">
         <h2>Seuraavat 10 viikkoa</h2>

@@ -2218,6 +2218,22 @@ label.template-pick input[type='checkbox'] {
   background: inherit;
 }
 
+.publish-week-modal {
+  width: min(560px, 100%);
+}
+
+.publish-pick-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.publish-pick-list .check {
+  align-items: flex-start;
+}
+
 .btn.danger {
   background: color-mix(in srgb, var(--danger) 12%, white);
   color: var(--danger);

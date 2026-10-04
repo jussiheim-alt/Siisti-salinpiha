@@ -76,6 +76,8 @@ export type User = {
   snoozeUntil?: string | null
   /** Same label → suositus pitää henkilöt samalla viikolla */
   travelGroup?: string | null
+  /** Käytä harvemmin — suositus noin joka toiseen kierrokseen */
+  sparseRotation?: boolean
 }
 
 export type Assignment = {
