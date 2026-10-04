@@ -100,7 +100,11 @@ export function ExtraTasksPage() {
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Apukutsut</h1>
-        <p className="lede">Yllättävä tarve — ilmoittaudu, kun minimi täyttyy tehtävä aktivoituu.</p>
+        <p className="lede">
+          Jos vuorossa olevat ystävät tarvitsevat lisätyövoimaa pihatöihin, tähän tulee heiltä
+          apukutsu. Voit ilmoittautua mukaan hyvään työhön auttamaan heitä, vaikka et olisi vuorossa
+          silloin. Apuasi arvostetaan suuresti!
+        </p>
       </header>
 
       {user?.role === 'admin' && tasks.length > 0 && (
@@ -191,7 +195,8 @@ export function ExtraTasksPage() {
 
       {!canCreate && (
         <p className="hint">
-          Apukutsun voi luoda ylläpitäjä tai julkaistun viikon vastuuveli.
+          Kun apukutsu ilmestyy, ilmoittaudu mukaan. Kun tarvittava määrä on koossa, tehtävä
+          aktivoituu. Uuden kutsun voi luoda ylläpitäjä tai julkaistun viikon vastuuveli.
         </p>
       )}
 

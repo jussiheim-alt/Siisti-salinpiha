@@ -25,7 +25,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Etusivu',
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
-      'Kytke ilmoitukset päälle etusivulta, jotta lukitusnäyttö saa viestit. Apukutsut tulevat kaikille; muut push-ilmoitukset (sää, huomiot, chat) vain vuorossa oleville. Sovelluksen Ilmo-listassa viestit voivat näkyä laajemmalle. Chat-viestit näkyvät chat-kuvakkeen punaisessa numerossa (eivät Ilmo-listassa). iPhonella sovellus pitää olla kotivalikossa.',
+      'Kytke ilmoitukset päälle etusivulta (tai Ilmo-välilehdeltä, kun ne on jo päällä), jotta lukitusnäyttö saa viestit. Apukutsut tulevat kaikille; muut push-ilmoitukset (sää, huomiot, chat) vain vuorossa oleville. Sovelluksen Ilmo-listassa viestit voivat näkyä laajemmalle. Chat-viestit näkyvät chat-kuvakkeen punaisessa numerossa (eivät Ilmo-listassa). iPhonella sovellus pitää olla kotivalikossa.',
       'Pikavalinnoista pääset käytettävyyteen, apukutsuihin ja huomioihin.',
     ],
     to: '/',
@@ -37,6 +37,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Vuorot-välilehdellä näet julkaistut viikot. Avaa oma viikkosi nähdäksesi kokoonpanon ja tehtävät.',
       'Viikon tehtävät ovat koko vuoron yhteisiä, mutta vain vastuuveli kuittaa ne tehdyiksi. Jos olet vastuuveli, näet etusivulla ohjeet.',
+      'Voit lisätä omat vuorosi puhelimen kalenteriin (esim. Google) napilla “Lisää kalenteriin” etusivulla, vuoronäkymässä tai Vuorot-listassa.',
       'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa. Lukemattomat viestit näkyvät punaisella numerolla kuvakkeessa; lukitusnäytölle tulee push, jos ilmoitukset on kytketty päälle.',
     ],
     to: '/kalenteri',
@@ -57,9 +58,9 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     id: 'apu',
     title: 'Apukutsut',
     body: [
-      'Kun tarvitaan lisäkäsiä (esim. runsas lumi), avaa Apu-välilehti.',
-      'Ilmoittaudu avoimeen kutsuun. Kun minimi täyttyy, tehtävä aktivoituu.',
-      'Vastuuveli tai ylläpitäjä voi luoda uuden apukutsun tarvittaessa.',
+      'Jos vuorossa olevat ystävät tarvitsevat lisätyövoimaa pihatöihin, he voivat lähettää apukutsun Apu-välilehdelle.',
+      'Voit ilmoittautua mukaan hyvään työhön auttamaan heitä, vaikka et itse olisi vuorossa silloin. Apuasi arvostetaan suuresti!',
+      'Kun ilmoittautuneita on tarpeeksi (minimi), tehtävä aktivoituu. Uuden kutsun luo vastuuveli tai ylläpitäjä tarvittaessa.',
     ],
     to: '/apukutsut',
     linkLabel: 'Avaa apukutsut',
@@ -68,7 +69,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     id: 'ilmo',
     title: 'Ilmoitukset',
     body: [
-      'Ilmo-välilehdellä näet sää-, apukutsu- ja muut ilmoitukset.',
+      'Ilmo-välilehdellä näet sää-, apukutsu- ja muut ilmoitukset. Sieltä voit myös kytkeä lukitusnäytön ilmoitukset päälle tai pois.',
       'Sääilmoituksia lähetetään klo 8–18 Suomen aikaa, ja lukitusnäytölle ne menevät vain viikon vuorolaisille. Apukutsujen push tulee kaikille.',
       'Avaa ilmoitus siirtyäksesi suoraan liittyvään näkymään. Merkitse luetuiksi tarvittaessa.',
     ],

@@ -28,7 +28,12 @@ function detectMode(status: {
   return 'off'
 }
 
-export function PushToggle() {
+type Props = {
+  /** Etusivulla: piilota kortti kun ilmoitukset ovat jo päällä (asetus Ilmo-välilehdellä). */
+  hideWhenEnabled?: boolean
+}
+
+export function PushToggle({ hideWhenEnabled = false }: Props) {
   const [mode, setMode] = useState<Mode>('loading')
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState('')
@@ -110,6 +115,7 @@ export function PushToggle() {
 
   if (mode === 'loading') return null
   if (mode === 'unsupported') return null
+  if (hideWhenEnabled && mode === 'on') return null
 
   const isOn = mode === 'on'
   const isBlocked = mode === 'blocked'
