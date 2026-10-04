@@ -16,10 +16,7 @@
   --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
-  /* Tab bar content height + home-indicator inset (kept in sync with .tabbar-bottom). */
-  --nav-safe-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
-  --nav-content-h: 3.7rem;
-  --nav-h: calc(var(--nav-content-h) + var(--nav-safe-bottom));
+  --nav-h: 5.15rem;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
@@ -59,23 +56,6 @@ body {
   overflow-x: hidden;
 }
 
-/*
- * Logged-in shell: fill the real standalone window.
- * 100dvh alone is often SHORT on iOS PWAs → mist letterbox under the tab bar
- * (manifest/body background shows through). Prefer -webkit-fill-available and
- * the JS --app-height fallback from viewportShell.ts.
- */
-html:has(.app-shell-bottom-nav),
-body:has(.app-shell-bottom-nav) {
-  height: 100%;
-  min-height: 100%;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
-  overflow: hidden;
-  overscroll-behavior: none;
-  background-color: #ffffff;
-}
-
 #root,
 .app-shell {
   width: 100%;
@@ -83,23 +63,14 @@ body:has(.app-shell-bottom-nav) {
 }
 
 #root:has(.app-shell-bottom-nav) {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  /* Fallbacks first; JS viewportShell overwrites height to the real window. */
-  height: 100%;
+  /* Fixed viewport shell: avoid -webkit-fill-available (clips tabbar on iOS). */
   height: 100dvh;
-  height: -webkit-fill-available;
-  display: flex;
-  flex-direction: column;
+  max-height: 100dvh;
   overflow: hidden;
   /* Reserve the notch/Dynamic Island outside the scrolling main. */
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
-  background: #ffffff;
 }
 
 img,
@@ -163,16 +134,12 @@ a {
 }
 
 .app-shell.app-shell-bottom-nav {
-  position: relative;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  /* Fill #root’s content box exactly — never taller than the viewport. */
   height: 100%;
-  max-height: none;
+  min-height: 0;
+  max-height: 100%;
   overflow: hidden;
-  /* Room for the absolutely positioned tab bar. */
-  padding-bottom: var(--nav-h);
+  padding-bottom: 0;
   box-sizing: border-box;
 }
 
@@ -207,16 +174,11 @@ a {
 }
 
 .tabbar-bottom {
-  /* Pin to the shell bottom (same box as --app-height), not a short 100dvh viewport. */
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0.4rem 0.35rem var(--nav-safe-bottom);
-  background: #ffffff;
+  margin-top: 0;
+  padding: 0.4rem 0.35rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border-top: 1px solid rgba(18, 35, 28, 0.08);
   box-shadow: 0 -8px 28px rgba(11, 36, 28, 0.05);
 }
@@ -1496,7 +1458,7 @@ select:focus {
 }
 
 @media (min-width: 800px) {
-  .tabbar-bottom {
+  .tabbar {
     max-width: 720px;
     border-radius: 1.1rem 1.1rem 0 0;
   }
@@ -2674,10 +2636,9 @@ label.template-pick input[type='checkbox'] {
 }
 
 .chat-fab {
-  position: absolute;
+  position: fixed;
   right: max(1rem, env(safe-area-inset-right));
-  /* Sit above the absolutely positioned tab bar inside the shell. */
-  bottom: calc(var(--nav-h) + 0.75rem);
+  bottom: calc(var(--nav-h) + 0.75rem + env(safe-area-inset-bottom));
   z-index: 45;
   width: 3.4rem;
   height: 3.4rem;
