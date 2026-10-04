@@ -1,3 +1,4 @@
+import { format, startOfWeek } from 'date-fns'
 import { getAppSettings } from './appSettings.ts'
 import { db } from './db.ts'
 import { capToAlertTips, getCapWarnings } from './capWarnings.ts'
@@ -5,6 +6,9 @@ import { getWeather, type WeatherPayload, type WeatherTip } from './weather.ts'
 import { webpush } from './vapid.ts'
 
 const CHECK_MS = 60 * 60 * 1000
+/** Sääpush / sääilmoitukset vain klo 8–18 Suomen aikaa. */
+const WEATHER_PUSH_HOUR_START = 8
+const WEATHER_PUSH_HOUR_END = 18
 
 function helsinkiDay(d = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -13,6 +17,57 @@ function helsinkiDay(d = new Date()): string {
     month: '2-digit',
     day: '2-digit',
   }).format(d)
+}
+
+function helsinkiHour(d = new Date()): number {
+  const hour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Helsinki',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(d).find((p) => p.type === 'hour')?.value
+  return Number(hour ?? 0)
+}
+
+/** Sääilmoituksia lähetetään vain klo 8.00–18.00 (Europe/Helsinki). */
+export function isWeatherAlertWindow(d = new Date()): boolean {
+  const hour = helsinkiHour(d)
+  return hour >= WEATHER_PUSH_HOUR_START && hour < WEATHER_PUSH_HOUR_END
+}
+
+function currentWeekStart(): string {
+  return format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+}
+
+/** Julkaistun kuluvan viikon Pihavuoron kokoonpano. */
+export function currentWeekAssigneeIds(): Set<string> {
+  const rows = db
+    .prepare(
+      `SELECT a.user_id AS id FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE p.status = 'published' AND p.week_start = ?`,
+    )
+    .all(currentWeekStart()) as { id: string }[]
+  return new Set(rows.map((r) => r.id))
+}
+
+/**
+ * Kenelle lukitusnäytön push lähetetään.
+ * - apukutsut (`extra`): kaikille vastaanottajille
+ * - vuoro/sää/chat: kutsujan rajaama lista (jo vuorokohtainen)
+ * - muut: vain kuluvan viikon vuorossa oleville (Ilmo-lista voi silti mennä laajemmalle)
+ */
+function resolvePushRecipients(userIds: string[], kind: string): string[] {
+  if (kind === 'extra') return userIds
+  if (
+    kind === 'shift' ||
+    kind === 'chat' ||
+    kind === 'weather' ||
+    kind === 'weather-cap'
+  ) {
+    return userIds
+  }
+  const onShift = currentWeekAssigneeIds()
+  return userIds.filter((id) => onShift.has(id))
 }
 
 function overlappingPublishedWeeks() {
@@ -74,7 +129,10 @@ export function notifyUsers(
   })
   tx()
 
-  void sendWebPush(unique, title, body, link, kind)
+  const pushIds = resolvePushRecipients(unique, kind)
+  if (pushIds.length) {
+    void sendWebPush(pushIds, title, body, link, kind)
+  }
 }
 
 /** Send OS/web-push to subscribed devices. Returns delivery counts. */
@@ -169,6 +227,13 @@ export async function runWeatherAlertCheck(): Promise<{
   place?: string
   warnings?: number
 }> {
+  if (!isWeatherAlertWindow()) {
+    return {
+      sent: [],
+      skipped: 'Sääilmoituksia lähetetään vain klo 8–18 (Suomen aikaa)',
+    }
+  }
+
   const weeks = overlappingPublishedWeeks()
   if (!weeks.length) {
     return { sent: [], skipped: 'Ei julkaistua Pihavuoroa tälle viikolle' }
