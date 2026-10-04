@@ -1,5 +1,5 @@
 /** Bump when the notice text changes so users must re-acknowledge. */
-export const PRIVACY_NOTICE_VERSION = '2026-10-04d'
+export const PRIVACY_NOTICE_VERSION = '2026-10-04e'
 
 export type PrivacySection = {
   id: string
@@ -12,16 +12,19 @@ export const PRIVACY_NOTICE_TITLE = 'Tietosuojaseloste'
 export const PRIVACY_NOTICE_INTRO =
   'Siisti salin piha -sovellus käsittelee henkilötietoja pihavuorojen järjestämiseksi. Lue tämä lyhyt seloste ennen käytön jatkamista.'
 
+export const PRIVACY_ACCEPT_LABEL =
+  'Olen lukenut tietosuojaselosteen.'
+
 export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'rekisteri',
     title: '1. Rekisterinpitäjä',
-    body: 'Rekisterinpitäjä on Siisti salin piha -sovelluksen ylläpitäjät, joita ovat Vääksyn seurakunnan huolto- ja siivouskoordinaattori ja apulainen. Yhteydenotot tietoturva-asioissa: Jussi Heimonen.',
+    body: 'Rekisterinpitäjinä toimivat sovelluksen ylläpitäjät yksityishenkilöinä: Joni Moilanen ja Jussi Heimonen. Yhteydenotot tietosuoja- ja tietoturva-asioissa: Jussi Heimonen, jussiheim@gmail.com.',
   },
   {
     id: 'tarkoitus',
     title: '2. Mihin tietoja käytetään',
-    body: 'Tietoja käytetään pihavuorojen suunnitteluun ja julkaisuun, tehtävien kuittaukseen, käytettävyysesteiden kirjaamiseen, apukutsuihin, huomioihin (vikailmoituksiin), vuorokeskusteluun sekä lukitusnäytön ilmoituksiin. Käsittelyn peruste on vuorojen järjestäminen yhteisön jäsenille (oikeutettu etu / jäsenyyteen liittyvä tarve).',
+    body: 'Tietoja käytetään pihavuorojen suunnitteluun ja julkaisuun, tehtävien kuittaukseen, käytettävyysesteiden kirjaamiseen, apukutsuihin, huomioihin (vikailmoituksiin), vuorokeskusteluun sekä lukitusnäytön ilmoituksiin. Käsittelyn peruste on vuorojen järjestäminen yhteisön jäsenille (oikeutettu etu / jäsenyyteen liittyvä tarve). Tilin luominen on tarpeen sovelluksen käyttämiseksi.',
   },
   {
     id: 'tiedot',
@@ -36,7 +39,7 @@ export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'vastaanottajat',
     title: '5. Palveluntarjoajat',
-    body: 'Sovellus ja tietokanta isännöidään Render-palvelussa (EU). Säätilatietoja haetaan Ilmatieteen laitokselta paikan perusteella (ei käyttäjäkohtainen sijainti). Push-ilmoitukset kulkevat laitteen valmistajan ilmoituspalvelun kautta. Kirjasimia voidaan ladata Google Fonts -palvelusta. Google-kalenteriin lisäys avaa Googlen sivun käyttäjän omalla toimella.',
+    body: 'Sovellus ja tietokanta isännöidään Render-palvelussa (EU). Säätilatietoja haetaan Ilmatieteen laitokselta paikan perusteella (ei käyttäjäkohtainen sijainti). Push-ilmoitukset kulkevat laitteen valmistajan ilmoituspalvelun kautta. Kirjasimia voidaan ladata Google Fonts -palvelusta. Google-kalenteriin lisäys avaa Googlen sivun käyttäjän omalla toimella. Google Fonts ja laitteen push-palvelu voivat käsitellä teknisiä tietoja myös EU-/ETA-alueen ulkopuolella.',
   },
   {
     id: 'sailytys',
@@ -46,7 +49,7 @@ export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'oikeudet',
     title: '7. Oikeutesi',
-    body: 'Sinulla on oikeus pyytää pääsyä tietoihisi, niiden oikaisua tai poistoa sekä vastustaa käsittelyä siltä osin kuin se perustuu oikeutettuun etuun. Voit myös tehdä valituksen tietosuojavaltuutetulle (tietosuoja.fi).',
+    body: 'Sinulla on oikeus pyytää pääsyä tietoihisi, niiden oikaisua tai poistoa, käsittelyn rajoittamista sekä tietojen siirrettävyyttä. Voit myös vastustaa käsittelyä siltä osin kuin se perustuu oikeutettuun etuun. Voit tehdä valituksen tietosuojavaltuutetulle (tietosuoja.fi).',
   },
   {
     id: 'ilmoitukset',

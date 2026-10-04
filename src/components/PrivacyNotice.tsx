@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  PRIVACY_ACCEPT_LABEL,
   PRIVACY_NOTICE_INTRO,
   PRIVACY_NOTICE_SECTIONS,
   PRIVACY_NOTICE_TITLE,
