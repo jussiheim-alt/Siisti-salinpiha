@@ -2295,37 +2295,6 @@ app.delete('/api/push/subscribe', authMiddleware, (req, res) => {
   res.json({ ok: true })
 })
 
-/** Testaa lukitusnäyttö-ilmoitus tälle käyttäjälle / laitteelle. */
-app.post('/api/push/test', authMiddleware, async (req, res) => {
-  const user = (req as express.Request & { user: AuthUser }).user
-  const count = (
-    db.prepare(`SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?`).get(user.id) as {
-      c: number
-    }
-  ).c
-  if (!count) {
-    return res.status(400).json({
-      error:
-        'Tällä tilillä ei ole push-tilausta tälle laitteelle. Kytke ilmoitukset päälle etusivulta (iPhonella: asenna ensin kotivalikkoon).',
-    })
-  }
-  const result = await sendWebPush(
-    [user.id],
-    'Testi-ilmoitus',
-    'Jos näet tämän lukitusnäytöllä, push toimii.',
-    '/',
-    'general',
-  )
-  if (!result.delivered) {
-    return res.status(502).json({
-      error:
-        'Push-lähetys epäonnistui. Kytke ilmoitukset pois ja uudelleen päälle etusivulta, ja varmista että sovellus on kotivalikossa.',
-      ...result,
-    })
-  }
-  res.json({ ok: true, ...result })
-})
-
 function hydrateExtraTask(row: Record<string, unknown>, viewerId?: string) {
   const id = String(row.id)
   const signups = db
