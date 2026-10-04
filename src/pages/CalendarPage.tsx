@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Pihavuoro } from '../api'
 import { useAuth } from '../auth'
+import { AddToCalendarButton } from '../components/AddToCalendarButton'
 import { formatWeekRangeFi } from '../shared/datetime'
 import {
   DEFAULT_TOTAL_PEOPLE,
@@ -69,6 +70,25 @@ export function CalendarPage() {
     (_, i) => MIN_TOTAL_PEOPLE + i,
   )
 
+  const myShifts = useMemo(
+    () =>
+      list
+        .filter((p) => p.status !== 'draft')
+        .map((p) => {
+          const mine = p.assignments.find((a) => a.userId === user?.id)
+          if (!mine) return null
+          return {
+            id: p.id,
+            weekStart: p.weekStart,
+            weekEnd: p.weekEnd,
+            role: mine.role,
+            seasonLabel: p.seasonLabel || p.season,
+          }
+        })
+        .filter((x): x is NonNullable<typeof x> => Boolean(x)),
+    [list, user?.id],
+  )
+
   return (
     <div className="page">
       <header className="page-hero compact">
@@ -76,6 +96,20 @@ export function CalendarPage() {
         <h1>Kalenteri</h1>
         <p className="lede">Viikoittaiset Pihavuorot — luonnos tai julkaistu.</p>
       </header>
+
+      {myShifts.length > 0 && (
+        <section className="panel" style={{ marginBottom: '0.85rem' }}>
+          <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>Omat vuorot kalenteriin</h2>
+          <AddToCalendarButton
+            events={myShifts}
+            label={
+              myShifts.length === 1
+                ? 'Lisää kalenteriin'
+                : `Lisää ${myShifts.length} vuoroa kalenteriin`
+            }
+          />
+        </section>
+      )}
 
       {user?.role === 'admin' && (
         <div className="stack" style={{ marginBottom: '0.85rem' }}>

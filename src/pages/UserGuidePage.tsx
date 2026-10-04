@@ -37,6 +37,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Vuorot-välilehdellä näet julkaistut viikot. Avaa oma viikkosi nähdäksesi kokoonpanon ja tehtävät.',
       'Viikon tehtävät ovat koko vuoron yhteisiä, mutta vain vastuuveli kuittaa ne tehdyiksi. Jos olet vastuuveli, näet etusivulla ohjeet.',
+      'Voit lisätä omat vuorosi puhelimen kalenteriin (esim. Google) napilla “Lisää kalenteriin” etusivulla, vuoronäkymässä tai Vuorot-listassa.',
       'Vuorokeskustelu aukeaa oikean alan chat-painikkeesta, kun olet viikon kokoonpanossa. Lukemattomat viestit näkyvät punaisella numerolla kuvakkeessa; lukitusnäytölle tulee push, jos ilmoitukset on kytketty päälle.',
     ],
     to: '/kalenteri',

@@ -8,6 +8,7 @@ import {
   type User,
 } from '../api'
 import { useAuth } from '../auth'
+import { AddToCalendarButton } from '../components/AddToCalendarButton'
 import { formatWeekRangeFi } from '../shared/datetime'
 import { CADENCE_LABELS, SEASON_LABELS } from '../shared/seasons'
 
@@ -362,6 +363,22 @@ export function PihavuoroPage() {
           </p>
         )}
       </header>
+
+      {onShift && p.status !== 'draft' && (
+        <div style={{ marginBottom: '1rem' }}>
+          <AddToCalendarButton
+            events={[
+              {
+                id: p.id,
+                weekStart: p.weekStart,
+                weekEnd: p.weekEnd,
+                role: myAssignment?.role,
+                seasonLabel: p.seasonLabel || SEASON_LABELS[p.season] || p.season,
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
       {info && <p className="ok-flash">{info}</p>}

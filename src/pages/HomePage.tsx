@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification, type Pihavuoro, type WeatherPayload } from '../api'
 import { useAuth } from '../auth'
+import { AddToCalendarButton } from '../components/AddToCalendarButton'
 import { LeadCallout } from '../components/LeadCallout'
 import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
@@ -154,6 +155,24 @@ export function HomePage() {
                 </Link>
               ))}
             </div>
+            {myAssignment && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <AddToCalendarButton
+                  events={[
+                    {
+                      id: next.id,
+                      weekStart: next.weekStart,
+                      weekEnd: next.weekEnd,
+                      role: myAssignment.role,
+                      seasonLabel:
+                        SEASON_LABELS[next.season as SeasonKey] ||
+                        next.seasonLabel ||
+                        next.season,
+                    },
+                  ]}
+                />
+              </div>
+            )}
           </section>
         )}
 
