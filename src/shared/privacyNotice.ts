@@ -1,5 +1,5 @@
 /** Bump when the notice text changes so users must re-acknowledge. */
-export const PRIVACY_NOTICE_VERSION = '2026-10-04b'
+export const PRIVACY_NOTICE_VERSION = '2026-10-04c'
 
 export type PrivacySection = {
   id: string
@@ -26,12 +26,12 @@ export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'tiedot',
     title: '3. Mitä tietoja kerätään',
-    body: 'Nimi, sähköposti ja salasana (salasanasta tallennetaan vain suojattu tiiviste). Lisäksi vuoroihin liittyvät tiedot (kokoonpano, vastuuveli/avustaja), käytettävyysrajoitukset (esim. ei raskaisiin töihin), esteviikot, huomiotekstit ja mahdolliset valokuvat, chat-viestit vuoron jäsenille, apukutsuihin ilmoittautumiset sekä push-ilmoitusten laitetiedot (jos ilmoitukset otetaan käyttöön).',
+    body: 'Nimi, sähköposti ja salasana (salasanasta tallennetaan vain suojattu tiiviste). Lisäksi vuoroihin liittyvät tiedot (kokoonpano, vastuuveli/avustaja), käytettävyysrajoitukset (esim. ei raskaisiin töihin), esteviikot, huomiotekstit ja mahdolliset valokuvat, chat-viestit (vain kyseisen viikon vuorolaisille; poistuvat viikon päätyttyä), apukutsuihin ilmoittautumiset sekä push-ilmoitusten laitetiedot (jos ilmoitukset otetaan käyttöön).',
   },
   {
     id: 'nakyvyys',
     title: '4. Kenelle tiedot näkyvät',
-    body: 'Kirjautuneet jäsenet näkevät julkaistujen vuorojen kokoonpanon nimet ja roolit sekä apukutsujen ilmoittautujat. Vastuuveli näkee vuoronsa kokoonpanossa merkinnän “ei raskaisiin töihin”. Chat näkyy vain kyseisen viikon vuorolaisille. Huomiot voivat olla kaikille tai vain vastuuveljille/ylläpidolle. Sähköpostiosoitteet ja täydet rajoitemerkinnät näkyvät pääosin vain ylläpitäjille.',
+    body: 'Kirjautuneet jäsenet näkevät julkaistujen vuorojen kokoonpanon nimet ja roolit sekä apukutsujen ilmoittautujat. Vastuuveli näkee vuoronsa kokoonpanossa merkinnän “ei raskaisiin töihin”. Chat-viestit näkyvät vain kyseisen viikon vuorolaisille ja poistuvat automaattisesti viikon päätyttyä. Huomiot voivat olla kaikille tai vain vastuuveljille/ylläpidolle. Sähköpostiosoitteet ja täydet rajoitemerkinnät näkyvät pääosin vain ylläpitäjille.',
   },
   {
     id: 'vastaanottajat',
@@ -41,7 +41,7 @@ export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'sailytys',
     title: '6. Säilytysaika',
-    body: 'Tilitietoja säilytetään jäsenyyden ajan. Vanhat esteviikot poistuvat automaattisesti listalta. Vuoro-, chat- ja huomiotietoja säilytetään niin kauan kuin ne tarvitaan vuorojen seurantaan, ellei ylläpito poista niitä. Ylläpitäjä voi poistaa käyttäjän; varmuuskopiot voivat sisältää tietoja kunnes ne korvautuvat.',
+    body: 'Tilitietoja säilytetään jäsenyyden ajan. Vanhat esteviikot poistuvat automaattisesti listalta. Chat-viestit poistuvat automaattisesti, kun viikko on ohi. Vuoro- ja huomiotietoja säilytetään niin kauan kuin ne tarvitaan vuorojen seurantaan, ellei ylläpito poista niitä. Ylläpitäjä voi poistaa käyttäjän; varmuuskopiot voivat sisältää tietoja kunnes ne korvautuvat.',
   },
   {
     id: 'oikeudet',

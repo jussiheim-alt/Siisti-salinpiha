@@ -217,6 +217,14 @@ function normalizeDb(db: Db): Db {
     const start = mondayOf()
     db.weekBlocks = db.weekBlocks.filter((b) => b.weekStart >= start)
   }
+  // Chat: poista viestit, kun viikko on ohi (persistoidaan loadDb:ssä)
+  if (Array.isArray(db.messages)) {
+    const t = today()
+    const openWeekIds = new Set(
+      db.pihavuorot.filter((p) => addDays(p.weekStart, 6) >= t).map((p) => p.id),
+    )
+    db.messages = db.messages.filter((m) => openWeekIds.has(m.pihavuoroId))
+  }
   if (!Array.isArray(db.taskCards) || db.taskCards.length === 0) {
     db.taskCards = seedTaskCardsFromCatalog()
   }
@@ -250,7 +258,13 @@ function loadDb(): Db {
   const raw = localStorage.getItem(DB_KEY)
   if (raw) {
     const parsed = JSON.parse(raw) as Db
-    return normalizeDb(parsed)
+    const beforeMsgs = Array.isArray(parsed.messages) ? parsed.messages.length : 0
+    const next = normalizeDb(parsed)
+    // Persist chat prune so expired messages leave storage, not only memory
+    if ((next.messages?.length ?? 0) < beforeMsgs) {
+      localStorage.setItem(DB_KEY, JSON.stringify(next))
+    }
+    return next
   }
   // Migrate previous local key if present
   const legacy = localStorage.getItem('siisti-piha-local-db-v2')
@@ -1069,7 +1083,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'tietosuojaseloste-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tietosuojaseloste-2026-10-04c' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
@@ -1408,6 +1422,9 @@ export async function localApi<T = unknown>(
       if (!p.assignments.some((a) => a.userId === user!.id)) {
         err('Viestit näkyvät vain tämän viikon vuorossa oleville')
       }
+      if (addDays(p.weekStart, 6) < today()) {
+        return ok({ messages: [] })
+      }
       const messages = db.messages
         .filter((m) => m.pihavuoroId === p.id)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1426,6 +1443,9 @@ export async function localApi<T = unknown>(
         err('Vain vuorossa olevat voivat lähettää viestejä')
       }
       if (p.status === 'draft') err('Keskustelu aukeaa kun vuoro on julkaistu')
+      if (addDays(p.weekStart, 6) < today()) {
+        err('Viikon keskustelu on päättynyt — viestit on poistettu')
+      }
       const text = String(body.body || '').trim()
       if (!text) err('Kirjoita viesti')
       const msg: ShiftMessage = {

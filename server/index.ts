@@ -1040,7 +1040,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'tietosuojaseloste-2026-10-04',
+    uiVersion: 'tietosuojaseloste-2026-10-04c',
   })
 })
 
@@ -1054,6 +1054,26 @@ function prunePastWeekBlocks(userId?: string) {
     db.prepare(`DELETE FROM week_blocks WHERE week_start < ?`).run(start)
   }
 }
+
+/** Chat-viestit poistuvat, kun viikko on ohi (sunnuntain jälkeen). */
+function pruneExpiredShiftMessages() {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  db.prepare(
+    `DELETE FROM shift_messages
+     WHERE pihavuoro_id IN (
+       SELECT id FROM pihavuorot
+       WHERE date(week_start, '+6 days') < ?
+     )`,
+  ).run(today)
+}
+
+function weekHasEnded(weekStart: string) {
+  const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
+  return weekEnd < format(new Date(), 'yyyy-MM-dd')
+}
+
+// Siivoa vanhat chatit käynnistyksessä
+pruneExpiredShiftMessages()
 
 app.get('/api/availability', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
@@ -1759,10 +1779,16 @@ function hydrateMessage(row: Record<string, unknown>) {
 
 app.get('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
-  const piha = db.prepare('SELECT id FROM pihavuorot WHERE id = ?').get(req.params.id)
+  pruneExpiredShiftMessages()
+  const piha = db.prepare('SELECT id, week_start FROM pihavuorot WHERE id = ?').get(req.params.id) as
+    | { id: string; week_start: string }
+    | undefined
   if (!piha) return res.status(404).json({ error: 'Pihavuoroa ei löydy' })
   if (!requireShiftMember(String(req.params.id), user.id)) {
     return res.status(403).json({ error: 'Viestit näkyvät vain tämän viikon vuorossa oleville' })
+  }
+  if (weekHasEnded(String(piha.week_start))) {
+    return res.json({ messages: [] })
   }
   const messages = (
     db
@@ -1776,6 +1802,7 @@ app.get('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
 
 app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
+  pruneExpiredShiftMessages()
   const piha = db.prepare('SELECT * FROM pihavuorot WHERE id = ?').get(req.params.id) as
     | Record<string, unknown>
     | undefined
@@ -1785,6 +1812,9 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   }
   if (piha.status === 'draft') {
     return res.status(400).json({ error: 'Keskustelu aukeaa kun vuoro on julkaistu' })
+  }
+  if (weekHasEnded(String(piha.week_start))) {
+    return res.status(400).json({ error: 'Viikon keskustelu on päättynyt — viestit on poistettu' })
   }
   const body = String(req.body.body || '').trim()
   if (!body) return res.status(400).json({ error: 'Kirjoita viesti' })
@@ -1832,6 +1862,7 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
 
 app.get('/api/chat/current', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
+  pruneExpiredShiftMessages()
   const today = format(new Date(), 'yyyy-MM-dd')
   const row = db
     .prepare(
@@ -2116,6 +2147,7 @@ app.delete('/api/notices/:id', authMiddleware, requireAdmin, (req, res) => {
 
 // ——— Home summary ———
 app.get('/api/home', authMiddleware, async (req, res) => {
+  pruneExpiredShiftMessages()
   const user = (req as express.Request & { user: AuthUser }).user
   const weekStart = mondayOf()
   const row = db
