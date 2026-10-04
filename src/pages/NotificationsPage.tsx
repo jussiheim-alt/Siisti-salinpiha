@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification } from '../api'
 import { useAuth } from '../auth'
+import { PushToggle } from '../components/PushToggle'
 import { formatDateTimeFi } from '../shared/datetime'
 import { onServiceWorkerPush, startLiveRefresh } from '../shared/liveRefresh'
 
@@ -118,6 +119,8 @@ export function NotificationsPage() {
           </button>
         )}
       </header>
+
+      <PushToggle />
 
       {error && <p className="error">{error}</p>}
 

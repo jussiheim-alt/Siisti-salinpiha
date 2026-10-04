@@ -32,7 +32,7 @@ export const DEFAULT_LEAD_GUIDE: LeadGuide = {
       id: 'weather',
       title: 'Sääilmoitukset',
       body:
-        'Sovellus näyttää etusivulla FMI:n sääennusteen ja tippejä (lumi, sade, liukkaus). Kun push-ilmoitukset ovat päällä, saat myös hälytyksiä säähän liittyvistä muutoksista. Pidä ilmoitukset päällä etusivun kytkimestä, jotta et missaa varoituksia.',
+        'Sovellus näyttää etusivulla FMI:n sääennusteen ja tippejä (lumi, sade, liukkaus). Kun push-ilmoitukset ovat päällä, saat myös hälytyksiä säähän liittyvistä muutoksista. Pidä ilmoitukset päällä Ilmo-välilehden (tai etusivun) kytkimestä, jotta et missaa varoituksia.',
     },
     {
       id: 'extra',

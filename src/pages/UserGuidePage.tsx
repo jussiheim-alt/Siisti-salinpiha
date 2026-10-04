@@ -25,7 +25,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Etusivu',
     body: [
       'Etusivulla näet seuraavan Pihavuorosi, sään ja ilmoitukset.',
-      'Kytke ilmoitukset päälle etusivulta, jotta lukitusnäyttö saa viestit. Apukutsut tulevat kaikille; muut push-ilmoitukset (sää, huomiot, chat) vain vuorossa oleville. Sovelluksen Ilmo-listassa viestit voivat näkyä laajemmalle. Chat-viestit näkyvät chat-kuvakkeen punaisessa numerossa (eivät Ilmo-listassa). iPhonella sovellus pitää olla kotivalikossa.',
+      'Kytke ilmoitukset päälle etusivulta (tai Ilmo-välilehdeltä, kun ne on jo päällä), jotta lukitusnäyttö saa viestit. Apukutsut tulevat kaikille; muut push-ilmoitukset (sää, huomiot, chat) vain vuorossa oleville. Sovelluksen Ilmo-listassa viestit voivat näkyä laajemmalle. Chat-viestit näkyvät chat-kuvakkeen punaisessa numerossa (eivät Ilmo-listassa). iPhonella sovellus pitää olla kotivalikossa.',
       'Pikavalinnoista pääset käytettävyyteen, apukutsuihin ja huomioihin.',
     ],
     to: '/',
@@ -68,7 +68,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     id: 'ilmo',
     title: 'Ilmoitukset',
     body: [
-      'Ilmo-välilehdellä näet sää-, apukutsu- ja muut ilmoitukset.',
+      'Ilmo-välilehdellä näet sää-, apukutsu- ja muut ilmoitukset. Sieltä voit myös kytkeä lukitusnäytön ilmoitukset päälle tai pois.',
       'Sääilmoituksia lähetetään klo 8–18 Suomen aikaa, ja lukitusnäytölle ne menevät vain viikon vuorolaisille. Apukutsujen push tulee kaikille.',
       'Avaa ilmoitus siirtyäksesi suoraan liittyvään näkymään. Merkitse luetuiksi tarvittaessa.',
     ],

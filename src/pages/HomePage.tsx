@@ -115,7 +115,7 @@ export function HomePage() {
           />
         )}
 
-        <PushToggle />
+        <PushToggle hideWhenEnabled />
 
         <div className="surface-card" style={{ animationDelay: '0.05s' }}>
           <NotificationStrip items={notifications} unreadCount={unreadNotifications} />

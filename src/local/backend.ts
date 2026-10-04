@@ -970,7 +970,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'apukutsut-kuvaus-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'apukutsut-push-ilmo-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
