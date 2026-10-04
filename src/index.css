@@ -16,7 +16,10 @@
   --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
-  --nav-h: 5.15rem;
+  /* Tab bar content height + home-indicator inset (kept in sync with .tabbar-bottom). */
+  --nav-safe-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
+  --nav-content-h: 3.7rem;
+  --nav-h: calc(var(--nav-content-h) + var(--nav-safe-bottom));
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
@@ -56,6 +59,15 @@ body {
   overflow-x: hidden;
 }
 
+/* Logged-in shell: lock document scroll so only .app-main moves. */
+html:has(.app-shell-bottom-nav),
+body:has(.app-shell-bottom-nav) {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 #root,
 .app-shell {
   width: 100%;
@@ -64,20 +76,24 @@ body {
 
 #root:has(.app-shell-bottom-nav) {
   /*
-   * Pin to the visual viewport edges. Relying on 100dvh alone can leave a
-   * mist-colored gap under the tab bar on iOS (dvh shorter than the screen).
+   * Fill the visual viewport with an explicit flex column.
+   * inset alone + height:auto has left a mist gap under the tab bar on iOS.
    */
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   width: 100%;
-  height: auto;
-  max-height: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   /* Reserve the notch/Dynamic Island outside the scrolling main. */
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
-  background: var(--mist);
+  background: #ffffff;
 }
 
 img,
@@ -141,12 +157,15 @@ a {
 }
 
 .app-shell.app-shell-bottom-nav {
-  /* Fill #root’s content box exactly — never taller than the viewport. */
-  height: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
   overflow: hidden;
-  padding-bottom: 0;
+  /* Room for the fixed tab bar (out of normal flow). */
+  padding-bottom: var(--nav-h);
   box-sizing: border-box;
 }
 
@@ -181,12 +200,16 @@ a {
 }
 
 .tabbar-bottom {
-  margin-top: 0;
-  /* Safe-area only — no extra gap under labels; bar sits on the screen edge. */
-  padding: 0.4rem 0.35rem max(0.35rem, env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  /* Physically pin to the screen bottom — survives iOS dvh/flex quirks. */
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0.4rem 0.35rem var(--nav-safe-bottom);
+  background: #ffffff;
   border-top: 1px solid rgba(18, 35, 28, 0.08);
   box-shadow: 0 -8px 28px rgba(11, 36, 28, 0.05);
 }
@@ -1466,7 +1489,7 @@ select:focus {
 }
 
 @media (min-width: 800px) {
-  .tabbar {
+  .tabbar-bottom {
     max-width: 720px;
     border-radius: 1.1rem 1.1rem 0 0;
   }
