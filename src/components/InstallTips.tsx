@@ -6,9 +6,11 @@ export function InstallTips({ compact = false }: Props) {
   return (
     <div className={`install-tips${compact ? ' is-compact' : ''}`}>
       {!compact && <h2>Lisää sovellus kotinäytölle</h2>}
-      <p className="install-tips-lede">
-        Neljä napautusta – sen jälkeen sovellus aukeaa kuin tavallinen sovellus.
-      </p>
+      {!compact && (
+        <p className="install-tips-lede">
+          Neljä napautusta – sen jälkeen sovellus aukeaa kuin tavallinen sovellus.
+        </p>
+      )}
 
       <div className="install-tips-grid">
         <section className="install-tip-card" aria-labelledby="install-ios">
