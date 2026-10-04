@@ -35,12 +35,20 @@
           var h = window.innerHeight || 0
           var probe = document.createElement('div')
           probe.setAttribute('aria-hidden', 'true')
+          /* Fixed + inset can inherit the lying viewport — measure with top/height only. */
           probe.style.cssText =
-            'position:fixed;visibility:hidden;pointer-events:none;height:100vh;height:100lvh;top:0;left:0;width:0;'
+            'position:fixed;visibility:hidden;pointer-events:none;top:0;left:0;width:0;height:100vh;height:100lvh;'
           document.documentElement.appendChild(probe)
           var large = probe.offsetHeight || 0
           document.documentElement.removeChild(probe)
           if (large > h) h = large
+          /*
+           * Last resort in standalone: screen.height is the physical CSS height.
+           * Never use it in a Safari tab (toolbars make screen taller than visible).
+           */
+          if (standalone && window.screen && window.screen.height > h) {
+            h = window.screen.height
+          }
           if (h > 0) document.documentElement.style.setProperty('--app-height', h + 'px')
           /* iOS keyboard/focus can scroll the document and hide the fixed tab bar. */
           pinScroll()

@@ -1053,7 +1053,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'publish-week-review-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tabbar-no-inset-gap-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
