@@ -970,7 +970,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'hub-checklist-light-2026-10' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tabbar-fill-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {

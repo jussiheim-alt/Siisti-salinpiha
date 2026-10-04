@@ -21,6 +21,7 @@ import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UserGuidePage } from './pages/UserGuidePage'
 import { UsersPage } from './pages/UsersPage'
 import { onServiceWorkerPush, startLiveRefresh } from './shared/liveRefresh'
+import { startViewportShell } from './shared/viewportShell'
 
 function IconHome() {
   return (
@@ -102,6 +103,11 @@ function Shell() {
       stopPush()
     }
   }, [user, location.pathname])
+
+  useEffect(() => {
+    if (loading || !user) return
+    return startViewportShell()
+  }, [loading, user])
 
   if (loading) return <div className="boot">Ladataan…</div>
   if (!user) return <Navigate to="/kirjaudu" replace />
