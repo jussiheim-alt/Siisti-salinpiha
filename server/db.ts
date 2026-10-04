@@ -323,6 +323,9 @@ export function initDb() {
   if (!userCols.some((c) => c.name === 'travel_group')) {
     db.exec(`ALTER TABLE users ADD COLUMN travel_group TEXT`)
   }
+  if (!userCols.some((c) => c.name === 'sparse_rotation')) {
+    db.exec(`ALTER TABLE users ADD COLUMN sparse_rotation INTEGER NOT NULL DEFAULT 0`)
+  }
 
   const inviteCols = db.prepare(`PRAGMA table_info(invites)`).all() as { name: string }[]
   if (!inviteCols.some((c) => c.name === 'travel_group')) {
@@ -396,6 +399,8 @@ export function publicUser(row: Record<string, unknown>) {
     constraintNote: row.constraint_note ?? null,
     snoozeUntil: row.snooze_until ?? null,
     travelGroup: row.travel_group ? String(row.travel_group) : null,
+    /** Käytä harvemmin — suositus noin joka toiseen kierrokseen */
+    sparseRotation: Boolean(row.sparse_rotation),
     createdAt: row.created_at,
   }
 }

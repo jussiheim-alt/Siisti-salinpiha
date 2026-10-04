@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, type Pihavuoro } from '../api'
 import { useAuth } from '../auth'
 import { AddToCalendarButton } from '../components/AddToCalendarButton'
+import { PublishWeekModal } from '../components/PublishWeekModal'
 import { formatWeekRangeFi } from '../shared/datetime'
 import {
   DEFAULT_TOTAL_PEOPLE,
@@ -15,9 +16,9 @@ export function CalendarPage() {
   const navigate = useNavigate()
   const [list, setList] = useState<Pihavuoro[]>([])
   const [error, setError] = useState('')
-  const [creating, setCreating] = useState(false)
   const [publishingId, setPublishingId] = useState<string | null>(null)
   const [totalPeople, setTotalPeople] = useState(DEFAULT_TOTAL_PEOPLE)
+  const [reviewMode, setReviewMode] = useState<'publish' | 'draft' | null>(null)
 
   async function load() {
     const data = await api<{ pihavuorot: Pihavuoro[] }>('/api/pihavuorot')
@@ -27,30 +28,6 @@ export function CalendarPage() {
   useEffect(() => {
     load().catch((e) => setError(e.message))
   }, [])
-
-  async function createWeek(andPublish: boolean) {
-    setCreating(true)
-    setError('')
-    try {
-      const data = await api<{ pihavuoro: Pihavuoro }>('/api/pihavuorot', {
-        method: 'POST',
-        json: { recommend: true, totalPeople },
-      })
-      let id = data.pihavuoro.id
-      if (andPublish) {
-        const pub = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}/publish`, {
-          method: 'POST',
-        })
-        id = pub.pihavuoro.id
-      }
-      await load()
-      navigate(`/pihavuoro/${id}`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Luonti epäonnistui')
-    } finally {
-      setCreating(false)
-    }
-  }
 
   async function publish(id: string) {
     setPublishingId(id)
@@ -118,7 +95,7 @@ export function CalendarPage() {
             <select
               value={totalPeople}
               onChange={(e) => setTotalPeople(Number(e.target.value))}
-              disabled={creating}
+              disabled={Boolean(reviewMode)}
             >
               {sizeOptions.map((n) => (
                 <option key={n} value={n}>
@@ -130,12 +107,16 @@ export function CalendarPage() {
           <div className="row-actions">
             <button
               className="btn primary"
-              disabled={creating}
-              onClick={() => void createWeek(true)}
+              disabled={Boolean(reviewMode)}
+              onClick={() => setReviewMode('publish')}
             >
-              {creating ? 'Luodaan…' : 'Luo ja julkaise viikko'}
+              Luo ja julkaise viikko
             </button>
-            <button className="btn" disabled={creating} onClick={() => void createWeek(false)}>
+            <button
+              className="btn"
+              disabled={Boolean(reviewMode)}
+              onClick={() => setReviewMode('draft')}
+            >
               Luo luonnos
             </button>
             <Link className="btn ghost" to="/kaytettavyys">
@@ -196,6 +177,19 @@ export function CalendarPage() {
         })}
         {!list.length && <p className="muted">Ei vuoroja vielä.</p>}
       </div>
+
+      {reviewMode && (
+        <PublishWeekModal
+          open
+          mode={reviewMode}
+          initialTotalPeople={totalPeople}
+          onClose={() => setReviewMode(null)}
+          onCreated={(id) => {
+            setReviewMode(null)
+            void load().then(() => navigate(`/pihavuoro/${id}`))
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -133,6 +133,7 @@ export function UsersPage() {
           constraintNote: editing.constraintNote,
           snoozeUntil: editing.snoozeUntil,
           travelGroup: editing.travelGroup?.trim() || null,
+          sparseRotation: Boolean(editing.sparseRotation),
         },
       })
       setEditing(null)
@@ -433,6 +434,16 @@ export function UsersPage() {
                 <p className="hint">
                   Sama nimi yhdistää jäsenet samalle viikolle suosituksessa.
                 </p>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editing.sparseRotation)}
+                    onChange={(e) =>
+                      setEditing({ ...editing, sparseRotation: e.target.checked })
+                    }
+                  />
+                  Käytä tavallista harvemmin (noin joka toinen kierros)
+                </label>
                 <label className="check">
                   <input
                     type="checkbox"
