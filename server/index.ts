@@ -1026,7 +1026,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'tabbar-no-inset-gap-2026-10-04',
+    uiVersion: 'google-calendar-cta-2026-10-04',
   })
 })
 
