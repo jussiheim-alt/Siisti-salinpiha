@@ -5,32 +5,51 @@ type Props = {
 export function InstallTips({ compact = false }: Props) {
   return (
     <div className={`install-tips${compact ? ' is-compact' : ''}`}>
-      {!compact && <h2>Lisää sovellus kotivalikkoon</h2>}
-      <p className="install-tips-lede">
-        Näin Siisti salin piha aukeaa kuin sovellus — ilman App Storea.
-      </p>
+      {!compact && <h2>Lisää sovellus kotinäytölle</h2>}
+      {!compact && (
+        <p className="install-tips-lede">
+          Neljä napautusta – sen jälkeen sovellus aukeaa kuin tavallinen sovellus.
+        </p>
+      )}
 
       <div className="install-tips-grid">
         <section className="install-tip-card" aria-labelledby="install-ios">
-          <h3 id="install-ios">iPhone (Safari)</h3>
+          <h3 id="install-ios">
+            <span className="install-tip-platform">iPhone</span>
+            <span className="install-tip-browser">Safari</span>
+          </h3>
           <ol>
-            <li>Avaa kutsulinkki tai kirjautunut sovellus <strong>Safarilla</strong>.</li>
-            <li>Napauta alareunan <strong>Jaa</strong>-painiketta (neliö ja nuoli ylös).</li>
-            <li>Vieritä ja valitse <strong>Lisää Koti-valikkoon</strong>.</li>
-            <li>Vahvista nimellä “Siisti salin piha” ja napauta <strong>Lisää</strong>.</li>
+            <li>Avaa kutsulinkki <strong>Safarissa</strong>.</li>
+            <li>
+              Napauta alhaalla <strong>Jaa</strong>.
+            </li>
+            <li>
+              Valitse <strong>Lisää Koti-valikkoon</strong>.
+            </li>
+            <li>
+              Vahvista ja napauta <strong>Lisää</strong>.
+            </li>
           </ol>
-          <p className="hint">Chrome iPhonella ei tue tätä yhtä luotettavasti — käytä Safaria.</p>
+          <p className="hint">Käytä Safaria. Chrome iPhonella ei tue asennusta yhtä hyvin.</p>
         </section>
 
         <section className="install-tip-card" aria-labelledby="install-android">
-          <h3 id="install-android">Android (Chrome)</h3>
+          <h3 id="install-android">
+            <span className="install-tip-platform">Android</span>
+            <span className="install-tip-browser">Chrome</span>
+          </h3>
           <ol>
-            <li>Avaa kutsulinkki tai kirjautunut sovellus <strong>Chromella</strong>.</li>
-            <li>Napauta oikean yläkulman <strong>⋮</strong>-valikkoa.</li>
-            <li>Valitse <strong>Asenna sovellus</strong> tai <strong>Lisää aloitusnäytölle</strong>.</li>
-            <li>Vahvista asennus — kuvake ilmestyy kotivalikkoon.</li>
+            <li>Avaa kutsulinkki <strong>Chromessa</strong>.</li>
+            <li>
+              Napauta oikean yläkulman valikkoa (<strong>⋮</strong>).
+            </li>
+            <li>
+              Valitse <strong>Asenna sovellus</strong> tai{' '}
+              <strong>Lisää aloitusnäytölle</strong>.
+            </li>
+            <li>Vahvista. Kuvake ilmestyy kotinäytölle.</li>
           </ol>
-          <p className="hint">Jos et näe Asenna-kohtaa, valitse “Lisää aloitusnäytölle”.</p>
+          <p className="hint">Jos Asenna-kohtaa ei näy, valitse Lisää aloitusnäytölle.</p>
         </section>
       </div>
     </div>

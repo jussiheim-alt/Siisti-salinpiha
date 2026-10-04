@@ -13,11 +13,9 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
   },
   {
     id: 'asennus',
-    title: 'Lisää kotivalikkoon (iPhone / Android)',
+    title: 'Lisää kotinäytölle (iPhone / Android)',
     body: [
-      'Kun tili on luotu, lisää sovellus kotivalikkoon — se aukeaa sitten kuin normaali app.',
-      'iPhone: Safari → Jaa → Lisää Koti-valikkoon.',
-      'Android: Chrome → ⋮ → Asenna sovellus / Lisää aloitusnäytölle.',
+      'Kun tili on luotu, lisää sovellus kotinäytölle. Se aukeaa sitten kuin tavallinen sovellus — ilman App Storea.',
     ],
   },
   {
