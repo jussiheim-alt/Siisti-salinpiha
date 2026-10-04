@@ -46,7 +46,7 @@ export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'oikeudet',
     title: '7. Oikeutesi',
-    body: 'Sinulla on oikeus pyytää pääsyä tietoihisi, niiden oikaisua tai poistoa sekä vastustaa käsittelyä siltä osin kuin se perustuu oikeutettuun etuun. Pyynnöt: sovelluksen ylläpitäjä. Voit myös tehdä valituksen tietosuojavaltuutetulle (tietosuoja.fi).',
+    body: 'Sinulla on oikeus pyytää pääsyä tietoihisi, niiden oikaisua tai poistoa sekä vastustaa käsittelyä siltä osin kuin se perustuu oikeutettuun etuun. Voit myös tehdä valituksen tietosuojavaltuutetulle (tietosuoja.fi).',
   },
   {
     id: 'ilmoitukset',
