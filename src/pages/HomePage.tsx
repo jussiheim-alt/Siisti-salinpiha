@@ -7,6 +7,7 @@ import { LeadCallout } from '../components/LeadCallout'
 import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
+import { LEAD_NO_HEAVY_NOTICE, weekHasOtherNoHeavy } from '../shared/catalog'
 
 function QuickLink({
   title,
@@ -65,6 +66,8 @@ export function HomePage() {
 
   const myAssignment = next?.assignments.find((a) => a.userId === user?.id)
   const isLead = myAssignment?.role === 'lead'
+  const showLeadNoHeavyNotice =
+    isLead && weekHasOtherNoHeavy(next?.assignments, user?.id)
   const firstName = user?.name.split(' ')[0]
 
   return (
@@ -111,6 +114,12 @@ export function HomePage() {
             weekEnd={next.weekEnd}
             pihavuoroId={next.id}
           />
+        )}
+
+        {next && showLeadNoHeavyNotice && (
+          <p className="lead-no-heavy-notice home-lead-no-heavy" role="status">
+            {LEAD_NO_HEAVY_NOTICE}
+          </p>
         )}
 
         <PushToggle hideWhenEnabled />
