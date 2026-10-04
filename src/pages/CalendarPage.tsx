@@ -77,14 +77,7 @@ export function CalendarPage() {
       {myShifts.length > 0 && (
         <section className="panel" style={{ marginBottom: '0.85rem' }}>
           <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>Omat vuorot kalenteriin</h2>
-          <AddToCalendarButton
-            events={myShifts}
-            label={
-              myShifts.length === 1
-                ? 'Lisää kalenteriin'
-                : `Lisää ${myShifts.length} vuoroa kalenteriin`
-            }
-          />
+          <AddToCalendarButton events={myShifts} />
         </section>
       )}
 

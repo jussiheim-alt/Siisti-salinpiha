@@ -1,62 +1,48 @@
-import { useState } from 'react'
-import {
-  buildShiftIcs,
-  googleCalendarUrl,
-  shareOrDownloadIcs,
-  type ShiftCalendarEvent,
-} from '../shared/shiftCalendar'
+import { googleCalendarUrl, type ShiftCalendarEvent } from '../shared/shiftCalendar'
+import { formatWeekRangeFiCompact } from '../shared/datetime'
 
 type Props = {
   events: ShiftCalendarEvent[]
+  /** Override label for a single-event button. */
   label?: string
   className?: string
 }
 
 export function AddToCalendarButton({
   events,
-  label = 'Lisää kalenteriin',
-  className = 'btn small',
+  label = 'Lisää Google-kalenteriin',
+  className = 'btn primary calendar-google-btn',
 }: Props) {
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-
   if (!events.length) return null
 
-  const single = events.length === 1 ? events[0]! : null
-  const googleUrl = single ? googleCalendarUrl(single) : null
-
-  async function onAdd() {
-    setError('')
-    setBusy(true)
-    try {
-      const ics = buildShiftIcs(events)
-      const filename =
-        events.length === 1
-          ? `pihavuoro-${events[0]!.weekStart}.ics`
-          : 'omat-pihavuorot.ics'
-      await shareOrDownloadIcs(filename, ics)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kalenteriin lisäys epäonnistui')
-    } finally {
-      setBusy(false)
-    }
-  }
+  const sorted = [...events].sort((a, b) => a.weekStart.localeCompare(b.weekStart))
 
   return (
-    <div className="stack" style={{ gap: '0.45rem' }}>
-      <div className="row-actions">
-        <button className={className} type="button" disabled={busy} onClick={() => void onAdd()}>
-          {busy ? 'Avataan…' : label}
-        </button>
-        {googleUrl && (
-          <a className="btn ghost small" href={googleUrl} target="_blank" rel="noopener noreferrer">
-            Google-kalenteri
+    <div className="stack calendar-google-block">
+      {sorted.length === 1 ? (
+        <a
+          className={className}
+          href={googleCalendarUrl(sorted[0]!)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {label}
+        </a>
+      ) : (
+        sorted.map((event) => (
+          <a
+            key={event.id}
+            className={className}
+            href={googleCalendarUrl(event)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Google-kalenteri · {formatWeekRangeFiCompact(event.weekStart, event.weekEnd)}
           </a>
-        )}
-      </div>
-      {error && <p className="error">{error}</p>}
-      <p className="hint" style={{ margin: 0 }}>
-        Luo koko päivän tapahtuma viikolle — aukeaa puhelimen kalenteriin (esim. Google).
+        ))
+      )}
+      <p className="hint calendar-google-hint">
+        Avaa Google-kalenterin — tallenna viikko koko päivän tapahtumaksi.
       </p>
     </div>
   )
