@@ -103,6 +103,21 @@ function Shell() {
     }
   }, [user, location.pathname])
 
+  /* Every tab: keep document pinned and start at the top of the scrollable main. */
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+    const main = document.querySelector('.app-main')
+    if (main instanceof HTMLElement) main.scrollTop = 0
+    if (document.activeElement instanceof HTMLElement) {
+      const tag = document.activeElement.tagName.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+        document.activeElement.blur()
+      }
+    }
+  }, [location.pathname])
+
   if (loading) return <div className="boot">Ladataan…</div>
   if (!user) return <Navigate to="/kirjaudu" replace />
 

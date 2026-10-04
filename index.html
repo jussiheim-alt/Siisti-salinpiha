@@ -29,10 +29,22 @@
           window.scrollTo(0, 0)
           document.documentElement.scrollTop = 0
           document.body.scrollTop = 0
+          if (window.visualViewport && typeof window.visualViewport.offsetTop === 'number') {
+            /* Keep layout viewport pinned even if visualViewport scrolled for the keyboard. */
+            if (window.visualViewport.offsetTop !== 0) {
+              try {
+                window.scrollTo(0, 0)
+              } catch (_) {}
+            }
+          }
         }
 
         function applyAppHeight() {
           var h = window.innerHeight || 0
+          if (window.visualViewport && window.visualViewport.height) {
+            /* Browser tabs: prefer the visible viewport (toolbars). */
+            if (!standalone) h = Math.round(window.visualViewport.height) || h
+          }
           var probe = document.createElement('div')
           probe.setAttribute('aria-hidden', 'true')
           /* Fixed + inset can inherit the lying viewport — measure with top/height only. */
@@ -41,16 +53,16 @@
           document.documentElement.appendChild(probe)
           var large = probe.offsetHeight || 0
           document.documentElement.removeChild(probe)
-          if (large > h) h = large
-          /*
-           * Last resort in standalone: screen.height is the physical CSS height.
-           * Never use it in a Safari tab (toolbars make screen taller than visible).
-           */
-          if (standalone && window.screen && window.screen.height > h) {
-            h = window.screen.height
+          if (standalone) {
+            if (large > h) h = large
+            /*
+             * Last resort in standalone: screen.height is the physical CSS height.
+             * Never use it in a Safari tab (toolbars make screen taller than visible).
+             */
+            if (window.screen && window.screen.height > h) h = window.screen.height
           }
           if (h > 0) document.documentElement.style.setProperty('--app-height', h + 'px')
-          /* iOS keyboard/focus can scroll the document and hide the fixed tab bar. */
+          /* iOS keyboard/focus can scroll the document and hide the tab bar. */
           pinScroll()
         }
 
@@ -64,11 +76,21 @@
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') applyAppHeight()
         })
-        /* After invite-form / keyboard dismiss, snap shell back. */
+        /* After any form field / keyboard dismiss on any tab, snap shell back. */
         document.addEventListener('focusout', function () {
           window.setTimeout(applyAppHeight, 50)
           window.setTimeout(applyAppHeight, 300)
         })
+        document.addEventListener(
+          'focusin',
+          function (e) {
+            var t = e.target
+            if (!t || !t.tagName) return
+            var tag = String(t.tagName).toLowerCase()
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') pinScroll()
+          },
+          true,
+        )
       })()
     </script>
   </head>

@@ -82,6 +82,13 @@ export function TaskCardsPage() {
 
   if (user && user.role !== 'admin') return <Navigate to="/" replace />
 
+  function releaseFocus() {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }
+
   async function onCreate(e: FormEvent) {
     e.preventDefault()
     setError('')
@@ -95,6 +102,7 @@ export function TaskCardsPage() {
       setForm({ ...emptyForm, season: form.season || seasonTab })
       setInfo('Tehtäväkortti lisätty.')
       await load()
+      releaseFocus()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tallennus epäonnistui')
     }
@@ -121,6 +129,7 @@ export function TaskCardsPage() {
       setEditing(null)
       setInfo('Kortti päivitetty.')
       await load()
+      releaseFocus()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tallennus epäonnistui')
     }

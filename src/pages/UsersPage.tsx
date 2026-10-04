@@ -139,6 +139,8 @@ export function UsersPage() {
       setEditing(null)
       setNotice('Käyttöoikeudet tallennettu.')
       await load()
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+      window.scrollTo(0, 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tallennus epäonnistui')
     } finally {
