@@ -2139,6 +2139,26 @@ a.btn.calendar-google-btn:hover {
   padding-bottom: 0.15rem;
 }
 
+.roster-name-no-heavy {
+  color: var(--danger);
+}
+
+.lead-no-heavy-notice {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, white);
+  color: color-mix(in srgb, var(--danger) 82%, var(--ink));
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.home-lead-no-heavy {
+  margin: 0;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -2153,6 +2173,11 @@ a.btn.calendar-google-btn:hover {
   border-radius: 0.45rem;
   background: rgba(15, 118, 110, 0.12);
   color: #0f5c54;
+}
+
+.tag-no-heavy {
+  background: color-mix(in srgb, var(--danger) 12%, white);
+  color: var(--danger);
 }
 
 .task-list {

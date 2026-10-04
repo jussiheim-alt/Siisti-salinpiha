@@ -171,3 +171,27 @@ export const CONSTRAINT_LABELS: Record<string, string> = {
   no_heavy: 'Ei raskaisiin töihin',
   no_lead: 'Ei vastuuhenkilöksi',
 }
+
+export const NO_HEAVY_CONSTRAINT = 'no_heavy'
+
+/** User has “Ei raskaisiin töihin”. */
+export function hasNoHeavyConstraint(constraints: string[] | undefined | null) {
+  return Boolean(constraints?.includes(NO_HEAVY_CONSTRAINT))
+}
+
+/**
+ * Vastuuveli should see a light-duty notice when someone else on the week
+ * has no_heavy — not when only the lead themselves has that marking.
+ */
+export function weekHasOtherNoHeavy(
+  assignments: { userId: string; constraints?: string[] | null }[] | undefined | null,
+  viewerUserId: string | undefined | null,
+) {
+  if (!assignments?.length || !viewerUserId) return false
+  return assignments.some(
+    (a) => a.userId !== viewerUserId && hasNoHeavyConstraint(a.constraints),
+  )
+}
+
+export const LEAD_NO_HEAVY_NOTICE =
+  'Vuorossasi on ystäviä joita ei tule käyttää raskaissa töissä, kuten lumitöissä.'

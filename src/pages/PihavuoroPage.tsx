@@ -9,6 +9,11 @@ import {
 } from '../api'
 import { useAuth } from '../auth'
 import { AddToCalendarButton } from '../components/AddToCalendarButton'
+import {
+  hasNoHeavyConstraint,
+  LEAD_NO_HEAVY_NOTICE,
+  weekHasOtherNoHeavy,
+} from '../shared/catalog'
 import { formatWeekRangeFi } from '../shared/datetime'
 import { CADENCE_LABELS, SEASON_LABELS } from '../shared/seasons'
 
@@ -112,6 +117,9 @@ export function PihavuoroPage() {
   const onShift = Boolean(myAssignment)
   const isLead = myAssignment?.role === 'lead'
   const isAdmin = user?.role === 'admin'
+  const showNoHeavyNames = isLead || isAdmin
+  const showLeadNoHeavyNotice =
+    isLead && weekHasOtherNoHeavy(p?.assignments, user?.id)
 
   const candidateUsers = useMemo(() => {
     return users.slice().sort((a, b) => a.name.localeCompare(b.name, 'fi'))
@@ -415,28 +423,48 @@ export function PihavuoroPage() {
           )}
         </div>
 
+        {showLeadNoHeavyNotice && !editingRoster && (
+          <p className="lead-no-heavy-notice" role="status">
+            {LEAD_NO_HEAVY_NOTICE}
+          </p>
+        )}
+
         {!editingRoster && (
           <ul className="roster">
-            {p.assignments.map((a) => (
-              <li key={a.id}>
-                <div>
-                  <strong>{a.userName}</strong>
-                  <span className="muted">
-                    {' '}
-                    · {a.role === 'lead' ? 'Vastuuveli' : 'Avustaja'}
-                  </span>
-                </div>
-                {isAdmin && a.constraintLabels.length > 0 && (
-                  <div className="tags">
-                    {a.constraintLabels.map((c) => (
-                      <span key={c} className="tag">
-                        {c}
-                      </span>
-                    ))}
+            {p.assignments.map((a) => {
+              const noHeavy = hasNoHeavyConstraint(a.constraints)
+              const markNoHeavy = showNoHeavyNames && noHeavy
+              return (
+                <li key={a.id}>
+                  <div>
+                    <strong className={markNoHeavy ? 'roster-name-no-heavy' : undefined}>
+                      {a.userName}
+                    </strong>
+                    <span className="muted">
+                      {' '}
+                      · {a.role === 'lead' ? 'Vastuuveli' : 'Avustaja'}
+                      {markNoHeavy ? ' · ei raskaisiin' : ''}
+                    </span>
                   </div>
-                )}
-              </li>
-            ))}
+                  {isAdmin && a.constraintLabels.length > 0 && (
+                    <div className="tags">
+                      {a.constraintLabels.map((label, i) => (
+                        <span
+                          key={label}
+                          className={
+                            a.constraints[i] === 'no_heavy' || label === 'Ei raskaisiin töihin'
+                              ? 'tag tag-no-heavy'
+                              : 'tag'
+                          }
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
 
@@ -499,12 +527,14 @@ export function PihavuoroPage() {
 
         {isAdmin && !editingRoster && (
           <p className="hint">
-            Rajoitteet (esim. ei vastuuhenkilöksi) näkyvät vain ylläpitäjille. Raskaita tehtäviä ei
-            voi antaa “ei raskaisiin” -henkilölle.
+            Punainen nimi = ei raskaisiin töihin. Muut rajoitteet (esim. ei vastuuhenkilöksi)
+            näkyvät tageina vain ylläpitäjille.
           </p>
         )}
         {isLead && !isAdmin && !editingRoster && (
-          <p className="hint">Raskaita tehtäviä ei voi antaa “ei raskaisiin” -henkilölle.</p>
+          <p className="hint">
+            Punainen nimi = ei raskaisiin töihin. Raskaita tehtäviä ei voi antaa heille.
+          </p>
         )}
       </section>
 

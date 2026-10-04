@@ -93,6 +93,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     body: [
       'Vastuuveli ei ole erillinen tili — se on viikkokohtainen tehtävä julkaistussa vuorossa.',
       'Etusivulla näkyy vastuuveljen ohje. Luot tarvittaessa apukutsun ja huolehdit, että viikon tehtävät tulevat tehdyiksi.',
+      'Jos vuorossa on ystäviä merkittynä “ei raskaisiin töihin”, näet siitä huomion ja nimet punaisella — heitä ei tule käyttää esim. lumitöissä.',
       'Jos ylläpitäjä aktivoi huoltokortin, näet sen Pihavuorossa ja voit merkitä tarkastuskohdat tehdyiksi.',
     ],
   },
