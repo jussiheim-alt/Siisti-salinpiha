@@ -59,13 +59,28 @@ body {
   overflow-x: hidden;
 }
 
-/* Logged-in: paint any residual iOS letterbox the same as the tab bar. */
+/*
+ * Logged-in shell: never let the document scroll.
+ * Form focus / iOS keyboard otherwise shove the tab bar off-screen on EVERY tab
+ * (Tehtävät, Käyttäjät, Huomiot, …) — not only in standalone PWA mode.
+ */
 html:has(.app-shell-bottom-nav),
 body:has(.app-shell-bottom-nav) {
   background-color: #ffffff;
   background-image: none;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+body:has(.app-shell-bottom-nav) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
 }
 
 #root,
@@ -76,17 +91,16 @@ body:has(.app-shell-bottom-nav) {
 
 #root:has(.app-shell-bottom-nav) {
   /*
-   * Browser tabs: stretch with inset.
-   * Installed PWA (below): 100dvh / inset bottom is SHORT on iOS — use 100lvh /
-   * --app-height instead (see index.html probe + .is-standalone).
+   * Browser tabs: stretch with inset / 100dvh.
+   * Installed PWA (below): 100dvh is SHORT on iOS — use 100lvh / --app-height.
    */
-  position: fixed;
+  position: absolute;
   top: 0;
-  right: 0;
-  bottom: 0;
   left: 0;
+  right: 0;
+  bottom: auto;
   width: 100%;
-  height: auto;
+  height: 100%;
   max-height: none;
   display: flex;
   flex-direction: column;
@@ -236,12 +250,12 @@ a {
 }
 
 .app-shell.app-shell-bottom-nav {
-  /* Fill the stretched #root; tab bar stays in normal flex flow at the bottom. */
+  /* Fill #root; tab bar is position:fixed overlay (not flex flow). */
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: auto;
+  height: 100%;
   max-height: none;
   overflow: hidden;
   padding-bottom: 0;
@@ -251,7 +265,8 @@ a {
 .app-main {
   --page-pad-x: clamp(1rem, 4.5vw, 1.4rem);
   flex: 1 1 auto;
-  padding: 0.85rem var(--page-pad-x) 1.5rem;
+  /* Reserve space so content scrolls above the fixed tab bar on every tab. */
+  padding: 0.85rem var(--page-pad-x) calc(var(--nav-h) + 1.35rem);
   max-width: min(720px, 100%);
   margin: 0 auto;
   width: 100%;
@@ -264,11 +279,11 @@ a {
   min-width: 0;
   min-height: 0;
   scroll-padding-top: 0.75rem;
+  scroll-padding-bottom: calc(var(--nav-h) + 1rem);
 }
 
 .tabbar {
-  position: relative;
-  z-index: 40;
+  z-index: 50;
   display: grid;
   gap: 0.08rem;
   margin: 0 auto;
@@ -279,7 +294,14 @@ a {
 }
 
 .tabbar-bottom {
-  position: relative;
+  /*
+   * Pin to the shell bottom on every tab. Flex-flow tab bars slide away when
+   * iOS scrolls the document for focused inputs (task cards, users, notices…).
+   */
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   margin-top: 0;
   /* Safe-area only — no extra gap under labels; bar sits on the screen edge. */
   padding: 0.4rem 0.35rem var(--nav-safe-bottom);
