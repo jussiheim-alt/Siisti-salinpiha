@@ -104,8 +104,12 @@ body:has(.app-shell-bottom-nav) {
  * home indicator (white gap under the tab bar). Large viewport (100lvh / 100vh)
  * and the JS --app-height probe report the real screen height.
  *
- * body is position:fixed so focusing invite inputs cannot scroll the document
- * and shove the tab bar below the visible viewport.
+ * IMPORTANT: do NOT use inset:0 / bottom:0 on body or #root in standalone —
+ * WebKit's lying viewport makes inset bottom snap to the short height and
+ * recreates the white band (regression after the invite keyboard lock).
+ *
+ * body is position:fixed (top/left/width + explicit height) so focusing invite
+ * inputs cannot scroll the document and shove the tab bar off-screen.
  */
 html.is-standalone:has(.app-shell-bottom-nav) {
   height: var(--app-height, 100lvh);
@@ -115,7 +119,10 @@ html.is-standalone:has(.app-shell-bottom-nav) {
 
 html.is-standalone body:has(.app-shell-bottom-nav) {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
   width: 100%;
   height: var(--app-height, 100lvh);
   height: var(--app-height, 100vh);
@@ -125,9 +132,13 @@ html.is-standalone body:has(.app-shell-bottom-nav) {
 
 html.is-standalone #root:has(.app-shell-bottom-nav) {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
   width: 100%;
-  height: 100%;
+  height: var(--app-height, 100lvh);
+  height: var(--app-height, 100vh);
   max-height: none;
 }
 
@@ -140,7 +151,10 @@ html.is-standalone #root:has(.app-shell-bottom-nav) {
 
   body:has(.app-shell-bottom-nav) {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: auto;
     width: 100%;
     height: var(--app-height, 100lvh);
     height: var(--app-height, 100vh);
@@ -150,9 +164,13 @@ html.is-standalone #root:has(.app-shell-bottom-nav) {
 
   #root:has(.app-shell-bottom-nav) {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: auto;
     width: 100%;
-    height: 100%;
+    height: var(--app-height, 100lvh);
+    height: var(--app-height, 100vh);
     max-height: none;
   }
 }
@@ -261,12 +279,25 @@ a {
 }
 
 .tabbar-bottom {
+  position: relative;
   margin-top: 0;
   /* Safe-area only — no extra gap under labels; bar sits on the screen edge. */
   padding: 0.4rem 0.35rem var(--nav-safe-bottom);
   background: #ffffff;
   border-top: 1px solid rgba(18, 35, 28, 0.08);
   box-shadow: 0 -8px 28px rgba(11, 36, 28, 0.05);
+}
+
+/* Paint any residual letterbox under the bar the same white as the tab strip. */
+.tabbar-bottom::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 120px;
+  background: #ffffff;
+  pointer-events: none;
 }
 
 .tabbar a,
