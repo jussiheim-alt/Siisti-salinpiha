@@ -38,7 +38,7 @@ export const DEFAULT_LEAD_GUIDE: LeadGuide = {
       id: 'extra',
       title: 'Apukutsu kun oma työvoima ei riitä',
       body:
-        'Jos vuoron väki ei riitä (esim. runsas lumi), luo Apukutsut-sivulta uusi apukutsu. Kerro mitä tarvitaan ja vähintään ilmoittautuneiden määrä. Kun minimi täyttyy, tehtävä aktivoituu. Vastuuvelenä voit luoda apukutsun julkaistulle viikolle.',
+        'Jos vuoron väki ei riitä (esim. runsas lumi), luo Apu-välilehdeltä apukutsu. Kerro mitä tarvitaan ja vähintään ilmoittautuneiden määrä — muut jäsenet voivat tulla auttamaan vaikka eivät olisi vuorossa. Kun minimi täyttyy, tehtävä aktivoituu. Vastuuvelenä voit luoda kutsun julkaistulle viikolle.',
     },
   ],
 }

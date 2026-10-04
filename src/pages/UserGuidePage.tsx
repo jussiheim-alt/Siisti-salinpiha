@@ -57,9 +57,9 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     id: 'apu',
     title: 'Apukutsut',
     body: [
-      'Kun tarvitaan lisäkäsiä (esim. runsas lumi), avaa Apu-välilehti.',
-      'Ilmoittaudu avoimeen kutsuun. Kun minimi täyttyy, tehtävä aktivoituu.',
-      'Vastuuveli tai ylläpitäjä voi luoda uuden apukutsun tarvittaessa.',
+      'Jos vuorossa olevat ystävät tarvitsevat lisätyövoimaa pihatöihin, he voivat lähettää apukutsun Apu-välilehdelle.',
+      'Voit ilmoittautua mukaan hyvään työhön auttamaan heitä, vaikka et itse olisi vuorossa silloin. Apuasi arvostetaan suuresti!',
+      'Kun ilmoittautuneita on tarpeeksi (minimi), tehtävä aktivoituu. Uuden kutsun luo vastuuveli tai ylläpitäjä tarvittaessa.',
     ],
     to: '/apukutsut',
     linkLabel: 'Avaa apukutsut',
