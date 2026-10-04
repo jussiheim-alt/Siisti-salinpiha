@@ -73,10 +73,7 @@ export function PrivacyNotice({ open, mode, busy, error, onAccept, onClose }: Pr
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
               />
-              <span>
-                Olen lukenut tietosuojaselosteen ja hyväksyn henkilötietojen käsittelyn siinä
-                kuvatulla tavalla.
-              </span>
+              <span>{PRIVACY_ACCEPT_LABEL}</span>
             </label>
             {error && <p className="error">{error}</p>}
             <button
@@ -85,7 +82,7 @@ export function PrivacyNotice({ open, mode, busy, error, onAccept, onClose }: Pr
               disabled={!checked || busy}
               onClick={() => void onAccept?.()}
             >
-              {busy ? 'Tallennetaan…' : 'Hyväksy ja jatka'}
+              {busy ? 'Tallennetaan…' : 'Jatka'}
             </button>
           </div>
         ) : (
