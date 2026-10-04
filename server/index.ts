@@ -965,7 +965,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'tabbar-inset-stretch-2026-10-04',
+    uiVersion: 'tabbar-standalone-lvh-2026-10-04',
   })
 })
 

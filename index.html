@@ -11,6 +11,44 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Siisti salin piha — Pihavuorot ja pihanhoito" />
     <title>Siisti salin piha</title>
+    <!--
+      iOS home-screen PWA: 100dvh / innerHeight is often short (screen minus top inset),
+      which leaves a white band under the tab bar. 100lvh/100vh is the real screen height.
+      Measure before paint and expose --app-height for the shell CSS.
+    -->
+    <script>
+      (function () {
+        var ua = window.navigator
+        var standalone =
+          ua.standalone === true ||
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: fullscreen)').matches
+        if (standalone) document.documentElement.classList.add('is-standalone')
+
+        function applyAppHeight() {
+          var h = window.innerHeight || 0
+          var probe = document.createElement('div')
+          probe.setAttribute('aria-hidden', 'true')
+          probe.style.cssText =
+            'position:fixed;visibility:hidden;pointer-events:none;height:100vh;height:100lvh;top:0;left:0;width:0;'
+          document.documentElement.appendChild(probe)
+          var large = probe.offsetHeight || 0
+          document.documentElement.removeChild(probe)
+          if (large > h) h = large
+          if (h > 0) document.documentElement.style.setProperty('--app-height', h + 'px')
+        }
+
+        applyAppHeight()
+        window.addEventListener('resize', applyAppHeight)
+        window.addEventListener('orientationchange', applyAppHeight)
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', applyAppHeight)
+        }
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') applyAppHeight()
+        })
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -76,9 +76,9 @@ body:has(.app-shell-bottom-nav) {
 
 #root:has(.app-shell-bottom-nav) {
   /*
-   * Stretch to the real window edges with top+bottom (not height:100dvh).
-   * iOS standalone often reports a short 100dvh / -webkit-fill-available, which
-   * left a white letterbox under the tab bar (~30px; reads as ~90px under icons).
+   * Browser tabs: stretch with inset.
+   * Installed PWA (below): 100dvh / inset bottom is SHORT on iOS — use 100lvh /
+   * --app-height instead (see index.html probe + .is-standalone).
    */
   position: fixed;
   top: 0;
@@ -96,6 +96,46 @@ body:has(.app-shell-bottom-nav) {
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
   background: #ffffff;
+}
+
+/*
+ * iOS home-screen PWA: small/dynamic viewport units omit the top safe-area from
+ * the reported height, so a bottom-anchored shell stops ~50–60pt above the
+ * home indicator (white gap under the tab bar). Large viewport (100lvh / 100vh)
+ * and the JS --app-height probe report the real screen height.
+ */
+html.is-standalone:has(.app-shell-bottom-nav),
+html.is-standalone body:has(.app-shell-bottom-nav) {
+  height: var(--app-height, 100lvh);
+  height: var(--app-height, 100vh);
+}
+
+html.is-standalone #root:has(.app-shell-bottom-nav) {
+  top: 0;
+  right: 0;
+  left: 0;
+  bottom: auto;
+  height: var(--app-height, 100lvh);
+  height: var(--app-height, 100vh);
+  max-height: none;
+}
+
+@media (display-mode: standalone) {
+  html:has(.app-shell-bottom-nav),
+  body:has(.app-shell-bottom-nav) {
+    height: var(--app-height, 100lvh);
+    height: var(--app-height, 100vh);
+  }
+
+  #root:has(.app-shell-bottom-nav) {
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: auto;
+    height: var(--app-height, 100lvh);
+    height: var(--app-height, 100vh);
+    max-height: none;
+  }
 }
 
 img,
