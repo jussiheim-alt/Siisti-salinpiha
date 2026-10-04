@@ -25,6 +25,12 @@
           window.matchMedia('(display-mode: fullscreen)').matches
         if (standalone) document.documentElement.classList.add('is-standalone')
 
+        function pinScroll() {
+          window.scrollTo(0, 0)
+          document.documentElement.scrollTop = 0
+          document.body.scrollTop = 0
+        }
+
         function applyAppHeight() {
           var h = window.innerHeight || 0
           var probe = document.createElement('div')
@@ -36,6 +42,8 @@
           document.documentElement.removeChild(probe)
           if (large > h) h = large
           if (h > 0) document.documentElement.style.setProperty('--app-height', h + 'px')
+          /* iOS keyboard/focus can scroll the document and hide the fixed tab bar. */
+          pinScroll()
         }
 
         applyAppHeight()
@@ -43,9 +51,15 @@
         window.addEventListener('orientationchange', applyAppHeight)
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', applyAppHeight)
+          window.visualViewport.addEventListener('scroll', pinScroll)
         }
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') applyAppHeight()
+        })
+        /* After invite-form / keyboard dismiss, snap shell back. */
+        document.addEventListener('focusout', function () {
+          window.setTimeout(applyAppHeight, 50)
+          window.setTimeout(applyAppHeight, 300)
         })
       })()
     </script>

@@ -87,6 +87,9 @@ export function UsersPage() {
       setTravelGroup('')
       setLastInviteUrl(data.invite.inviteUrl || '')
       setNotice('Kutsu luotu — kopioi linkki ja lähetä se henkilölle.')
+      /* iOS PWA: blur + scroll reset so the tab bar is not left off-screen. */
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+      window.scrollTo(0, 0)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kutsu epäonnistui')
@@ -258,10 +261,11 @@ export function UsersPage() {
         </form>
         {lastInviteUrl && (
           <div className="stack" style={{ marginTop: '1rem' }}>
-            <label>
-              Kutsulinkki
-              <input value={lastInviteUrl} readOnly onFocus={(e) => e.target.select()} />
-            </label>
+            <p className="hint" style={{ wordBreak: 'break-all', margin: 0 }}>
+              <strong>Kutsulinkki</strong>
+              <br />
+              {lastInviteUrl}
+            </p>
             <button className="btn" type="button" onClick={() => void copyLink(lastInviteUrl)}>
               Kopioi linkki
             </button>
