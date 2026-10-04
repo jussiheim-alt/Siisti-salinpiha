@@ -16,7 +16,7 @@
   --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
-  /* Tab bar content height + home-indicator inset (kept in sync with .tabbar-bottom). */
+  /* Tab content + home-indicator; keep in sync with .tabbar-bottom padding. */
   --nav-safe-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
   --nav-content-h: 3.7rem;
   --nav-h: calc(var(--nav-content-h) + var(--nav-safe-bottom));
@@ -59,21 +59,13 @@ body {
   overflow-x: hidden;
 }
 
-/*
- * Logged-in shell: fill the real standalone window.
- * 100dvh alone is often SHORT on iOS PWAs → mist letterbox under the tab bar
- * (manifest/body background shows through). Prefer -webkit-fill-available and
- * the JS --app-height fallback from viewportShell.ts.
- */
+/* Logged-in: paint any residual iOS letterbox the same as the tab bar. */
 html:has(.app-shell-bottom-nav),
 body:has(.app-shell-bottom-nav) {
-  height: 100%;
-  min-height: 100%;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
+  background-color: #ffffff;
+  background-image: none;
   overflow: hidden;
   overscroll-behavior: none;
-  background-color: #ffffff;
 }
 
 #root,
@@ -83,15 +75,19 @@ body:has(.app-shell-bottom-nav) {
 }
 
 #root:has(.app-shell-bottom-nav) {
+  /*
+   * Stretch to the real window edges with top+bottom (not height:100dvh).
+   * iOS standalone often reports a short 100dvh / -webkit-fill-available, which
+   * left a white letterbox under the tab bar (~30px; reads as ~90px under icons).
+   */
   position: fixed;
   top: 0;
-  left: 0;
   right: 0;
+  bottom: 0;
+  left: 0;
   width: 100%;
-  /* Fallbacks first; JS viewportShell overwrites height to the real window. */
-  height: 100%;
-  height: 100dvh;
-  height: -webkit-fill-available;
+  height: auto;
+  max-height: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -163,16 +159,15 @@ a {
 }
 
 .app-shell.app-shell-bottom-nav {
-  position: relative;
+  /* Fill the stretched #root; tab bar stays in normal flex flow at the bottom. */
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: 100%;
+  height: auto;
   max-height: none;
   overflow: hidden;
-  /* Room for the absolutely positioned tab bar. */
-  padding-bottom: var(--nav-h);
+  padding-bottom: 0;
   box-sizing: border-box;
 }
 
@@ -207,14 +202,8 @@ a {
 }
 
 .tabbar-bottom {
-  /* Pin to the shell bottom (same box as --app-height), not a short 100dvh viewport. */
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  width: 100%;
-  margin: 0 auto;
+  margin-top: 0;
+  /* Safe-area only — no extra gap under labels; bar sits on the screen edge. */
   padding: 0.4rem 0.35rem var(--nav-safe-bottom);
   background: #ffffff;
   border-top: 1px solid rgba(18, 35, 28, 0.08);
@@ -1496,7 +1485,7 @@ select:focus {
 }
 
 @media (min-width: 800px) {
-  .tabbar-bottom {
+  .tabbar {
     max-width: 720px;
     border-radius: 1.1rem 1.1rem 0 0;
   }
@@ -2674,9 +2663,9 @@ label.template-pick input[type='checkbox'] {
 }
 
 .chat-fab {
-  position: absolute;
+  position: fixed;
   right: max(1rem, env(safe-area-inset-right));
-  /* Sit above the absolutely positioned tab bar inside the shell. */
+  /* --nav-h already includes safe-area-inset-bottom */
   bottom: calc(var(--nav-h) + 0.75rem);
   z-index: 45;
   width: 3.4rem;

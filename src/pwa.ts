@@ -3,8 +3,8 @@ import { registerSW } from 'virtual:pwa-register'
 /**
  * PWA-päivitykset kotivalikon sovellukselle:
  * - registerType autoUpdate + skipWaiting → uusi build aktivoituu
- * - controllerchange → pakota reload (iOS ei muuten aina vaihda CSS:ää)
- * - tarkista päivitykset heti, fokuksessa, sivun paluussa ja 2 min välein
+ * - controllerchange → pakota reload, jotta CSS/JS ei jää vanhaan SW:hen
+ * - tarkista päivitykset heti, fokuksessa, sivun paluussa ja 5 min välein
  */
 let refreshing = false
 if ('serviceWorker' in navigator) {
@@ -30,13 +30,17 @@ registerSW({
     }
 
     checkForUpdate()
-    window.setInterval(checkForUpdate, 2 * 60 * 1000)
+
+    const intervalMs = 5 * 60 * 1000
+    window.setInterval(checkForUpdate, intervalMs)
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') checkForUpdate()
     })
     window.addEventListener('focus', checkForUpdate)
-    window.addEventListener('pageshow', checkForUpdate)
+    window.addEventListener('pageshow', () => {
+      checkForUpdate()
+    })
   },
   onOfflineReady() {
     // Ensimmäinen asennus valmis — ei UI:ta tarvita
