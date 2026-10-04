@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from './api'
 import { AuthProvider, useAuth } from './auth'
+import { PrivacyGate } from './components/PrivacyGate'
 import { ShiftChatFab } from './components/ShiftChatFab'
 import { AdminHubPage } from './pages/AdminHubPage'
 import { AppSettingsPage } from './pages/AppSettingsPage'
@@ -182,6 +183,7 @@ function Shell() {
         </button>
       </nav>
       <ShiftChatFab />
+      <PrivacyGate />
     </div>
   )
 }

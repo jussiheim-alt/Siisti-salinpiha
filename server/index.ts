@@ -459,6 +459,20 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ user: publicUser(row) })
 })
 
+app.post('/api/me/privacy-accept', authMiddleware, (req, res) => {
+  const auth = (req as express.Request & { user: AuthUser }).user
+  const version = String((req.body as { version?: string })?.version || '').trim()
+  if (!version || version.length > 40) {
+    return res.status(400).json({ error: 'Virheellinen tietosuojaversio' })
+  }
+  const now = new Date().toISOString()
+  db.prepare(
+    `UPDATE users SET privacy_accepted_version = ?, privacy_accepted_at = ? WHERE id = ?`,
+  ).run(version, now, auth.id)
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(auth.id) as Record<string, unknown>
+  res.json({ user: publicUser(row) })
+})
+
 function publicAppUrl(req: express.Request) {
   const fromEnv = process.env.APP_PUBLIC_URL?.trim().replace(/\/$/, '')
   if (fromEnv) return fromEnv
@@ -1026,7 +1040,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'lead-no-heavy-notice-2026-10-04',
+    uiVersion: 'tietosuojaseloste-2026-10-04',
   })
 })
 

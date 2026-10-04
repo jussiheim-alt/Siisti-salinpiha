@@ -3210,3 +3210,114 @@ label.template-pick input[type='checkbox'] {
 .install-tips.is-compact h2 {
   font-size: 1.05rem;
 }
+
+/* Privacy notice */
+.privacy-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(10, 24, 18, 0.5);
+  display: grid;
+  align-items: end;
+  padding: 0.75rem;
+}
+
+.privacy-sheet {
+  width: min(560px, 100%);
+  max-height: min(90dvh, 780px);
+  margin: 0 auto;
+  overflow: auto;
+  background: var(--birch);
+  border-radius: 1.2rem 1.2rem 0.9rem 0.9rem;
+  padding: 1rem 1.05rem 1.15rem;
+  box-shadow: 0 -12px 40px rgba(11, 36, 28, 0.2);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.privacy-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.privacy-head h2 {
+  margin: 0.15rem 0 0;
+  font-size: 1.2rem;
+}
+
+.privacy-version {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+}
+
+.privacy-intro {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.93rem;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+.privacy-body {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.privacy-section {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.9rem;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.privacy-section h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+  color: var(--moss-deep);
+}
+
+.privacy-section p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.privacy-accept {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.25rem;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, transparent, var(--birch) 18%);
+  padding-bottom: 0.15rem;
+}
+
+.privacy-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.privacy-check input {
+  margin-top: 0.2rem;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.privacy-ilmo-link {
+  padding: 0.35rem 0.5rem;
+}
+
+.privacy-ilmo-link .quick-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}

@@ -326,6 +326,12 @@ export function initDb() {
   if (!userCols.some((c) => c.name === 'sparse_rotation')) {
     db.exec(`ALTER TABLE users ADD COLUMN sparse_rotation INTEGER NOT NULL DEFAULT 0`)
   }
+  if (!userCols.some((c) => c.name === 'privacy_accepted_version')) {
+    db.exec(`ALTER TABLE users ADD COLUMN privacy_accepted_version TEXT`)
+  }
+  if (!userCols.some((c) => c.name === 'privacy_accepted_at')) {
+    db.exec(`ALTER TABLE users ADD COLUMN privacy_accepted_at TEXT`)
+  }
 
   const inviteCols = db.prepare(`PRAGMA table_info(invites)`).all() as { name: string }[]
   if (!inviteCols.some((c) => c.name === 'travel_group')) {
@@ -401,6 +407,10 @@ export function publicUser(row: Record<string, unknown>) {
     travelGroup: row.travel_group ? String(row.travel_group) : null,
     /** Käytä harvemmin — suositus noin joka toiseen kierrokseen */
     sparseRotation: Boolean(row.sparse_rotation),
+    privacyAcceptedVersion: row.privacy_accepted_version
+      ? String(row.privacy_accepted_version)
+      : null,
+    privacyAcceptedAt: row.privacy_accepted_at ? String(row.privacy_accepted_at) : null,
     createdAt: row.created_at,
   }
 }

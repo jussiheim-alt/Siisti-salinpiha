@@ -48,6 +48,8 @@ type User = {
   snoozeUntil?: string | null
   travelGroup?: string | null
   sparseRotation?: boolean
+  privacyAcceptedVersion?: string | null
+  privacyAcceptedAt?: string | null
   createdAt: string
 }
 
@@ -424,6 +426,8 @@ function publicUser(u: User) {
     snoozeUntil: u.snoozeUntil ?? null,
     travelGroup: u.travelGroup ?? null,
     sparseRotation: Boolean(u.sparseRotation),
+    privacyAcceptedVersion: u.privacyAcceptedVersion ?? null,
+    privacyAcceptedAt: u.privacyAcceptedAt ?? null,
   }
 }
 
@@ -741,6 +745,18 @@ export async function localApi<T = unknown>(
     return ok({ user: publicUser(user!) })
   }
 
+  if (pathname === '/api/me/privacy-accept' && method === 'POST') {
+    if (!user) err('Istunto vanhentunut')
+    const version = String(body.version || '').trim()
+    if (!version || version.length > 40) err('Virheellinen tietosuojaversio')
+    const target = db.users.find((u) => u.id === user!.id)
+    if (!target) err('Käyttäjää ei löydy')
+    target!.privacyAcceptedVersion = version
+    target!.privacyAcceptedAt = new Date().toISOString()
+    saveDb(db)
+    return ok({ user: publicUser(target!) })
+  }
+
   const inviteTokenGet = pathname.match(/^\/api\/invites\/token\/([^/]+)$/)
   if (inviteTokenGet && method === 'GET') {
     const inv = db.invites.find((i) => i.token === inviteTokenGet[1])
@@ -1053,7 +1069,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-no-heavy-notice-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tietosuojaseloste-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
