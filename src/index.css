@@ -1185,9 +1185,121 @@ a {
   gap: 0;
 }
 
-.home-shift-task .quick-link-text strong {
-  font-size: 0.94rem;
-  font-weight: 600;
+button.home-shift-trigger {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+button.home-shift-trigger:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--moss) 25%, var(--line));
+}
+
+.home-shift-calendar {
+  margin-top: 0.85rem;
+}
+
+.home-shift-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(10, 24, 18, 0.45);
+  display: grid;
+  align-items: end;
+  padding: 0.75rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  animation: rise 0.22s var(--ease) both;
+}
+
+.home-shift-sheet {
+  width: min(520px, 100%);
+  margin: 0 auto;
+  background: var(--birch);
+  border-radius: calc(var(--radius) + 0.15rem);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  max-height: min(78dvh, 640px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: rise 0.28s var(--ease) both;
+}
+
+.home-shift-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.65rem;
+  flex-shrink: 0;
+}
+
+.home-shift-sheet-head h2 {
+  margin: 0.15rem 0 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.03em;
+}
+
+.home-shift-sheet-meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+}
+
+.home-shift-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.15rem 1rem 0.5rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.45rem;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.home-shift-task-row {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #fbfcfb 0%, #f4f8f6 100%);
+  border: 1px solid rgba(18, 35, 28, 0.07);
+}
+
+.home-shift-task-row strong {
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+}
+
+.home-shift-task-row span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.home-shift-task-row.status-done {
+  opacity: 0.72;
+}
+
+.home-shift-task-row.status-done strong {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.home-shift-sheet-actions {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+  background: inherit;
+}
+
+.home-shift-sheet-actions .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .notice-strip {

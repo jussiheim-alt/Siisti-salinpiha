@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification, type Pihavuoro, type WeatherPayload } from '../api'
 import { useAuth } from '../auth'
-import { AddToCalendarButton } from '../components/AddToCalendarButton'
+import { HomeShiftPanel } from '../components/HomeShiftPanel'
 import { LeadCallout } from '../components/LeadCallout'
 import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
-import { formatWeekRangeFi } from '../shared/datetime'
-import { SEASON_LABELS, type SeasonKey } from '../shared/seasons'
 
 function QuickLink({
   title,
@@ -67,7 +65,6 @@ export function HomePage() {
 
   const myAssignment = next?.assignments.find((a) => a.userId === user?.id)
   const isLead = myAssignment?.role === 'lead'
-  const openTasks = next?.tasks.filter((t) => t.status === 'open') ?? []
   const firstName = user?.name.split(' ')[0]
 
   return (
@@ -129,51 +126,11 @@ export function HomePage() {
         )}
 
         {next && (
-          <section className="surface-card home-shift" style={{ animationDelay: '0.14s' }}>
-            <p className="kicker">Pihavuoro</p>
-            <div className="quick-list">
-              <Link className="quick-link" to={`/pihavuoro/${next.id}`}>
-                <span className="quick-link-text">
-                  <strong>{formatWeekRangeFi(next.weekStart, next.weekEnd)}</strong>
-                  <span>
-                    {SEASON_LABELS[next.season as SeasonKey] || next.seasonLabel || next.season}
-                    {myAssignment
-                      ? ` · ${myAssignment.role === 'lead' ? 'vastuuveli' : 'avustaja'}`
-                      : ''}
-                    {openTasks.length ? ` · ${openTasks.length} avointa tehtävää` : ' · ei avoimia tehtäviä'}
-                  </span>
-                </span>
-                <span className="quick-link-action">Avaa</span>
-              </Link>
-              {openTasks.slice(0, 3).map((t) => (
-                <Link key={t.id} className="quick-link home-shift-task" to={`/pihavuoro/${next.id}`}>
-                  <span className="quick-link-text">
-                    <strong>{t.title}</strong>
-                    <span>{t.effort === 'heavy' ? 'Raskas tehtävä' : 'Kevyt tehtävä'}</span>
-                  </span>
-                  <span className="quick-link-action">Avaa</span>
-                </Link>
-              ))}
-            </div>
-            {myAssignment && (
-              <div style={{ marginTop: '0.75rem' }}>
-                <AddToCalendarButton
-                  events={[
-                    {
-                      id: next.id,
-                      weekStart: next.weekStart,
-                      weekEnd: next.weekEnd,
-                      role: myAssignment.role,
-                      seasonLabel:
-                        SEASON_LABELS[next.season as SeasonKey] ||
-                        next.seasonLabel ||
-                        next.season,
-                    },
-                  ]}
-                />
-              </div>
-            )}
-          </section>
+          <HomeShiftPanel
+            pihavuoro={next}
+            role={myAssignment?.role ?? null}
+            showCalendar={Boolean(myAssignment)}
+          />
         )}
 
         <section className="surface-card quick-grid" style={{ animationDelay: '0.18s' }}>

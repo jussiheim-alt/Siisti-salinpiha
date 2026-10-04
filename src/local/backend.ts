@@ -1053,7 +1053,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'google-calendar-cta-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'home-shift-sheet-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
