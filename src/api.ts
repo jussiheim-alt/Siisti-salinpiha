@@ -78,6 +78,9 @@ export type User = {
   travelGroup?: string | null
   /** Käytä harvemmin — suositus noin joka toiseen kierrokseen */
   sparseRotation?: boolean
+  /** Accepted privacy notice version (null until user accepts) */
+  privacyAcceptedVersion?: string | null
+  privacyAcceptedAt?: string | null
 }
 
 export type Assignment = {

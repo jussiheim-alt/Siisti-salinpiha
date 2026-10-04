@@ -48,6 +48,8 @@ type User = {
   snoozeUntil?: string | null
   travelGroup?: string | null
   sparseRotation?: boolean
+  privacyAcceptedVersion?: string | null
+  privacyAcceptedAt?: string | null
   createdAt: string
 }
 
@@ -215,6 +217,14 @@ function normalizeDb(db: Db): Db {
     const start = mondayOf()
     db.weekBlocks = db.weekBlocks.filter((b) => b.weekStart >= start)
   }
+  // Chat: poista viestit, kun viikko on ohi (persistoidaan loadDb:ssä)
+  if (Array.isArray(db.messages)) {
+    const t = today()
+    const openWeekIds = new Set(
+      db.pihavuorot.filter((p) => addDays(p.weekStart, 6) >= t).map((p) => p.id),
+    )
+    db.messages = db.messages.filter((m) => openWeekIds.has(m.pihavuoroId))
+  }
   if (!Array.isArray(db.taskCards) || db.taskCards.length === 0) {
     db.taskCards = seedTaskCardsFromCatalog()
   }
@@ -248,7 +258,13 @@ function loadDb(): Db {
   const raw = localStorage.getItem(DB_KEY)
   if (raw) {
     const parsed = JSON.parse(raw) as Db
-    return normalizeDb(parsed)
+    const beforeMsgs = Array.isArray(parsed.messages) ? parsed.messages.length : 0
+    const next = normalizeDb(parsed)
+    // Persist chat prune so expired messages leave storage, not only memory
+    if ((next.messages?.length ?? 0) < beforeMsgs) {
+      localStorage.setItem(DB_KEY, JSON.stringify(next))
+    }
+    return next
   }
   // Migrate previous local key if present
   const legacy = localStorage.getItem('siisti-piha-local-db-v2')
@@ -424,6 +440,8 @@ function publicUser(u: User) {
     snoozeUntil: u.snoozeUntil ?? null,
     travelGroup: u.travelGroup ?? null,
     sparseRotation: Boolean(u.sparseRotation),
+    privacyAcceptedVersion: u.privacyAcceptedVersion ?? null,
+    privacyAcceptedAt: u.privacyAcceptedAt ?? null,
   }
 }
 
@@ -741,6 +759,18 @@ export async function localApi<T = unknown>(
     return ok({ user: publicUser(user!) })
   }
 
+  if (pathname === '/api/me/privacy-accept' && method === 'POST') {
+    if (!user) err('Istunto vanhentunut')
+    const version = String(body.version || '').trim()
+    if (!version || version.length > 40) err('Virheellinen tietosuojaversio')
+    const target = db.users.find((u) => u.id === user!.id)
+    if (!target) err('Käyttäjää ei löydy')
+    target!.privacyAcceptedVersion = version
+    target!.privacyAcceptedAt = new Date().toISOString()
+    saveDb(db)
+    return ok({ user: publicUser(target!) })
+  }
+
   const inviteTokenGet = pathname.match(/^\/api\/invites\/token\/([^/]+)$/)
   if (inviteTokenGet && method === 'GET') {
     const inv = db.invites.find((i) => i.token === inviteTokenGet[1])
@@ -1053,7 +1083,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-no-heavy-notice-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tietosuojaseloste-2026-10-04e' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
@@ -1392,6 +1422,9 @@ export async function localApi<T = unknown>(
       if (!p.assignments.some((a) => a.userId === user!.id)) {
         err('Viestit näkyvät vain tämän viikon vuorossa oleville')
       }
+      if (addDays(p.weekStart, 6) < today()) {
+        return ok({ messages: [] })
+      }
       const messages = db.messages
         .filter((m) => m.pihavuoroId === p.id)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1410,6 +1443,9 @@ export async function localApi<T = unknown>(
         err('Vain vuorossa olevat voivat lähettää viestejä')
       }
       if (p.status === 'draft') err('Keskustelu aukeaa kun vuoro on julkaistu')
+      if (addDays(p.weekStart, 6) < today()) {
+        err('Viikon keskustelu on päättynyt — viestit on poistettu')
+      }
       const text = String(body.body || '').trim()
       if (!text) err('Kirjoita viesti')
       const msg: ShiftMessage = {

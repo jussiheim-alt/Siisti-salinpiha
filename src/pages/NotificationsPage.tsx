@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification } from '../api'
 import { useAuth } from '../auth'
+import { PrivacyNotice } from '../components/PrivacyNotice'
 import { PushToggle } from '../components/PushToggle'
 import { formatDateTimeFi } from '../shared/datetime'
 import { onServiceWorkerPush, startLiveRefresh } from '../shared/liveRefresh'
@@ -25,6 +26,7 @@ export function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
 
   async function load() {
     const data = await api<{
@@ -121,6 +123,18 @@ export function NotificationsPage() {
       </header>
 
       <PushToggle />
+
+      <section className="panel privacy-ilmo-link">
+        <button type="button" className="quick-link" onClick={() => setPrivacyOpen(true)}>
+          <span className="quick-link-text">
+            <strong>Tietosuojaseloste</strong>
+            <span>Miten henkilötietoja käsitellään tässä sovelluksessa</span>
+          </span>
+          <span className="quick-link-action">Avaa</span>
+        </button>
+      </section>
+
+      <PrivacyNotice open={privacyOpen} mode="readonly" onClose={() => setPrivacyOpen(false)} />
 
       {error && <p className="error">{error}</p>}
 
