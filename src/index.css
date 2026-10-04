@@ -1003,6 +1003,7 @@ a {
 
 .push-toggle-card {
   padding: 0.85rem 1rem;
+  margin-bottom: 0.85rem;
 }
 
 .push-toggle-card.is-on {
@@ -3324,13 +3325,66 @@ label.template-pick input[type='checkbox'] {
   height: 1.1rem;
 }
 
-.privacy-ilmo-link {
-  padding: 0.35rem 0.5rem;
+.privacy-ilmo-card {
+  margin: 0 0 0.85rem;
+  padding: 0.35rem 0.4rem;
 }
 
-.privacy-ilmo-link .quick-link {
+.privacy-ilmo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
   width: 100%;
+  margin: 0;
+  padding: 0.7rem 0.75rem;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.privacy-ilmo-btn:hover,
+.privacy-ilmo-btn:focus-visible {
+  background: color-mix(in srgb, var(--mist) 70%, white);
+  outline: none;
+}
+
+.privacy-ilmo-copy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.privacy-ilmo-copy .kicker {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+
+.privacy-ilmo-copy strong {
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.privacy-ilmo-copy > span:last-child {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.privacy-ilmo-action {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--moss);
+  letter-spacing: 0.02em;
 }
