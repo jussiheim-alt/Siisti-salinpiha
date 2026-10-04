@@ -970,7 +970,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'tabbar-revert-pre50-2026-10-04' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'tabbar-inset-stretch-2026-10-04' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {

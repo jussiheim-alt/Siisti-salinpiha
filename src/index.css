@@ -16,7 +16,10 @@
   --radius-sm: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
-  --nav-h: 5.15rem;
+  /* Tab content + home-indicator; keep in sync with .tabbar-bottom padding. */
+  --nav-safe-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
+  --nav-content-h: 3.7rem;
+  --nav-h: calc(var(--nav-content-h) + var(--nav-safe-bottom));
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
@@ -56,6 +59,15 @@ body {
   overflow-x: hidden;
 }
 
+/* Logged-in: paint any residual iOS letterbox the same as the tab bar. */
+html:has(.app-shell-bottom-nav),
+body:has(.app-shell-bottom-nav) {
+  background-color: #ffffff;
+  background-image: none;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 #root,
 .app-shell {
   width: 100%;
@@ -63,14 +75,27 @@ body {
 }
 
 #root:has(.app-shell-bottom-nav) {
-  /* Fixed viewport shell: avoid -webkit-fill-available (clips tabbar on iOS). */
-  height: 100dvh;
-  max-height: 100dvh;
+  /*
+   * Stretch to the real window edges with top+bottom (not height:100dvh).
+   * iOS standalone often reports a short 100dvh / -webkit-fill-available, which
+   * left a white letterbox under the tab bar (~30px; reads as ~90px under icons).
+   */
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   /* Reserve the notch/Dynamic Island outside the scrolling main. */
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
+  background: #ffffff;
 }
 
 img,
@@ -134,10 +159,13 @@ a {
 }
 
 .app-shell.app-shell-bottom-nav {
-  /* Fill #root’s content box exactly — never taller than the viewport. */
-  height: 100%;
+  /* Fill the stretched #root; tab bar stays in normal flex flow at the bottom. */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
   overflow: hidden;
   padding-bottom: 0;
   box-sizing: border-box;
@@ -175,10 +203,9 @@ a {
 
 .tabbar-bottom {
   margin-top: 0;
-  padding: 0.4rem 0.35rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  /* Safe-area only — no extra gap under labels; bar sits on the screen edge. */
+  padding: 0.4rem 0.35rem var(--nav-safe-bottom);
+  background: #ffffff;
   border-top: 1px solid rgba(18, 35, 28, 0.08);
   box-shadow: 0 -8px 28px rgba(11, 36, 28, 0.05);
 }
@@ -2638,7 +2665,8 @@ label.template-pick input[type='checkbox'] {
 .chat-fab {
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
-  bottom: calc(var(--nav-h) + 0.75rem + env(safe-area-inset-bottom));
+  /* --nav-h already includes safe-area-inset-bottom */
+  bottom: calc(var(--nav-h) + 0.75rem);
   z-index: 45;
   width: 3.4rem;
   height: 3.4rem;
