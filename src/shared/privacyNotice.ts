@@ -1,5 +1,5 @@
 /** Bump when the notice text changes so users must re-acknowledge. */
-export const PRIVACY_NOTICE_VERSION = '2026-10-04'
+export const PRIVACY_NOTICE_VERSION = '2026-10-04b'
 
 export type PrivacySection = {
   id: string
@@ -16,7 +16,7 @@ export const PRIVACY_NOTICE_SECTIONS: PrivacySection[] = [
   {
     id: 'rekisteri',
     title: '1. Rekisterinpitäjä',
-    body: 'Rekisterinpitäjä on Siisti salin piha -sovelluksen ylläpito (taloyhtiön / yhteisön nimeämä vastuuhenkilö). Yhteydenotot tietosuoja-asioissa: sovelluksen ylläpitäjä (Ylläpito-osio tai huoltoyhteystieto asetuksissa).',
+    body: 'Rekisterinpitäjä on Siisti salin piha -sovelluksen ylläpitäjät, joita ovat Vääksyn seurakunnan huolto- ja siivouskoordinaattori ja apulainen. Yhteydenotot tietoturva-asioissa: Jussi Heimonen.',
   },
   {
     id: 'tarkoitus',

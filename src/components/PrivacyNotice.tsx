@@ -52,15 +52,16 @@ export function PrivacyNotice({ open, mode, busy, error, onAccept, onClose }: Pr
           )}
         </header>
 
-        <p className="privacy-intro">{PRIVACY_NOTICE_INTRO}</p>
-
-        <div className="privacy-body">
-          {PRIVACY_NOTICE_SECTIONS.map((s) => (
-            <section key={s.id} className="privacy-section">
-              <h3>{s.title}</h3>
-              <p>{s.body}</p>
-            </section>
-          ))}
+        <div className="privacy-scroll">
+          <p className="privacy-intro">{PRIVACY_NOTICE_INTRO}</p>
+          <div className="privacy-body">
+            {PRIVACY_NOTICE_SECTIONS.map((s) => (
+              <section key={s.id} className="privacy-section">
+                <h3>{s.title}</h3>
+                <p>{s.body}</p>
+              </section>
+            ))}
+          </div>
         </div>
 
         {required ? (
@@ -71,7 +72,10 @@ export function PrivacyNotice({ open, mode, busy, error, onAccept, onClose }: Pr
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
               />
-              <span>Olen lukenut tietosuojaselosteen ja hyväksyn henkilötietojen käsittelyn siinä kuvatulla tavalla.</span>
+              <span>
+                Olen lukenut tietosuojaselosteen ja hyväksyn henkilötietojen käsittelyn siinä
+                kuvatulla tavalla.
+              </span>
             </label>
             {error && <p className="error">{error}</p>}
             <button
