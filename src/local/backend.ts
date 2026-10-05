@@ -472,6 +472,15 @@ function shiftCountLocal(db: Db, userId: string): number {
   ).length
 }
 
+function seasonShiftCountLocal(db: Db, userId: string, season: SeasonKey): number {
+  return db.pihavuorot.filter(
+    (p) =>
+      (p.status === 'published' || p.status === 'done') &&
+      p.season === season &&
+      p.assignments.some((a) => a.userId === userId),
+  ).length
+}
+
 function publishedWeeksSinceLocal(db: Db, last: string | null, weekStart: string): number {
   if (!last) return 999
   return db.pihavuorot.filter(
@@ -507,6 +516,7 @@ function recommendLocal(
     (u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()),
   )
   const activeMemberCount = rotationPool.length
+  const season = seasonFor(weekStart)
   const people = rotationPool
     .filter((u) => !blocked.has(u.id) && !already.has(u.id))
     .map((u) => {
@@ -515,6 +525,7 @@ function recommendLocal(
         ...publicUser(u),
         last,
         shiftCount: shiftCountLocal(db, u.id),
+        seasonShiftCount: seasonShiftCountLocal(db, u.id, season),
         sparseRotation: Boolean(u.sparseRotation),
         publishedWeeksSinceLast: publishedWeeksSinceLocal(db, last, weekStart),
       }
@@ -1085,7 +1096,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'admin-week-history-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'season-shift-count-2026-10-05' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {

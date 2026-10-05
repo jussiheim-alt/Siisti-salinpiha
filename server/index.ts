@@ -332,6 +332,18 @@ function shiftCountForUser(userId: string): number {
   return Number(row?.c ?? 0)
 }
 
+/** Published/done shifts for this user in a given season (kevät/kesä/syksy/talvi). */
+function seasonShiftCountForUser(userId: string, season: SeasonKey): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM assignments a
+       JOIN pihavuorot p ON p.id = a.pihavuoro_id
+       WHERE a.user_id = ? AND p.status IN ('published','done') AND p.season = ?`,
+    )
+    .get(userId, season) as { c: number }
+  return Number(row?.c ?? 0)
+}
+
 /** How many published/done weeks fall strictly between last assignment and the target week. */
 function publishedWeeksSinceLast(last: string | null, weekStart: string): number {
   if (!last) return 999
@@ -402,6 +414,7 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
         ).map((r) => r.user_id),
   )
 
+  const season = seasonForDate(weekStart)
   const people = users
     .filter((u) => !already.has(u.id))
     .map((u) => {
@@ -410,6 +423,7 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
         ...u,
         last,
         shiftCount: shiftCountForUser(u.id),
+        seasonShiftCount: seasonShiftCountForUser(u.id, season),
         sparseRotation: Boolean(u.sparseRotation),
         publishedWeeksSinceLast: publishedWeeksSinceLast(last, weekStart),
       }
@@ -1039,7 +1053,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'admin-week-history-2026-10-05',
+    uiVersion: 'season-shift-count-2026-10-05',
   })
 })
 
