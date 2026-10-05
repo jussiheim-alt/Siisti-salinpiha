@@ -1083,7 +1083,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'tietosuojaseloste-2026-10-04e' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'fix-guide-chat-typos-2026-10-05' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
