@@ -5,6 +5,11 @@ import { useAuth } from '../auth'
 
 const SECTIONS = [
   {
+    to: '/viikkohistoria',
+    title: 'Viikkohistoria',
+    body: 'Kokoonpanot, tehtäväkuittaukset ja viikon huomiot — suunnittelun tueksi.',
+  },
+  {
     to: '/kayttajat',
     title: 'Jäsenet',
     body: 'Kutsu käyttäjiä, käyttöoikeudet ja poistaminen.',

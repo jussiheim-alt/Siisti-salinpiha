@@ -3405,3 +3405,99 @@ label.template-pick input[type='checkbox'] {
   color: var(--moss);
   letter-spacing: 0.02em;
 }
+
+/* ——— Admin viikkohistoria ——— */
+.week-history-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.week-history-card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(18, 35, 28, 0.07);
+  border-radius: calc(var(--radius) + 0.05rem);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.week-history-toggle {
+  width: 100%;
+  display: grid;
+  gap: 0.55rem;
+  text-align: left;
+  padding: 0.95rem 1.05rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.week-history-toggle-main {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.week-history-toggle-main strong {
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+
+.week-history-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.week-history-body {
+  display: grid;
+  gap: 1.1rem;
+  padding: 0 1.05rem 1.1rem;
+  border-top: 1px solid var(--line);
+}
+
+.week-history-section h2 {
+  margin: 0.85rem 0 0.45rem;
+  font-size: 1.05rem;
+}
+
+.week-history-roster,
+.week-history-tasks,
+.week-history-notices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.week-history-roster li,
+.week-history-tasks li,
+.week-history-notices li {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--birch) 80%, white);
+}
+
+.week-history-task-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.week-history-tasks li.status-done {
+  background: color-mix(in srgb, var(--resin) 10%, white);
+}
+
+.week-history-tasks li.status-open {
+  background: color-mix(in srgb, #b42318 8%, white);
+}
+
+.week-history-notices li p {
+  margin: 0.15rem 0;
+  white-space: pre-wrap;
+}
