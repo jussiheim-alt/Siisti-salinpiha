@@ -963,10 +963,7 @@ app.post('/api/task-cards', authMiddleware, requireAdmin, (req, res) => {
   const effort = req.body.effort === 'heavy' ? 'heavy' : 'light'
   const season = isSeasonKey(req.body.season) ? req.body.season : 'kesa'
   const cadence = isCadenceKey(req.body.cadence) ? req.body.cadence : 'weekly'
-  const defaultAssignee =
-    req.body.defaultAssignee === 'lead' || req.body.defaultAssignee === 'all'
-      ? req.body.defaultAssignee
-      : 'helpers'
+  const defaultAssignee = 'all'
   const maxOrder = (
     db.prepare(`SELECT COALESCE(MAX(sort_order), 0) AS m FROM task_cards`).get() as { m: number }
   ).m
@@ -995,12 +992,7 @@ app.patch('/api/task-cards/:id', authMiddleware, requireAdmin, (req, res) => {
     req.body.effort === 'light' || req.body.effort === 'heavy' ? req.body.effort : current.effort
   const season = isSeasonKey(req.body.season) ? req.body.season : current.season
   const cadence = isCadenceKey(req.body.cadence) ? req.body.cadence : current.cadence
-  const defaultAssignee =
-    req.body.defaultAssignee === 'lead' ||
-    req.body.defaultAssignee === 'helpers' ||
-    req.body.defaultAssignee === 'all'
-      ? req.body.defaultAssignee
-      : current.defaultAssignee
+  const defaultAssignee = 'all'
   const active = typeof req.body.active === 'boolean' ? req.body.active : current.active
   const sortOrder =
     typeof req.body.sortOrder === 'number' ? req.body.sortOrder : current.sortOrder
@@ -1043,7 +1035,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'copy-task-card-2026-10-05',
+    uiVersion: 'task-cards-shared-all-2026-10-05',
   })
 })
 

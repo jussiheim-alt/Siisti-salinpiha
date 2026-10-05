@@ -55,7 +55,7 @@ export function seedTaskCardsFromCatalog(): TaskCard[] {
       effort: t.effort,
       season,
       cadence: 'weekly' as TaskCadence,
-      defaultAssignee: t.defaultAssignee,
+      defaultAssignee: 'all' as const,
       active: true,
       sortOrder: t.sortOrder,
     }
@@ -70,10 +70,7 @@ export function publicTaskCard(row: Record<string, unknown>): TaskCard {
     effort: row.effort === 'heavy' ? 'heavy' : 'light',
     season: isSeasonKey(row.season) ? row.season : 'kesa',
     cadence: isCadenceKey(row.cadence) ? row.cadence : 'weekly',
-    defaultAssignee:
-      row.default_assignee === 'lead' || row.default_assignee === 'all'
-        ? row.default_assignee
-        : 'helpers',
+    defaultAssignee: 'all',
     active: Boolean(row.active),
     sortOrder: Number(row.sort_order ?? 0),
   }
