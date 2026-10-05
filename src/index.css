@@ -519,12 +519,13 @@ a {
 }
 
 .home-hero-copy {
-  /* Pinned to hero bottom via space-between — not clustered under the brand. */
-  margin: 0;
+  /* Pinned to hero bottom — empty middle like admin/lead view. */
+  margin: auto 0 0;
   padding-top: 0;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.28rem;
   flex-shrink: 0;
+  align-self: stretch;
 }
 
 .home-hero-greeting {
