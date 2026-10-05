@@ -942,7 +942,6 @@ a {
   /* Portal + .modal-backdrop (z-index 120): above tabbar (50) and chat FAB (45). */
   align-items: end;
   overscroll-behavior: none;
-  touch-action: none;
 }
 
 .lead-guide-sheet {
@@ -954,7 +953,10 @@ a {
   border-radius: 1.2rem 1.2rem 0.9rem 0.9rem;
   padding: 1rem 1.05rem 0.95rem;
   box-shadow: 0 -12px 40px rgba(11, 36, 28, 0.18);
-  touch-action: auto;
+}
+
+.lead-guide-actions {
+  padding-top: 0.5rem;
 }
 
 .lead-guide-body.modal-scroll {

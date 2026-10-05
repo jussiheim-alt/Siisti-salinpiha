@@ -1053,7 +1053,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'lead-guide-scroll-lock-2026-10-05',
+    uiVersion: 'lead-guide-close-fix-2026-10-05',
   })
 })
 

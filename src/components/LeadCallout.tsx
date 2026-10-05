@@ -25,6 +25,10 @@ export function LeadCallout({
       .catch(() => undefined)
   }, [])
 
+  function closeGuide() {
+    setOpen(false)
+  }
+
   /* Lock the app shell scroll so iOS doesn't pan .app-main behind the sheet. */
   useEffect(() => {
     if (!open) return
@@ -38,15 +42,21 @@ export function LeadCallout({
     document.documentElement.classList.add('lead-guide-open')
     document.body.classList.add('lead-guide-open')
 
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeGuide()
+    }
+    window.addEventListener('keydown', onKey)
+
+    // Only block touch-scroll on the dimmed backdrop — not on the sheet (Sulje, scroll, links).
     const onTouchMove = (e: TouchEvent) => {
       const target = e.target
-      if (!(target instanceof Element) || !target.closest('.lead-guide-body')) {
-        e.preventDefault()
-      }
+      if (target instanceof Element && target.closest('.lead-guide-sheet')) return
+      e.preventDefault()
     }
 
     document.addEventListener('touchmove', onTouchMove, { passive: false })
     return () => {
+      window.removeEventListener('keydown', onKey)
       document.removeEventListener('touchmove', onTouchMove)
       if (main instanceof HTMLElement) {
         main.style.overflow = prevOverflow
@@ -80,7 +90,7 @@ export function LeadCallout({
           <div
             className="modal-backdrop lead-guide-backdrop"
             role="presentation"
-            onClick={() => setOpen(false)}
+            onClick={closeGuide}
           >
             <div
               className="modal user-rights-modal lead-guide-sheet"
@@ -94,7 +104,7 @@ export function LeadCallout({
                   <p className="kicker">Vastuuveli</p>
                   <h2>{guide.guideTitle}</h2>
                 </div>
-                <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
+                <button type="button" className="btn ghost small" onClick={closeGuide}>
                   Sulje
                 </button>
               </header>
@@ -107,11 +117,16 @@ export function LeadCallout({
                 ))}
                 {user?.role === 'admin' && (
                   <p className="lead-guide-admin">
-                    <Link to="/yllapitaja" onClick={() => setOpen(false)}>
+                    <Link to="/yllapitaja" onClick={closeGuide}>
                       Ylläpitäjä: ohjeet ja asetukset
                     </Link>
                   </p>
                 )}
+              </div>
+              <div className="modal-actions lead-guide-actions">
+                <button type="button" className="btn primary" onClick={closeGuide}>
+                  Sulje ohjeet
+                </button>
               </div>
             </div>
           </div>,
