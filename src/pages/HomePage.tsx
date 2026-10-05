@@ -115,7 +115,7 @@ export function HomePage() {
             </span>
             <span className="home-now-date">{nowMeta.todayLabel}</span>
           </p>
-          <h1>{`Hei, ${firstName}`}</h1>
+          <h1>{`Hei ${firstName}, kiva nähdä!`}</h1>
           {!isLead && (
             <>
               <p className="lede">
