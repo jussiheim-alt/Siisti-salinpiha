@@ -1085,7 +1085,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'task-cards-shared-all-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-sunday-task-push-2026-10-05' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
