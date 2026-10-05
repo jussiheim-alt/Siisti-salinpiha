@@ -565,6 +565,15 @@ a {
   margin-bottom: 0;
 }
 
+.home-hero-thanks {
+  margin: 0.2rem 0 0;
+  color: rgba(232, 244, 238, 0.88);
+  font-size: 0.98rem;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  animation: fade-up 0.6s var(--ease) 0.1s both;
+}
+
 .page-hero h1,
 .login-panel h1,
 .section-title {
