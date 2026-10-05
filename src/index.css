@@ -939,24 +939,44 @@ a {
 }
 
 .lead-guide-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  background: rgba(10, 24, 18, 0.45);
-  display: grid;
+  /* Portal + .modal-backdrop (z-index 120): above tabbar (50) and chat FAB (45). */
   align-items: end;
-  padding: 0.75rem;
+  overscroll-behavior: none;
 }
 
 .lead-guide-sheet {
   width: min(560px, 100%);
-  max-height: min(86dvh, 720px);
-  margin: 0 auto;
-  overflow: auto;
-  background: var(--birch);
+  max-height: min(
+    calc(100dvh - 1.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)),
+    740px
+  );
   border-radius: 1.2rem 1.2rem 0.9rem 0.9rem;
-  padding: 1rem 1.05rem 1.15rem;
+  padding: 1rem 1.05rem 0.95rem;
   box-shadow: 0 -12px 40px rgba(11, 36, 28, 0.18);
+}
+
+.lead-guide-actions {
+  padding-top: 0.5rem;
+}
+
+.lead-guide-body.modal-scroll {
+  display: grid;
+  gap: 0.85rem;
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+html.lead-guide-open,
+html.lead-guide-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.lead-guide-open .app-main {
+  overflow: hidden !important;
+  touch-action: none;
 }
 
 .lead-guide-head {

@@ -1100,7 +1100,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'chat-monday-layout-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-guide-close-fix-2026-10-05' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
