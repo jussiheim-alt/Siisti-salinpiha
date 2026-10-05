@@ -12,6 +12,8 @@ import {
 type RankedUser = User & {
   last?: string | null
   shiftCount?: number
+  /** Published shifts in the draft week's season. */
+  seasonShiftCount?: number
   sparseRotation?: boolean
   publishedWeeksSinceLast?: number
 }
@@ -155,13 +157,18 @@ export function PublishWeekModal({
     }
   }
 
-  if (!open) return null
-
   const candidates = draft?.ranked ?? []
   const deferred = draft?.sparseDeferred ?? []
   const seasonLabel = draft
     ? draft.seasonLabel || SEASON_LABELS[draft.season] || draft.season
     : ''
+
+  function seasonCountLabel(u: RankedUser) {
+    const n = u.seasonShiftCount ?? 0
+    return ` (${n})`
+  }
+
+  if (!open) return null
 
   return createPortal(
     <div
@@ -246,6 +253,7 @@ export function PublishWeekModal({
                   {candidates.map((u) => (
                     <option key={u.id} value={u.id} disabled={u.constraints.includes('no_lead')}>
                       {u.name}
+                      {seasonCountLabel(u)}
                       {u.sparseRotation ? ' · harvemmin' : ''}
                       {u.constraints.includes('no_lead') ? ' — ei vastuuhenkilöksi' : ''}
                     </option>
@@ -271,6 +279,7 @@ export function PublishWeekModal({
                             />
                             <span>
                               {u.name}
+                              <span className="muted">{seasonCountLabel(u)}</span>
                               {u.sparseRotation ? (
                                 <span className="muted"> · harvemmin</span>
                               ) : null}
@@ -289,8 +298,9 @@ export function PublishWeekModal({
                     })}
                 </ul>
                 <p className="hint">
-                  Valittu {helperIds.length}/{totalPeople - 1}. Kierto suosii pisimpään ilman vuoroa
-                  olleita.
+                  Valittu {helperIds.length}/{totalPeople - 1}. Suluissa vuorojen määrä tällä
+                  vuodenajalla ({seasonLabel || 'kuluva kausi'}). Kierto suosii pisimpään ilman
+                  vuoroa olleita.
                 </p>
               </fieldset>
 
