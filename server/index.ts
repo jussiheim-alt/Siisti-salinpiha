@@ -1071,11 +1071,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-<<<<<<< HEAD
-    uiVersion: 'roster-respect-availability-2026-10-05',
-=======
-    uiVersion: 'lead-guide-close-fix-2026-10-05',
->>>>>>> origin/main
+    uiVersion: 'fix-render-build-2026-10-05',
   })
 })
 

@@ -1117,11 +1117,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-<<<<<<< HEAD
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'roster-respect-availability-2026-10-05' })
-=======
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-guide-close-fix-2026-10-05' })
->>>>>>> origin/main
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'fix-render-build-2026-10-05' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
