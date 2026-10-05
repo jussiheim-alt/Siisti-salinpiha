@@ -390,6 +390,19 @@ function blockedUserIdsForWeek(weekStart: string): Set<string> {
   )
 }
 
+/** Returns Finnish error message if lead/helpers include a week block (esteviikko). */
+function rosterBlockedError(weekStart: string, leadId: string, helperIds: string[]): string | null {
+  const blocked = blockedUserIdsForWeek(weekStart)
+  const picked = [leadId, ...helperIds]
+  const blockedPicks = [...new Set(picked.filter((id) => blocked.has(id)))]
+  if (!blockedPicks.length) return null
+  const names = blockedPicks.map((id) => {
+    const row = db.prepare('SELECT name FROM users WHERE id = ?').get(id) as { name: string } | undefined
+    return row?.name || id
+  })
+  return `Esteviikko: ${names.join(', ')} ei ole saatavilla tälle viikolle`
+}
+
 function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek?: boolean } = {}) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const blocked = blockedUserIdsForWeek(weekStart)
@@ -445,6 +458,7 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
     ranked,
     sparseDeferred,
     blockedCount: blocked.size,
+    blockedUserIds: [...blocked],
     availableCount: ranked.length,
   }
 }
@@ -1057,7 +1071,11 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
+<<<<<<< HEAD
+    uiVersion: 'roster-respect-availability-2026-10-05',
+=======
     uiVersion: 'lead-guide-close-fix-2026-10-05',
+>>>>>>> origin/main
   })
 })
 
@@ -1443,6 +1461,8 @@ app.post('/api/pihavuorot', authMiddleware, requireAdmin, (req, res) => {
           : `Avustajia tarvitaan ${MIN_HELPERS}–${MAX_HELPERS}`,
     })
   }
+  const blockErr = rosterBlockedError(weekStart, leadId, helperIds)
+  if (blockErr) return res.status(400).json({ error: blockErr })
 
   const now = new Date().toISOString()
   const tx = db.transaction(() => {
@@ -1504,6 +1524,8 @@ app.patch('/api/pihavuorot/:id', authMiddleware, requireAdmin, (req, res) => {
         error: `Kokoonpano: 1 vastuu + ${MIN_HELPERS}–${MAX_HELPERS} avustajaa`,
       })
     }
+    const blockErr = rosterBlockedError(String(row.week_start), leadId, helperIds)
+    if (blockErr) return res.status(400).json({ error: blockErr })
     const existingTemplateIds = (
       db
         .prepare(

@@ -503,6 +503,22 @@ function nextFreeWeekLocal(db: Db, from = mondayOf()): string {
   return from
 }
 
+function rosterBlockedErrorLocal(
+  db: Db,
+  weekStart: string,
+  leadId: string,
+  helperIds: string[],
+): string | null {
+  const blocked = new Set(
+    db.weekBlocks.filter((b) => b.weekStart === weekStart).map((b) => b.userId),
+  )
+  const picked = [leadId, ...helperIds]
+  const blockedPicks = [...new Set(picked.filter((id) => blocked.has(id)))]
+  if (!blockedPicks.length) return null
+  const names = blockedPicks.map((id) => db.users.find((u) => u.id === id)?.name || id)
+  return `Esteviikko: ${names.join(', ')} ei ole saatavilla tälle viikolle`
+}
+
 function recommendLocal(
   db: Db,
   weekStart: string,
@@ -545,6 +561,7 @@ function recommendLocal(
     ranked,
     sparseDeferred,
     blockedCount: blocked.size,
+    blockedUserIds: [...blocked],
     availableCount: ranked.length,
   }
 }
@@ -1100,7 +1117,11 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
+<<<<<<< HEAD
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'roster-respect-availability-2026-10-05' })
+=======
     return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-guide-close-fix-2026-10-05' })
+>>>>>>> origin/main
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
@@ -1297,6 +1318,8 @@ export async function localApi<T = unknown>(
           : 'Avustajia tarvitaan 1–5',
       )
     }
+    const blockErr = rosterBlockedErrorLocal(db, weekStart, leadId, helperIds)
+    if (blockErr) err(blockErr)
     const assignments: Assignment[] = [
       { id: uid(), userId: leadId, role: 'lead' },
       ...helperIds.map((hid) => ({ id: uid(), userId: hid, role: 'helper' as const })),
@@ -1398,6 +1421,8 @@ export async function localApi<T = unknown>(
           err('Kokoonpano: 1 vastuu + 1–5 avustajaa')
         }
         if (helperIds.includes(leadId)) err('Vastuuhenkilö ei voi olla samalla avustaja')
+        const blockErr = rosterBlockedErrorLocal(db, p.weekStart, leadId, helperIds)
+        if (blockErr) err(blockErr)
         const assignments: Assignment[] = [
           { id: uid(), userId: leadId, role: 'lead' },
           ...helperIds.map((hid) => ({ id: uid(), userId: hid, role: 'helper' as const })),
