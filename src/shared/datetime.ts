@@ -61,6 +61,66 @@ export function formatWeekRangeFi(weekStart: string, weekEnd: string): string {
   return `${formatDateFi(weekStart)} – ${formatDateFi(weekEnd)}`
 }
 
+/** ISO week number (1–53) for the calendar date in Europe/Helsinki. */
+export function isoWeekNumber(value: string | Date = new Date()): number {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? String(value)
+    : todayYmdHelsinki(value instanceof Date ? value : parseInput(value))
+  const [y, m, d] = ymd.split('-').map(Number)
+  // Treat Helsinki calendar day as UTC noon for ISO arithmetic
+  const utc = new Date(Date.UTC(y!, m! - 1, d!, 12))
+  const dayNum = utc.getUTCDay() || 7
+  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1))
+  return Math.ceil(((utc.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7)
+}
+
+/** Today's calendar date as yyyy-MM-dd in Europe/Helsinki. */
+export function todayYmdHelsinki(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
+/** True when today (Helsinki) falls inside [weekStart, weekEnd] inclusive. */
+export function isActiveCalendarWeek(weekStart: string, weekEnd: string, now = new Date()): boolean {
+  const today = todayYmdHelsinki(now)
+  return weekStart <= today && today <= weekEnd
+}
+
+/** Whole Mondays from fromWeekStart until toWeekStart (0 = same week). */
+export function weeksUntilWeekStart(fromWeekStart: string, toWeekStart: string): number {
+  const a = parseInput(fromWeekStart).getTime()
+  const b = parseInput(toWeekStart).getTime()
+  return Math.round((b - a) / (7 * 86_400_000))
+}
+
+/** e.g. maanantai 5.10.2026 */
+export function formatWeekdayDateFi(value: string | Date = new Date()): string {
+  try {
+    const d = parseInput(value)
+    const wd = new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      timeZone: TZ,
+    }).format(d)
+    const names: Record<string, string> = {
+      Mon: 'maanantai',
+      Tue: 'tiistai',
+      Wed: 'keskiviikko',
+      Thu: 'torstai',
+      Fri: 'perjantai',
+      Sat: 'lauantai',
+      Sun: 'sunnuntai',
+    }
+    return `${names[wd] || wd} ${formatDateFi(d)}`
+  } catch {
+    return formatDateFi(value)
+  }
+}
+
 /**
  * Compact week range for narrow lists (stays on one line):
  * same month → 19.–25.10.2026

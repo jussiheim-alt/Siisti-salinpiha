@@ -505,6 +505,35 @@ a {
   animation: brand-in 0.75s var(--ease) both;
 }
 
+.home-now-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.45rem;
+  margin: 0.15rem 0 0.55rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(247, 252, 249, 0.88);
+  animation: fade-up 0.55s var(--ease) 0.04s both;
+}
+
+.home-now-week {
+  font-variant-numeric: tabular-nums;
+  color: #f7fcf9;
+  font-weight: 750;
+}
+
+.home-now-sep {
+  opacity: 0.55;
+}
+
+.home-now-date {
+  text-transform: lowercase;
+  font-weight: 550;
+  opacity: 0.92;
+}
+
 .page-hero.home-hero h1,
 .page-hero.home-hero .lede {
   color: #e8f4ee;
@@ -1719,6 +1748,37 @@ a.btn.calendar-google-btn:hover {
 .notice-card:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--moss) 35%, var(--line));
+}
+
+.week-card-active {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--resin) 14%, #fff) 0%,
+    color-mix(in srgb, var(--lichen) 55%, #fff) 100%
+  );
+  border-color: color-mix(in srgb, var(--resin) 42%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--resin) 22%, transparent),
+    var(--shadow-soft);
+}
+
+.week-card-active:hover {
+  border-color: color-mix(in srgb, var(--resin) 55%, var(--line));
+}
+
+.week-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.pill-active {
+  background: color-mix(in srgb, var(--resin) 18%, #fff);
+  color: var(--moss-deep);
+  border: 1px solid color-mix(in srgb, var(--resin) 35%, transparent);
+  font-weight: 750;
 }
 
 .week-card-top {

@@ -3,8 +3,19 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { formatWeekRangeFi } from '../shared/datetime'
+import { formatWeekRangeFi, isoWeekNumber } from '../shared/datetime'
 import { DEFAULT_LEAD_GUIDE, type LeadGuide } from '../shared/leadGuide'
+
+function leadTitleForWeek(weekStart: string, template: string): string {
+  const n = isoWeekNumber(weekStart)
+  const withToken = template.replace(/\{viikko\}/gi, String(n))
+  if (withToken !== template) return withToken
+  // Old default sounded like "this calendar week" — always pin the ISO week.
+  if (/tämän viikkovuoron|olet viikon vastuuveli/i.test(template)) {
+    return `Olet viikon ${n} vastuuveli`
+  }
+  return withToken
+}
 
 export function LeadCallout({
   weekStart,
@@ -71,9 +82,10 @@ export function LeadCallout({
     <>
       <section className="lead-callout" aria-label="Vastuuveli">
         <div className="lead-callout-badge">Vastuuveli</div>
-        <h2>{guide.calloutTitle}</h2>
+        <h2>{leadTitleForWeek(weekStart, guide.calloutTitle)}</h2>
         <p>
-          {guide.calloutBody} Viikko {formatWeekRangeFi(weekStart, weekEnd)}.
+          {guide.calloutBody} Viikko {formatWeekRangeFi(weekStart, weekEnd)} (vko{' '}
+          {isoWeekNumber(weekStart)}).
         </p>
         <div className="lead-callout-actions">
           <button type="button" className="btn primary" onClick={() => setOpen(true)}>
