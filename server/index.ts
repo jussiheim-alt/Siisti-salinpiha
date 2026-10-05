@@ -1039,8 +1039,79 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'lead-sunday-task-push-2026-10-05',
+    uiVersion: 'admin-week-history-2026-10-05',
   })
+})
+
+// ——— Ylläpito: viikkohistoria (kokoonpano + kuittaukset + huomiot) ———
+app.get('/api/admin/week-history', authMiddleware, requireAdmin, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT * FROM pihavuorot
+       WHERE status IN ('published','done')
+       ORDER BY week_start DESC
+       LIMIT 52`,
+    )
+    .all() as Record<string, unknown>[]
+
+  const weeks = rows.map((row) => {
+    const hydrated = hydratePihavuoro(row)
+    const weekStart = String(hydrated.weekStart)
+    const weekEnd = String(hydrated.weekEnd)
+    const tasks = hydrated.tasks
+    const done = tasks.filter((t) => t.status === 'done').length
+    const skipped = tasks.filter((t) => t.status === 'skipped').length
+    const open = tasks.filter((t) => t.status === 'open').length
+
+    const noticeRows = db
+      .prepare(
+        `SELECT n.*, u.name AS author_name FROM notices n
+         JOIN users u ON u.id = n.author_user_id
+         WHERE date(n.created_at) >= date(?)
+           AND date(n.created_at) <= date(?)
+         ORDER BY n.created_at ASC`,
+      )
+      .all(weekStart, weekEnd) as Record<string, unknown>[]
+
+    return {
+      id: hydrated.id,
+      weekStart,
+      weekEnd,
+      status: hydrated.status,
+      season: hydrated.season,
+      seasonLabel: hydrated.seasonLabel,
+      notes: hydrated.notes ?? null,
+      assignments: hydrated.assignments,
+      taskStats: {
+        total: tasks.length,
+        done,
+        skipped,
+        open,
+      },
+      tasks: tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        effort: t.effort,
+        status: t.status,
+        skipReason: t.skipReason ?? null,
+        doneByName: t.doneByName ?? null,
+        doneAt: t.doneAt ?? null,
+      })),
+      notices: noticeRows.map((n) => ({
+        id: String(n.id),
+        body: String(n.body || ''),
+        status: String(n.status || 'open'),
+        audience: n.audience === 'leads' ? 'leads' : 'all',
+        authorName: String(n.author_name || '—'),
+        createdAt: String(n.created_at || ''),
+        photoUrl: n.photo_path
+          ? `/uploads/${path.basename(String(n.photo_path))}`
+          : null,
+      })),
+    }
+  })
+
+  res.json({ weeks })
 })
 
 // ——— Käytettävyys (esteviikot) ———

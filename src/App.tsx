@@ -18,6 +18,7 @@ import { NoticesPage } from './pages/NoticesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { PihavuoroPage } from './pages/PihavuoroPage'
 import { LeadGuideAdminPage } from './pages/LeadGuideAdminPage'
+import { WeekHistoryPage } from './pages/WeekHistoryPage'
 import { TaskCardsPage } from './pages/TaskCardsPage'
 import { UserGuidePage } from './pages/UserGuidePage'
 import { UsersPage } from './pages/UsersPage'
@@ -129,6 +130,7 @@ function Shell() {
     location.pathname.startsWith('/vastuuohjeet') ||
     location.pathname.startsWith('/asetukset') ||
     location.pathname.startsWith('/tehtavat') ||
+    location.pathname.startsWith('/viikkohistoria') ||
     location.pathname.startsWith('/huolto')
 
   return (
@@ -206,6 +208,7 @@ export default function App() {
           <Route path="/yllapitaja" element={<AdminHubPage />} />
           <Route path="/kayttajat" element={<UsersPage />} />
           <Route path="/tehtavat" element={<TaskCardsPage />} />
+          <Route path="/viikkohistoria" element={<WeekHistoryPage />} />
           <Route path="/vastuuohjeet" element={<LeadGuideAdminPage />} />
           <Route path="/asetukset" element={<AppSettingsPage />} />
           <Route path="/kaytettavyys" element={<AvailabilityPage />} />

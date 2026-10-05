@@ -1085,7 +1085,64 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-sunday-task-push-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'admin-week-history-2026-10-05' })
+  }
+
+  if (pathname === '/api/admin/week-history' && method === 'GET') {
+    if (user!.role !== 'admin') err('Vain ylläpitäjälle')
+    const weeks = db.pihavuorot
+      .filter((p) => p.status === 'published' || p.status === 'done')
+      .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
+      .slice(0, 52)
+      .map((p) => {
+        const hydrated = hydratePihavuoro(db, p)
+        const weekStart = hydrated.weekStart
+        const weekEnd = hydrated.weekEnd
+        const tasks = hydrated.tasks
+        const done = tasks.filter((t) => t.status === 'done').length
+        const skipped = tasks.filter((t) => t.status === 'skipped').length
+        const open = tasks.filter((t) => t.status === 'open').length
+        const notices = db.notices
+          .filter((n) => {
+            const day = String(n.createdAt || '').slice(0, 10)
+            return day >= weekStart && day <= weekEnd
+          })
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          .map((n) => {
+            const author = db.users.find((u) => u.id === n.authorUserId)
+            return {
+              id: n.id,
+              body: n.body,
+              status: n.status,
+              audience: n.audience,
+              authorName: author?.name || '—',
+              createdAt: n.createdAt,
+              photoUrl: n.photoDataUrl || null,
+            }
+          })
+        return {
+          id: hydrated.id,
+          weekStart,
+          weekEnd,
+          status: hydrated.status,
+          season: hydrated.season,
+          seasonLabel: hydrated.seasonLabel,
+          notes: hydrated.notes ?? null,
+          assignments: hydrated.assignments,
+          taskStats: { total: tasks.length, done, skipped, open },
+          tasks: tasks.map((t) => ({
+            id: t.id,
+            title: t.title,
+            effort: t.effort,
+            status: t.status,
+            skipReason: t.skipReason ?? null,
+            doneByName: t.doneByName ?? null,
+            doneAt: t.doneAt ?? null,
+          })),
+          notices,
+        }
+      })
+    return ok({ weeks })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
