@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
@@ -42,39 +43,48 @@ export function LeadCallout({
         </div>
       </section>
 
-      {open && (
-        <div className="lead-guide-backdrop" role="presentation" onClick={() => setOpen(false)}>
+      {open &&
+        createPortal(
           <div
-            className="lead-guide-sheet"
-            role="dialog"
-            aria-label={guide.guideTitle}
-            onClick={(e) => e.stopPropagation()}
+            className="modal-backdrop lead-guide-backdrop"
+            role="presentation"
+            onClick={() => setOpen(false)}
           >
-            <header className="lead-guide-head">
-              <div>
-                <p className="kicker">Vastuuveli</p>
-                <h2>{guide.guideTitle}</h2>
+            <div
+              className="modal user-rights-modal lead-guide-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-label={guide.guideTitle}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <header className="modal-head lead-guide-head">
+                <div>
+                  <p className="kicker">Vastuuveli</p>
+                  <h2>{guide.guideTitle}</h2>
+                </div>
+                <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
+                  Sulje
+                </button>
+              </header>
+              <div className="modal-scroll lead-guide-body">
+                {guide.sections.map((s) => (
+                  <section key={s.id} className="lead-guide-section">
+                    <h3>{s.title}</h3>
+                    <p>{s.body}</p>
+                  </section>
+                ))}
+                {user?.role === 'admin' && (
+                  <p className="lead-guide-admin">
+                    <Link to="/yllapitaja" onClick={() => setOpen(false)}>
+                      Ylläpitäjä: ohjeet ja asetukset
+                    </Link>
+                  </p>
+                )}
               </div>
-              <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
-                Sulje
-              </button>
-            </header>
-            <div className="lead-guide-body">
-              {guide.sections.map((s) => (
-                <section key={s.id} className="lead-guide-section">
-                  <h3>{s.title}</h3>
-                  <p>{s.body}</p>
-                </section>
-              ))}
             </div>
-            {user?.role === 'admin' && (
-              <p className="lead-guide-admin">
-                <Link to="/yllapitaja">Ylläpitäjä: ohjeet ja asetukset</Link>
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }
