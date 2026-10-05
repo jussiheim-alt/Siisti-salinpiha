@@ -17,12 +17,17 @@ import {
 import { formatWeekRangeFi } from '../shared/datetime'
 import { CADENCE_LABELS, SEASON_LABELS } from '../shared/seasons'
 
+type RankedUser = User & {
+  last?: string | null
+  seasonShiftCount?: number
+  sparseRotation?: boolean
+}
+
 export function PihavuoroPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const [p, setP] = useState<Pihavuoro | null>(null)
-  const [users, setUsers] = useState<User[]>([])
   const [catalog, setCatalog] = useState<TaskCard[]>([])
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   const [editingTasks, setEditingTasks] = useState(false)
@@ -41,6 +46,10 @@ export function PihavuoroPage() {
   const [customInstructions, setCustomInstructions] = useState('')
   const [customEffort, setCustomEffort] = useState<'light' | 'heavy'>('light')
   const [addingCustom, setAddingCustom] = useState(false)
+  const [rosterRanked, setRosterRanked] = useState<RankedUser[]>([])
+  const [rosterBlockedCount, setRosterBlockedCount] = useState(0)
+  const [rosterBlockedIds, setRosterBlockedIds] = useState<Set<string>>(() => new Set())
+  const [loadingRosterCandidates, setLoadingRosterCandidates] = useState(false)
 
   async function load() {
     const data = await api<{ pihavuoro: Pihavuoro }>(`/api/pihavuorot/${id}`)
@@ -86,32 +95,10 @@ export function PihavuoroPage() {
 
   useEffect(() => {
     if (user?.role !== 'admin') return
-    api<{ users: User[] }>('/api/users')
-      .then((d) => setUsers(d.users.filter((u) => u.active)))
-      .catch(() => undefined)
     api<{ cards: TaskCard[] }>('/api/task-cards')
       .then((d) => setCatalog(Array.isArray(d.cards) ? d.cards.filter((c) => c.active) : []))
       .catch(() => undefined)
   }, [user?.role])
-
-  useEffect(() => {
-    if (!user) return
-    if (user.role === 'admin') return
-    api<{ users: { id: string; name: string }[] }>('/api/directory')
-      .then((d) =>
-        setUsers(
-          d.users.map((u) => ({
-            id: u.id,
-            name: u.name,
-            email: '',
-            role: 'member',
-            active: true,
-            constraints: [],
-          })),
-        ),
-      )
-      .catch(() => undefined)
-  }, [user?.id, user?.role])
 
   const myAssignment = p?.assignments.find((a) => a.userId === user?.id)
   const onShift = Boolean(myAssignment)
@@ -121,9 +108,46 @@ export function PihavuoroPage() {
   const showLeadNoHeavyNotice =
     isLead && weekHasOtherNoHeavy(p?.assignments, user?.id)
 
-  const candidateUsers = useMemo(() => {
-    return users.slice().sort((a, b) => a.name.localeCompare(b.name, 'fi'))
-  }, [users])
+  useEffect(() => {
+    if (!editingRoster || !p || user?.role !== 'admin') return
+    const totalPeople = Math.min(6, Math.max(2, (helperIds.length || 4) + 1))
+    setLoadingRosterCandidates(true)
+    api<{
+      ranked: RankedUser[]
+      blockedCount?: number
+      blockedUserIds?: string[]
+    }>(
+      `/api/pihavuorot/meta/recommend?weekStart=${encodeURIComponent(p.weekStart)}&totalPeople=${totalPeople}&fresh=1`,
+    )
+      .then((data) => {
+        setRosterRanked(Array.isArray(data.ranked) ? data.ranked : [])
+        setRosterBlockedCount(data.blockedCount ?? 0)
+        setRosterBlockedIds(new Set(data.blockedUserIds ?? []))
+      })
+      .catch(() => undefined)
+      .finally(() => setLoadingRosterCandidates(false))
+  }, [editingRoster, p?.weekStart, user?.role, helperIds.length])
+
+  const rosterExtras = useMemo(() => {
+    if (!p) return [] as User[]
+    const rankedIds = new Set(rosterRanked.map((u) => u.id))
+    const extras: User[] = []
+    for (const a of p.assignments) {
+      if (rankedIds.has(a.userId)) continue
+      if (a.userId !== leadId && !helperIds.includes(a.userId)) continue
+      extras.push({
+        id: a.userId,
+        name: a.userName,
+        email: '',
+        role: 'member',
+        active: true,
+        constraints: a.constraints ?? [],
+      })
+    }
+    return extras
+  }, [p, rosterRanked, leadId, helperIds])
+
+  const isBlockedForWeek = (userId: string) => rosterBlockedIds.has(userId)
 
   async function complete(taskId: string, status: 'done' | 'skipped') {
     setBusyId(taskId)
@@ -266,6 +290,7 @@ export function PihavuoroPage() {
   }
 
   function toggleHelper(uid: string) {
+    if (isBlockedForWeek(uid)) return
     setHelperIds((prev) => {
       if (prev.includes(uid)) return prev.filter((x) => x !== uid)
       if (prev.length >= 5) return prev
@@ -310,6 +335,13 @@ export function PihavuoroPage() {
     }
     if (helperIds.includes(leadId)) {
       setError('Vastuuhenkilö ei voi olla samalla avustaja')
+      return
+    }
+    if (
+      isBlockedForWeek(leadId) ||
+      helperIds.some((id) => isBlockedForWeek(id))
+    ) {
+      setError('Kokoonpanossa on jäseniä, joilla on esteviikko tälle viikolle')
       return
     }
     if (p.status === 'published') {
@@ -470,11 +502,34 @@ export function PihavuoroPage() {
 
         {editingRoster && isAdmin && (
           <div className="roster-editor">
+            {loadingRosterCandidates && rosterRanked.length === 0 && (
+              <p className="muted">Haetaan saatavilla olevia jäseniä…</p>
+            )}
+            {rosterBlockedCount > 0 && (
+              <p className="hint">
+                Esteviikko ohittaa {rosterBlockedCount} jäsentä — he eivät ole valittavissa tälle
+                viikolle.
+              </p>
+            )}
+
             <label>
               Vastuuhenkilö
-              <select value={leadId} onChange={(e) => setLeadId(e.target.value)}>
+              <select
+                value={leadId}
+                onChange={(e) => {
+                  const next = e.target.value
+                  if (next && isBlockedForWeek(next)) return
+                  setLeadId(next)
+                  setHelperIds((prev) => prev.filter((id) => id !== next))
+                }}
+              >
                 <option value="">Valitse…</option>
-                {candidateUsers.map((u) => (
+                {rosterExtras.map((u) => (
+                  <option key={u.id} value={u.id} disabled>
+                    {u.name} — esteviikko (vaihda pois)
+                  </option>
+                ))}
+                {rosterRanked.map((u) => (
                   <option key={u.id} value={u.id} disabled={u.constraints.includes('no_lead')}>
                     {u.name}
                     {u.constraints.includes('no_lead') ? ' — ei vastuuhenkilöksi' : ''}
@@ -486,7 +541,17 @@ export function PihavuoroPage() {
 
             <fieldset className="checks">
               <legend>Avustajat ({helperIds.length}/1–5)</legend>
-              {candidateUsers
+              {rosterExtras
+                .filter((u) => u.id !== leadId)
+                .map((u) => (
+                  <label key={u.id} className="check">
+                    <input type="checkbox" checked={helperIds.includes(u.id)} disabled />
+                    <span>
+                      {u.name} — esteviikko (poista valinta vaihtamalla henkilö)
+                    </span>
+                  </label>
+                ))}
+              {rosterRanked
                 .filter((u) => u.id !== leadId)
                 .map((u) => (
                   <label key={u.id} className="check">
