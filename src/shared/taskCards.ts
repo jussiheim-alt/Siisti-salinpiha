@@ -36,7 +36,7 @@ export function seedTaskCardsFromCatalog(): TaskCard[] {
       effort: t.effort,
       season,
       cadence: mapCadence(t.cadence as string),
-      defaultAssignee: t.defaultAssignee,
+      defaultAssignee: 'all' as const,
       active: true,
       sortOrder: t.sortOrder,
     }

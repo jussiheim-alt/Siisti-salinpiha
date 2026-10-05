@@ -293,6 +293,11 @@ export function initDb() {
 
   migratePihavuoroSeasons()
 
+  // Kortit ovat koko vuoron yhteisiä — ei vastuu/avustaja-jakoa.
+  db.prepare(
+    `UPDATE task_cards SET default_assignee = 'all' WHERE default_assignee != 'all'`,
+  ).run()
+
   const notifCols = db.prepare(`PRAGMA table_info(notifications)`).all() as { name: string }[]
   if (!notifCols.some((c) => c.name === 'kind')) {
     db.exec(`ALTER TABLE notifications ADD COLUMN kind TEXT NOT NULL DEFAULT 'general'`)

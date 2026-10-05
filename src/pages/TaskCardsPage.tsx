@@ -16,7 +16,6 @@ type CardForm = {
   effort: 'light' | 'heavy'
   season: SeasonKey
   cadence: TaskCadence
-  defaultAssignee: 'lead' | 'helpers' | 'all'
 }
 
 const emptyForm: CardForm = {
@@ -25,7 +24,6 @@ const emptyForm: CardForm = {
   effort: 'light',
   season: 'kevat',
   cadence: 'weekly',
-  defaultAssignee: 'helpers',
 }
 
 function formFromCard(card: TaskCard): CardForm {
@@ -35,27 +33,7 @@ function formFromCard(card: TaskCard): CardForm {
     effort: card.effort,
     season: card.season,
     cadence: card.cadence,
-    defaultAssignee: card.defaultAssignee,
   }
-}
-
-function AssigneeFields({
-  value,
-  onChange,
-}: {
-  value: 'lead' | 'helpers' | 'all'
-  onChange: (v: 'lead' | 'helpers' | 'all') => void
-}) {
-  return (
-    <label>
-      Oletusjako
-      <select value={value} onChange={(e) => onChange(e.target.value as 'lead' | 'helpers' | 'all')}>
-        <option value="lead">Vastuuveli</option>
-        <option value="helpers">Avustajat</option>
-        <option value="all">Kaikki vuorossa</option>
-      </select>
-    </label>
-  )
 }
 
 export function TaskCardsPage() {
@@ -162,7 +140,6 @@ export function TaskCardsPage() {
           effort: editing.effort,
           season: editing.season,
           cadence: editing.cadence,
-          defaultAssignee: editing.defaultAssignee,
           active: editing.active,
         },
       })
@@ -302,10 +279,6 @@ export function TaskCardsPage() {
               <option value="heavy">Raskas</option>
             </select>
           </label>
-          <AssigneeFields
-            value={form.defaultAssignee}
-            onChange={(defaultAssignee) => setForm({ ...form, defaultAssignee })}
-          />
           <div className="row-actions">
             <button className="btn primary" type="submit">
               {copying ? 'Tallenna kopio' : 'Lisää kortti'}
@@ -393,10 +366,6 @@ export function TaskCardsPage() {
                     <option value="heavy">Raskas</option>
                   </select>
                 </label>
-                <AssigneeFields
-                  value={editing.defaultAssignee}
-                  onChange={(defaultAssignee) => setEditing({ ...editing, defaultAssignee })}
-                />
                 <label className="check-row">
                   <input
                     type="checkbox"
@@ -422,12 +391,7 @@ export function TaskCardsPage() {
                 </div>
                 <p>{c.instructions}</p>
                 <p className="meta">
-                  {SEASON_LABELS[c.season]} · {c.effort === 'heavy' ? 'Raskas' : 'Kevyt'} ·{' '}
-                  {c.defaultAssignee === 'lead'
-                    ? 'Vastuuveli'
-                    : c.defaultAssignee === 'all'
-                      ? 'Kaikki'
-                      : 'Avustajat'}
+                  {SEASON_LABELS[c.season]} · {c.effort === 'heavy' ? 'Raskas' : 'Kevyt'}
                   {!c.active ? ' · pois käytöstä' : ''}
                 </p>
                 <div className="row-actions">

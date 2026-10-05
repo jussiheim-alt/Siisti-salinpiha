@@ -232,6 +232,10 @@ function normalizeDb(db: Db): Db {
   db.taskCards = db.taskCards.filter(
     (c) => c.id !== 'T5' && !c.title.startsWith('Vastuuveli: viikon tilanne'),
   )
+  // Kortit ovat koko vuoron yhteisiä — ei vastuu/avustaja-jakoa.
+  for (const c of db.taskCards) {
+    c.defaultAssignee = 'all'
+  }
   db.leadGuide = normalizeLeadGuide(db.leadGuide || DEFAULT_LEAD_GUIDE)
   db.appSettings = normalizeAppSettings(db.appSettings || DEFAULT_APP_SETTINGS)
   for (const p of db.pihavuorot) {
@@ -259,9 +263,10 @@ function loadDb(): Db {
   if (raw) {
     const parsed = JSON.parse(raw) as Db
     const beforeMsgs = Array.isArray(parsed.messages) ? parsed.messages.length : 0
+    const hadSplitAssignee = (parsed.taskCards || []).some((c) => c.defaultAssignee !== 'all')
     const next = normalizeDb(parsed)
-    // Persist chat prune so expired messages leave storage, not only memory
-    if ((next.messages?.length ?? 0) < beforeMsgs) {
+    // Persist chat prune / assignee migration so changes leave storage, not only memory
+    if ((next.messages?.length ?? 0) < beforeMsgs || hadSplitAssignee) {
       localStorage.setItem(DB_KEY, JSON.stringify(next))
     }
     return next
@@ -1037,10 +1042,7 @@ export async function localApi<T = unknown>(
     const effort = body.effort === 'heavy' ? 'heavy' : 'light'
     const season: SeasonKey = isSeasonKey(body.season) ? body.season : 'kesa'
     const cadence: TaskCadence = isCadenceKey(body.cadence) ? body.cadence : 'weekly'
-    const defaultAssignee =
-      body.defaultAssignee === 'lead' || body.defaultAssignee === 'all'
-        ? body.defaultAssignee
-        : 'helpers'
+    const defaultAssignee = 'all' as const
     const maxOrder = (db.taskCards || []).reduce((m, c) => Math.max(m, c.sortOrder), 0)
     const card: TaskCard = {
       id: uid(),
@@ -1067,13 +1069,7 @@ export async function localApi<T = unknown>(
     if (body.effort === 'light' || body.effort === 'heavy') card!.effort = body.effort
     if (isSeasonKey(body.season)) card!.season = body.season
     if (isCadenceKey(body.cadence)) card!.cadence = body.cadence
-    if (
-      body.defaultAssignee === 'lead' ||
-      body.defaultAssignee === 'helpers' ||
-      body.defaultAssignee === 'all'
-    ) {
-      card!.defaultAssignee = body.defaultAssignee
-    }
+    card!.defaultAssignee = 'all'
     if (typeof body.active === 'boolean') card!.active = body.active
     if (typeof body.sortOrder === 'number') card!.sortOrder = body.sortOrder
     saveDb(db)
@@ -1089,7 +1085,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'copy-task-card-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'task-cards-shared-all-2026-10-05' })
   }
 
   if (pathname === '/api/home' && method === 'GET') {
