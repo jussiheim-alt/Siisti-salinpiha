@@ -18,8 +18,11 @@
   --shadow-soft: 0 10px 30px rgba(11, 36, 28, 0.06);
   /* Tab content + home-indicator; keep in sync with .tabbar-bottom padding. */
   --nav-safe-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
-  --nav-content-h: 3.7rem;
+  /* Icon + label + link paddings + tabbar top pad (+ a little slack for admin 7-col). */
+  --nav-content-h: 4.15rem;
   --nav-h: calc(var(--nav-content-h) + var(--nav-safe-bottom));
+  /* Extra air so last buttons/cards clear the fixed tab bar when scrolled to end. */
+  --nav-scroll-gap: 1.75rem;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   color: var(--ink);
   background: var(--mist);
@@ -265,8 +268,13 @@ a {
 .app-main {
   --page-pad-x: clamp(1rem, 4.5vw, 1.4rem);
   flex: 1 1 auto;
-  /* Reserve space so content scrolls above the fixed tab bar on every tab. */
-  padding: 0.85rem var(--page-pad-x) calc(var(--nav-h) + 1.35rem);
+  /*
+   * Bottom clearance for the fixed tab bar: use a real in-flow spacer (::after),
+   * not only padding-bottom. iOS WebKit often omits padding-bottom from the
+   * scrollable overflow of flex children, which left the last Tehtäväkortti
+   * (and similar lists) half under the nav.
+   */
+  padding: 0.85rem var(--page-pad-x) 0.85rem;
   max-width: min(720px, 100%);
   margin: 0 auto;
   width: 100%;
@@ -279,7 +287,16 @@ a {
   min-width: 0;
   min-height: 0;
   scroll-padding-top: 0.75rem;
-  scroll-padding-bottom: calc(var(--nav-h) + 1rem);
+  scroll-padding-bottom: calc(var(--nav-h) + var(--nav-scroll-gap));
+}
+
+.app-main::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: calc(var(--nav-h) + var(--nav-scroll-gap));
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 .tabbar {
@@ -2540,7 +2557,7 @@ label.template-pick input[type='checkbox'] {
   border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line));
   background: color-mix(in srgb, var(--danger) 7%, white);
-  scroll-margin-bottom: calc(var(--nav-h) + 1rem);
+  scroll-margin-bottom: calc(var(--nav-h) + var(--nav-scroll-gap));
 }
 
 .notice-card.is-cancelled {

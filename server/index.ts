@@ -1040,7 +1040,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'privacy-ilmo-card-gap-2026-10-05',
+    uiVersion: 'task-cards-tabbar-pad-2026-10-05',
   })
 })
 
