@@ -1071,7 +1071,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'home-hero-lift-2026-10-05',
+    uiVersion: 'home-hero-crop-2026-10-05',
   })
 })
 
