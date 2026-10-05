@@ -132,20 +132,28 @@ export function TaskCardsPage() {
     if (!editing) return
     setError('')
     try {
-      await api(`/api/task-cards/${editing.id}`, {
-        method: 'PATCH',
-        json: {
-          title: editing.title,
-          instructions: editing.instructions,
-          effort: editing.effort,
-          season: editing.season,
-          cadence: editing.cadence,
-          active: editing.active,
+      const res = await api<{ card: TaskCard; syncedTasks?: number }>(
+        `/api/task-cards/${editing.id}`,
+        {
+          method: 'PATCH',
+          json: {
+            title: editing.title,
+            instructions: editing.instructions,
+            effort: editing.effort,
+            season: editing.season,
+            cadence: editing.cadence,
+            active: editing.active,
+          },
         },
-      })
+      )
       setSeasonTab(editing.season)
       setEditing(null)
-      setInfo('Kortti päivitetty.')
+      const synced = res.syncedTasks ?? 0
+      setInfo(
+        synced > 0
+          ? `Kortti päivitetty. Päivitys vietiin myös ${synced} tehtävään julkaistuissa/luonnosviikoissa.`
+          : 'Kortti päivitetty.',
+      )
       await load()
       releaseFocus()
     } catch (err) {

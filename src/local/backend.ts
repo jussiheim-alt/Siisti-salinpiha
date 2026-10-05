@@ -657,6 +657,26 @@ function createTasks(
   }))
 }
 
+/** Push catalog card text into draft/published week tasks that still use this template. */
+function syncShiftTasksFromCard(
+  db: Db,
+  card: Pick<TaskCard, 'id' | 'title' | 'instructions' | 'effort' | 'sortOrder'>,
+): number {
+  let synced = 0
+  for (const p of db.pihavuorot) {
+    if (p.status !== 'draft' && p.status !== 'published') continue
+    for (const task of p.tasks) {
+      if (task.templateId !== card.id) continue
+      task.title = card.title
+      task.instructions = card.instructions
+      task.effort = card.effort
+      task.sortOrder = card.sortOrder
+      synced += 1
+    }
+  }
+  return synced
+}
+
 function getSessionUser(db: Db): User | null {
   let sid = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY)
   if (!sid) {
@@ -1104,8 +1124,9 @@ export async function localApi<T = unknown>(
     card!.defaultAssignee = 'all'
     if (typeof body.active === 'boolean') card!.active = body.active
     if (typeof body.sortOrder === 'number') card!.sortOrder = body.sortOrder
+    const syncedTasks = syncShiftTasksFromCard(db, card!)
     saveDb(db)
-    return ok({ card })
+    return ok({ card, syncedTasks })
   }
   if (taskCardMatch && method === 'DELETE') {
     if (user!.role !== 'admin') err('Vain ylläpitäjälle')
@@ -1117,7 +1138,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'home-hero-no-flicker-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'task-card-sync-published-2026-10-05' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
