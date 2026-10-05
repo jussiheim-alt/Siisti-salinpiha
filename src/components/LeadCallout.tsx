@@ -112,13 +112,7 @@ export function LeadCallout({
               onClick={(e) => e.stopPropagation()}
             >
               <header className="modal-head lead-guide-head">
-                <div>
-                  <p className="kicker">Vastuuveli</p>
-                  <h2>{guide.guideTitle}</h2>
-                </div>
-                <button type="button" className="btn ghost small" onClick={closeGuide}>
-                  Sulje
-                </button>
+                <h2>{guide.guideTitle}</h2>
               </header>
               <div className="modal-scroll lead-guide-body">
                 {guide.sections.map((s) => (
