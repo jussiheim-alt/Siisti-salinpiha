@@ -25,6 +25,38 @@ export function LeadCallout({
       .catch(() => undefined)
   }, [])
 
+  /* Lock the app shell scroll so iOS doesn't pan .app-main behind the sheet. */
+  useEffect(() => {
+    if (!open) return
+    const main = document.querySelector('.app-main')
+    const prevOverflow = main instanceof HTMLElement ? main.style.overflow : ''
+    const prevTouch = main instanceof HTMLElement ? main.style.touchAction : ''
+    if (main instanceof HTMLElement) {
+      main.style.overflow = 'hidden'
+      main.style.touchAction = 'none'
+    }
+    document.documentElement.classList.add('lead-guide-open')
+    document.body.classList.add('lead-guide-open')
+
+    const onTouchMove = (e: TouchEvent) => {
+      const target = e.target
+      if (!(target instanceof Element) || !target.closest('.lead-guide-body')) {
+        e.preventDefault()
+      }
+    }
+
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      document.removeEventListener('touchmove', onTouchMove)
+      if (main instanceof HTMLElement) {
+        main.style.overflow = prevOverflow
+        main.style.touchAction = prevTouch
+      }
+      document.documentElement.classList.remove('lead-guide-open')
+      document.body.classList.remove('lead-guide-open')
+    }
+  }, [open])
+
   return (
     <>
       <section className="lead-callout" aria-label="Vastuuveli">
