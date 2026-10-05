@@ -100,13 +100,12 @@ export function HomePage() {
       currentWeek,
       todayLabel: formatWeekdayDateFi(today),
       shiftHint,
-      leadTitle: shiftWeek != null ? `Olet viikon ${shiftWeek} vastuuveli` : 'Olet viikon vastuuveli',
     }
   }, [next])
 
   return (
     <div className="page home-page">
-      <header className="page-hero home-hero">
+      <header className={`page-hero home-hero${isLead ? ' home-hero-lead' : ''}`}>
         <p className="brand-mark">Siisti salin piha</p>
         <p className="home-now-meta" aria-label="Kuluvan viikon tiedot">
           <span className="home-now-week">Viikko {nowMeta.currentWeek}</span>
@@ -115,36 +114,32 @@ export function HomePage() {
           </span>
           <span className="home-now-date">{nowMeta.todayLabel}</span>
         </p>
-        <h1>
-          {isLead
-            ? nowMeta.leadTitle
-            : next
-              ? 'Seuraava vuorosi odottaa'
-              : `Hei, ${firstName}`}
-        </h1>
-        <p className="lede">
-          {isLead
-            ? 'Sinulla on vastuu viikon töistä — katso ohjeet alta.'
-            : next
-              ? nowMeta.shiftHint ||
-                'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
-              : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
-        </p>
-        <div className="hero-cta">
-          {next ? (
-            <Link className="btn primary on-dark" to={`/pihavuoro/${next.id}`}>
-              Avaa Pihavuoro
-            </Link>
-          ) : user?.role === 'admin' ? (
-            <Link className="btn primary on-dark" to="/kalenteri">
-              Luo viikko kalenterissa
-            </Link>
-          ) : (
-            <Link className="btn primary on-dark" to="/kalenteri">
-              Katso kalenteri
-            </Link>
-          )}
-        </div>
+        <h1>{`Hei, ${firstName}`}</h1>
+        {!isLead && (
+          <>
+            <p className="lede">
+              {next
+                ? nowMeta.shiftHint ||
+                  'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
+                : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
+            </p>
+            <div className="hero-cta">
+              {next ? (
+                <Link className="btn primary on-dark" to={`/pihavuoro/${next.id}`}>
+                  Avaa Pihavuoro
+                </Link>
+              ) : user?.role === 'admin' ? (
+                <Link className="btn primary on-dark" to="/kalenteri">
+                  Luo viikko kalenterissa
+                </Link>
+              ) : (
+                <Link className="btn primary on-dark" to="/kalenteri">
+                  Katso kalenteri
+                </Link>
+              )}
+            </div>
+          </>
+        )}
       </header>
 
       {error && <p className="error">{error}</p>}

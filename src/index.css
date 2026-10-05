@@ -552,6 +552,14 @@ a {
   animation: fade-up 0.6s var(--ease) 0.16s both;
 }
 
+.page-hero.home-hero.home-hero-lead {
+  padding-bottom: 1.15rem;
+}
+
+.page-hero.home-hero.home-hero-lead h1 {
+  margin-bottom: 0;
+}
+
 .page-hero h1,
 .login-panel h1,
 .section-title {
