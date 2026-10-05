@@ -117,8 +117,10 @@ export function HomePage() {
           </p>
         </div>
         <div className="home-hero-copy">
-          <h1>{`Hei ${firstName}, kiva nähdä!`}</h1>
-          <p className="home-hero-thanks">Kiitos kun huolehdit pihastani😃</p>
+          <div className="home-hero-greeting">
+            <h1>{`Hei ${firstName}, kiva nähdä!`}</h1>
+            <p className="home-hero-thanks">Kiitos kun huolehdit pihastani😃</p>
+          </div>
           {!isLead && (
             <>
               <p className="lede">
