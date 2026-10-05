@@ -10,6 +10,21 @@ export type FairnessPerson = {
   sparseRotation?: boolean
 }
 
+/** Published weeks needed for one full pass through the active roster. */
+export function rotationCycleWeeks(activeMemberCount: number, rosterSize: number): number {
+  const roster = Math.max(1, Math.floor(rosterSize))
+  const members = Math.max(1, Math.floor(activeMemberCount))
+  return Math.max(1, Math.ceil(members / roster))
+}
+
+/**
+ * Min published weeks between shifts for "harvemmin" (~every other rotation).
+ * Roughly doubles the usual turn interval when the pool is large enough.
+ */
+export function sparseMinPublishedWeeks(activeMemberCount: number, rosterSize: number): number {
+  return rotationCycleWeeks(activeMemberCount, rosterSize) * 2
+}
+
 /** Oldest last shift first, then fewer lifetime shifts, then name. */
 export function compareFairness(a: FairnessPerson, b: FairnessPerson): number {
   if (!a.last && !b.last) {
@@ -28,16 +43,18 @@ export function compareFairness(a: FairnessPerson, b: FairnessPerson): number {
   return a.name.localeCompare(b.name, 'fi')
 }
 
-/**
- * "Käytä harvemmin": skip for this pick if fewer than 2 published weeks
- * have passed since their last assignment (≈ every other round).
- */
 export function shouldDeferSparse(
   person: { last?: string | null; sparseRotation?: boolean },
   publishedWeeksSinceLast: number,
+  minPublishedWeeks: number,
 ): boolean {
   if (!person.sparseRotation || !person.last) return false
-  return publishedWeeksSinceLast < 2
+  return publishedWeeksSinceLast < minPublishedWeeks
+}
+
+export type RankForRosterOptions = {
+  /** From sparseMinPublishedWeeks(activeCount, rosterSize). */
+  sparseMinPublishedWeeks: number
 }
 
 /**
@@ -47,11 +64,13 @@ export function shouldDeferSparse(
 export function rankForRoster<T extends FairnessPerson & { publishedWeeksSinceLast?: number }>(
   people: T[],
   needed: number,
+  opts: RankForRosterOptions,
 ): { ranked: T[]; sparseDeferred: T[] } {
+  const minGap = opts.sparseMinPublishedWeeks
   const deferred: T[] = []
   const ready: T[] = []
   for (const p of people) {
-    if (shouldDeferSparse(p, p.publishedWeeksSinceLast ?? 0)) deferred.push(p)
+    if (shouldDeferSparse(p, p.publishedWeeksSinceLast ?? 0, minGap)) deferred.push(p)
     else ready.push(p)
   }
   ready.sort(compareFairness)

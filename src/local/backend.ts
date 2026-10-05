@@ -22,7 +22,7 @@ import {
   pickLeadAndHelpers,
   resolveHelperCount,
 } from '../shared/travelGroup'
-import { rankForRoster } from '../shared/shiftFairness'
+import { rankForRoster, sparseMinPublishedWeeks } from '../shared/shiftFairness'
 
 
 const DB_KEY = 'siisti-piha-local-db-v3'
@@ -498,8 +498,11 @@ function recommendLocal(
       : (db.pihavuorot.find((x) => x.weekStart === weekStart)?.assignments.map((a) => a.userId) ??
           []),
   )
-  const people = db.users
-    .filter((u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()))
+  const rotationPool = db.users.filter(
+    (u) => u.active && (!u.snoozeUntil || u.snoozeUntil <= today()),
+  )
+  const activeMemberCount = rotationPool.length
+  const people = rotationPool
     .filter((u) => !blocked.has(u.id) && !already.has(u.id))
     .map((u) => {
       const last = lastPublishedShift(db, u.id)
@@ -511,7 +514,10 @@ function recommendLocal(
         publishedWeeksSinceLast: publishedWeeksSinceLocal(db, last, weekStart),
       }
     })
-  const { ranked, sparseDeferred } = rankForRoster(people, helperCount + 1)
+  const needed = helperCount + 1
+  const { ranked, sparseDeferred } = rankForRoster(people, needed, {
+    sparseMinPublishedWeeks: sparseMinPublishedWeeks(activeMemberCount, needed),
+  })
   const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
   return {
     lead,

@@ -50,7 +50,7 @@ import {
   pickLeadAndHelpers,
   resolveHelperCount,
 } from '../src/shared/travelGroup.ts'
-import { rankForRoster } from '../src/shared/shiftFairness.ts'
+import { rankForRoster, sparseMinPublishedWeeks } from '../src/shared/shiftFairness.ts'
 import {
   assertCanDeleteUser,
   assertCanInviteAdmin,
@@ -373,7 +373,7 @@ function blockedUserIdsForWeek(weekStart: string): Set<string> {
 function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek?: boolean } = {}) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const blocked = blockedUserIdsForWeek(weekStart)
-  const users = (
+  const rotationPool = (
     db.prepare(`SELECT * FROM users WHERE active = 1 AND role IN ('admin','member')`).all() as Record<
       string,
       unknown
@@ -381,7 +381,8 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
   )
     .map(publicUser)
     .filter((u) => !u.snoozeUntil || String(u.snoozeUntil) <= today)
-    .filter((u) => !blocked.has(u.id))
+  const activeMemberCount = rotationPool.length
+  const users = rotationPool.filter((u) => !blocked.has(u.id))
 
   const already = new Set(
     opts.ignoreCurrentWeek
@@ -411,7 +412,9 @@ function recommend(weekStart: string, helperCount = 4, opts: { ignoreCurrentWeek
     })
 
   const needed = helperCount + 1
-  const { ranked, sparseDeferred } = rankForRoster(people, needed)
+  const { ranked, sparseDeferred } = rankForRoster(people, needed, {
+    sparseMinPublishedWeeks: sparseMinPublishedWeeks(activeMemberCount, needed),
+  })
   const { lead, helpers } = pickLeadAndHelpers(ranked, helperCount)
 
   return {

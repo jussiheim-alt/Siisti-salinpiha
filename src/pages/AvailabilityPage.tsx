@@ -118,8 +118,9 @@ export function AvailabilityPage() {
           Käytä minua tavallista harvemmin (noin joka toinen kierros)
         </label>
         <p className="hint" style={{ marginTop: 0 }}>
-          Kun rasti on päällä, suositus jättää sinut väliin yhden julkaistun vuoron verran
-          edellisen vuorosi jälkeen — ellei vuorolle muuten jää liian vähän väkeä.
+          Kun rasti on päällä, suositus odottaa noin yhden täyden kierron verran pidempään ennen
+          kuin ehdottaa sinua uudelleen (käytännössä noin joka toinen vuoro). Jos väkeä on liian
+          vähän, sinut voidaan silti ottaa mukaan aiemmin.
         </p>
       </section>
 
