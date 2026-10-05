@@ -451,8 +451,8 @@ a {
   flex-direction: column;
   justify-content: space-between;
   /* Cropped height — room for top brand/date and bottom greeting. */
-  min-height: min(74vw, 400px);
-  height: min(74vw, 400px);
+  min-height: min(68vw, 370px);
+  height: min(68vw, 370px);
   /* Full-bleed yard photo — overlay keeps brand/CTA readable */
   margin: 0 calc(-1 * var(--page-pad-x, 1rem)) 1.15rem;
   padding: 1.55rem var(--page-pad-x, 1rem) 2.15rem;
