@@ -449,7 +449,8 @@ a {
 .page-hero.home-hero {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  /* Keep full yard photo presence even when copy is short (lead view). */
   min-height: min(62vw, 340px);
   /* Full-bleed yard photo — overlay keeps brand/CTA readable */
   margin: 0 calc(-1 * var(--page-pad-x, 1rem)) 1.15rem;
@@ -502,7 +503,15 @@ a {
 .page-hero.home-hero .brand-mark {
   color: #f7fcf9;
   max-width: 11ch;
+  margin: 0;
   animation: brand-in 0.75s var(--ease) both;
+}
+
+.home-hero-copy {
+  margin-top: auto;
+  padding-top: 1.25rem;
+  display: grid;
+  gap: 0.15rem;
 }
 
 .home-now-meta {
@@ -510,7 +519,7 @@ a {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.35rem 0.45rem;
-  margin: 0.15rem 0 0.55rem;
+  margin: 0 0 0.35rem;
   font-size: 0.92rem;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -552,11 +561,7 @@ a {
   animation: fade-up 0.6s var(--ease) 0.16s both;
 }
 
-.page-hero.home-hero.home-hero-lead {
-  padding-bottom: 1.15rem;
-}
-
-.page-hero.home-hero.home-hero-lead h1 {
+.page-hero.home-hero.home-hero-lead .home-hero-copy h1 {
   margin-bottom: 0;
 }
 
