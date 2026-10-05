@@ -106,8 +106,8 @@ export function HomePage() {
   return (
     <div className="page home-page">
       <header className={`page-hero home-hero${isLead ? ' home-hero-lead' : ''}`}>
-        <p className="brand-mark">Siisti salin piha</p>
-        <div className="home-hero-copy">
+        <div className="home-hero-top">
+          <p className="brand-mark">Siisti salin piha</p>
           <p className="home-now-meta" aria-label="Kuluvan viikon tiedot">
             <span className="home-now-week">Viikko {nowMeta.currentWeek}</span>
             <span className="home-now-sep" aria-hidden="true">
@@ -115,6 +115,8 @@ export function HomePage() {
             </span>
             <span className="home-now-date">{nowMeta.todayLabel}</span>
           </p>
+        </div>
+        <div className="home-hero-copy">
           <h1>{`Hei ${firstName}, kiva nähdä!`}</h1>
           <p className="home-hero-thanks">Kiitos kun huolehdit pihastani😃</p>
           {!isLead && (
