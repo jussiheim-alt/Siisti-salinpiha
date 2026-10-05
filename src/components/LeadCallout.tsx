@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
@@ -24,6 +25,48 @@ export function LeadCallout({
       .catch(() => undefined)
   }, [])
 
+  function closeGuide() {
+    setOpen(false)
+  }
+
+  /* Lock the app shell scroll so iOS doesn't pan .app-main behind the sheet. */
+  useEffect(() => {
+    if (!open) return
+    const main = document.querySelector('.app-main')
+    const prevOverflow = main instanceof HTMLElement ? main.style.overflow : ''
+    const prevTouch = main instanceof HTMLElement ? main.style.touchAction : ''
+    if (main instanceof HTMLElement) {
+      main.style.overflow = 'hidden'
+      main.style.touchAction = 'none'
+    }
+    document.documentElement.classList.add('lead-guide-open')
+    document.body.classList.add('lead-guide-open')
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeGuide()
+    }
+    window.addEventListener('keydown', onKey)
+
+    // Only block touch-scroll on the dimmed backdrop — not on the sheet (Sulje, scroll, links).
+    const onTouchMove = (e: TouchEvent) => {
+      const target = e.target
+      if (target instanceof Element && target.closest('.lead-guide-sheet')) return
+      e.preventDefault()
+    }
+
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('touchmove', onTouchMove)
+      if (main instanceof HTMLElement) {
+        main.style.overflow = prevOverflow
+        main.style.touchAction = prevTouch
+      }
+      document.documentElement.classList.remove('lead-guide-open')
+      document.body.classList.remove('lead-guide-open')
+    }
+  }, [open])
+
   return (
     <>
       <section className="lead-callout" aria-label="Vastuuveli">
@@ -42,39 +85,53 @@ export function LeadCallout({
         </div>
       </section>
 
-      {open && (
-        <div className="lead-guide-backdrop" role="presentation" onClick={() => setOpen(false)}>
+      {open &&
+        createPortal(
           <div
-            className="lead-guide-sheet"
-            role="dialog"
-            aria-label={guide.guideTitle}
-            onClick={(e) => e.stopPropagation()}
+            className="modal-backdrop lead-guide-backdrop"
+            role="presentation"
+            onClick={closeGuide}
           >
-            <header className="lead-guide-head">
-              <div>
-                <p className="kicker">Vastuuveli</p>
-                <h2>{guide.guideTitle}</h2>
+            <div
+              className="modal user-rights-modal lead-guide-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-label={guide.guideTitle}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <header className="modal-head lead-guide-head">
+                <div>
+                  <p className="kicker">Vastuuveli</p>
+                  <h2>{guide.guideTitle}</h2>
+                </div>
+                <button type="button" className="btn ghost small" onClick={closeGuide}>
+                  Sulje
+                </button>
+              </header>
+              <div className="modal-scroll lead-guide-body">
+                {guide.sections.map((s) => (
+                  <section key={s.id} className="lead-guide-section">
+                    <h3>{s.title}</h3>
+                    <p>{s.body}</p>
+                  </section>
+                ))}
+                {user?.role === 'admin' && (
+                  <p className="lead-guide-admin">
+                    <Link to="/yllapitaja" onClick={closeGuide}>
+                      Ylläpitäjä: ohjeet ja asetukset
+                    </Link>
+                  </p>
+                )}
               </div>
-              <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
-                Sulje
-              </button>
-            </header>
-            <div className="lead-guide-body">
-              {guide.sections.map((s) => (
-                <section key={s.id} className="lead-guide-section">
-                  <h3>{s.title}</h3>
-                  <p>{s.body}</p>
-                </section>
-              ))}
+              <div className="modal-actions lead-guide-actions">
+                <button type="button" className="btn primary" onClick={closeGuide}>
+                  Sulje ohjeet
+                </button>
+              </div>
             </div>
-            {user?.role === 'admin' && (
-              <p className="lead-guide-admin">
-                <Link to="/yllapitaja">Ylläpitäjä: ohjeet ja asetukset</Link>
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

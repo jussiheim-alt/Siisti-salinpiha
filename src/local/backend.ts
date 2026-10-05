@@ -15,6 +15,10 @@ import {
   type TaskCadence,
 } from '../shared/seasons'
 import { formatWeekRangeFi } from '../shared/datetime'
+import {
+  isShiftChatOpen,
+  SHIFT_CHAT_NOT_YET_MSG,
+} from '../shared/shiftChat'
 import { isOwnerEmail } from '../shared/owner'
 import { seedTaskCardsFromCatalog, type TaskCard } from '../shared/taskCards'
 import {
@@ -1113,7 +1117,11 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
+<<<<<<< HEAD
     return ok({ commit: 'local', commitFull: null, uiVersion: 'roster-respect-availability-2026-10-05' })
+=======
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'lead-guide-close-fix-2026-10-05' })
+>>>>>>> origin/main
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
@@ -1231,7 +1239,7 @@ export async function localApi<T = unknown>(
         ),
       },
       availability: { weeksAhead: 10, blockedCount },
-      chat: next
+      chat: next && isShiftChatOpen(next.weekStart)
         ? {
             pihavuoroId: next.id,
             messageCount: db.messages.filter((m) => m.pihavuoroId === next.id).length,
@@ -1253,7 +1261,8 @@ export async function localApi<T = unknown>(
         (p) =>
           p.status === 'published' &&
           addDays(p.weekStart, 6) >= t &&
-          p.assignments.some((a) => a.userId === user!.id),
+          p.assignments.some((a) => a.userId === user!.id) &&
+          isShiftChatOpen(p.weekStart),
       )
       .sort((a, b) => a.weekStart.localeCompare(b.weekStart))[0]
     if (!current) return ok({ chat: null })
@@ -1516,6 +1525,9 @@ export async function localApi<T = unknown>(
       if (addDays(p.weekStart, 6) < today()) {
         return ok({ messages: [] })
       }
+      if (!isShiftChatOpen(p.weekStart)) {
+        err(SHIFT_CHAT_NOT_YET_MSG)
+      }
       const messages = db.messages
         .filter((m) => m.pihavuoroId === p.id)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1536,6 +1548,9 @@ export async function localApi<T = unknown>(
       if (p.status === 'draft') err('Keskustelu aukeaa kun vuoro on julkaistu')
       if (addDays(p.weekStart, 6) < today()) {
         err('Viikon keskustelu on päättynyt — viestit on poistettu')
+      }
+      if (!isShiftChatOpen(p.weekStart)) {
+        err(SHIFT_CHAT_NOT_YET_MSG)
       }
       const text = String(body.body || '').trim()
       if (!text) err('Kirjoita viesti')

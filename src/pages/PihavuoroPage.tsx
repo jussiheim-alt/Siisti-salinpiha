@@ -399,7 +399,7 @@ export function PihavuoroPage() {
         </p>
         {onShift && p.status !== 'draft' && (
           <p className="lede" style={{ marginTop: '0.35rem' }}>
-            Vuorokeskustelu: chat-painike oikeassa alakulmassa.
+            Vuorokeskustelu: chat-painike oikeassa alakulmassa (aukeaa maanantaina klo 8.00).
           </p>
         )}
       </header>
