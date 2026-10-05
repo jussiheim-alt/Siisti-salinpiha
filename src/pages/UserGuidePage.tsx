@@ -36,7 +36,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Vuorot ja Pihavuoro',
     body: [
       'Vuorot-välilehdellä näet julkaistut viikot. Avaa oma viikkosi nähdäksesi kokoonpanon ja tehtävät.',
-      'Viikon tehtävät ovat koko vuoron yhteisiä, mutta vain vastuuveli kuittaa ne tehdyiksi. Jos olet vastuuveli, näet etusivulla ohjeet.',
+      'Viikon tehtävät ovat koko vuoron yhteisiä, mutta vain vastuuveli kuittaa ne tehdyiksi. Jos olet vastuuveli, näet etusivulla ohjeet. Jos tehtäviä on vielä avoinna sunnuntaina, vastuuveli saa push-muistutuksen etusivulle.',
       'Voit lisätä omat vuorosi Google-kalenteriin napilla “Lisää Google-kalenteriin” etusivulla, vuoronäkymässä tai Vuorot-listassa.',
       'Vuorokeskustelu aukeaa oikean alalaidan chat-painikkeesta, kun olet viikon kokoonpanossa. Viestit näkyvät vain vuorolaisille ja poistuvat automaattisesti viikon päätyttyä. Lukemattomat näkyvät punaisella numerolla kuvakkeessa; lukitusnäytölle tulee ilmoitus, jos ilmoitukset on kytketty päälle.',
     ],
@@ -70,7 +70,7 @@ const SECTIONS: { id: string; title: string; body: string[]; to?: string; linkLa
     title: 'Ilmoitukset',
     body: [
       'Ilmo-välilehdellä näet sää-, apukutsu- ja muut ilmoitukset. Sieltä voit myös kytkeä lukitusnäytön ilmoitukset päälle tai pois.',
-      'Sääilmoituksia lähetetään klo 8–18 Suomen aikaa, ja lukitusnäytölle ne menevät vain viikon vuorolaisille. Apukutsujen push tulee kaikille.',
+      'Sääilmoituksia lähetetään klo 8–18 Suomen aikaa, ja lukitusnäytölle ne menevät vain viikon vuorolaisille. Apukutsujen push tulee kaikille. Vastuuveli saa sunnuntaina muistutuksen, jos viikon tehtäväkortteja on vielä merkkaamatta.',
       'Avaa ilmoitus siirtyäksesi suoraan liittyvään näkymään. Merkitse luetuiksi tarvittaessa.',
     ],
     to: '/ilmoitukset',

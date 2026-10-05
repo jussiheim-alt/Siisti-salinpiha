@@ -24,6 +24,10 @@ import {
   startWeatherAlertScheduler,
 } from './weatherAlerts.ts'
 import {
+  runLeadOpenTaskReminder,
+  startLeadTaskReminderScheduler,
+} from './leadTaskReminders.ts'
+import {
   getHubInspection,
   hubOpenSummary,
   listActivatedHubInspections,
@@ -1035,7 +1039,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'task-cards-shared-all-2026-10-05',
+    uiVersion: 'lead-sunday-task-push-2026-10-05',
   })
 })
 
@@ -2283,6 +2287,16 @@ app.post('/api/weather/alerts/run', authMiddleware, requireAdmin, async (_req, r
   }
 })
 
+app.post('/api/tasks/lead-reminder/run', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const force = String(req.query.force || req.body?.force || '') === '1'
+    res.json(runLeadOpenTaskReminder(new Date(), { force }))
+  } catch (err) {
+    console.warn('Lead task reminder run failed', err)
+    res.status(502).json({ error: 'Vastuuveljen muistutuksen ajo epäonnistui' })
+  }
+})
+
 app.get('/api/notifications', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   // Siivoa vanhat chat-rivit (chat → vain FAB + push)
@@ -2842,4 +2856,5 @@ if (fs.existsSync(dist)) {
 app.listen(PORT, () => {
   console.log(`Siisti salin piha API http://localhost:${PORT}`)
   startWeatherAlertScheduler()
+  startLeadTaskReminderScheduler()
 })
