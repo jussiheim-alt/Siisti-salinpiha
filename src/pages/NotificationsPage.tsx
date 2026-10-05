@@ -124,13 +124,14 @@ export function NotificationsPage() {
 
       <PushToggle />
 
-      <section className="panel privacy-ilmo-link">
-        <button type="button" className="quick-link" onClick={() => setPrivacyOpen(true)}>
-          <span className="quick-link-text">
+      <section className="surface-card privacy-ilmo-card" aria-label="Tietosuoja">
+        <button type="button" className="privacy-ilmo-btn" onClick={() => setPrivacyOpen(true)}>
+          <span className="privacy-ilmo-copy">
+            <span className="kicker">Tietosuoja</span>
             <strong>Tietosuojaseloste</strong>
             <span>Miten henkilötietoja käsitellään tässä sovelluksessa</span>
           </span>
-          <span className="quick-link-action">Avaa</span>
+          <span className="privacy-ilmo-action">Avaa</span>
         </button>
       </section>
 
