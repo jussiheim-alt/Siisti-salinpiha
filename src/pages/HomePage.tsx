@@ -107,39 +107,41 @@ export function HomePage() {
     <div className="page home-page">
       <header className={`page-hero home-hero${isLead ? ' home-hero-lead' : ''}`}>
         <p className="brand-mark">Siisti salin piha</p>
-        <p className="home-now-meta" aria-label="Kuluvan viikon tiedot">
-          <span className="home-now-week">Viikko {nowMeta.currentWeek}</span>
-          <span className="home-now-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="home-now-date">{nowMeta.todayLabel}</span>
-        </p>
-        <h1>{`Hei, ${firstName}`}</h1>
-        {!isLead && (
-          <>
-            <p className="lede">
-              {next
-                ? nowMeta.shiftHint ||
-                  'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
-                : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
-            </p>
-            <div className="hero-cta">
-              {next ? (
-                <Link className="btn primary on-dark" to={`/pihavuoro/${next.id}`}>
-                  Avaa Pihavuoro
-                </Link>
-              ) : user?.role === 'admin' ? (
-                <Link className="btn primary on-dark" to="/kalenteri">
-                  Luo viikko kalenterissa
-                </Link>
-              ) : (
-                <Link className="btn primary on-dark" to="/kalenteri">
-                  Katso kalenteri
-                </Link>
-              )}
-            </div>
-          </>
-        )}
+        <div className="home-hero-copy">
+          <p className="home-now-meta" aria-label="Kuluvan viikon tiedot">
+            <span className="home-now-week">Viikko {nowMeta.currentWeek}</span>
+            <span className="home-now-sep" aria-hidden="true">
+              ·
+            </span>
+            <span className="home-now-date">{nowMeta.todayLabel}</span>
+          </p>
+          <h1>{`Hei, ${firstName}`}</h1>
+          {!isLead && (
+            <>
+              <p className="lede">
+                {next
+                  ? nowMeta.shiftHint ||
+                    'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
+                  : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
+              </p>
+              <div className="hero-cta">
+                {next ? (
+                  <Link className="btn primary on-dark" to={`/pihavuoro/${next.id}`}>
+                    Avaa Pihavuoro
+                  </Link>
+                ) : user?.role === 'admin' ? (
+                  <Link className="btn primary on-dark" to="/kalenteri">
+                    Luo viikko kalenterissa
+                  </Link>
+                ) : (
+                  <Link className="btn primary on-dark" to="/kalenteri">
+                    Katso kalenteri
+                  </Link>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </header>
 
       {error && <p className="error">{error}</p>}
