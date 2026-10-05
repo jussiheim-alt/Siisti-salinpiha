@@ -48,6 +48,10 @@ import { ensureLeadGuideTable, getLeadGuide, saveLeadGuide } from './leadGuide.t
 import { ensureAppSettings, getAppSettings, saveAppSettings } from './appSettings.ts'
 import { formatWeekRangeFi } from '../src/shared/datetime.ts'
 import {
+  isShiftChatOpen,
+  SHIFT_CHAT_NOT_YET_MSG,
+} from '../src/shared/shiftChat.ts'
+import {
   MAX_HELPERS,
   MIN_HELPERS,
   normalizeTravelGroup,
@@ -1871,8 +1875,11 @@ app.get('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   if (!requireShiftMember(String(req.params.id), user.id)) {
     return res.status(403).json({ error: 'Viestit näkyvät vain tämän viikon vuorossa oleville' })
   }
-  if (weekHasEnded(String(piha.week_start))) {
-    return res.json({ messages: [] })
+  if (!isShiftChatOpen(String(piha.week_start))) {
+    if (weekHasEnded(String(piha.week_start))) {
+      return res.json({ messages: [] })
+    }
+    return res.status(403).json({ error: SHIFT_CHAT_NOT_YET_MSG })
   }
   const messages = (
     db
@@ -1899,6 +1906,9 @@ app.post('/api/pihavuorot/:id/messages', authMiddleware, (req, res) => {
   }
   if (weekHasEnded(String(piha.week_start))) {
     return res.status(400).json({ error: 'Viikon keskustelu on päättynyt — viestit on poistettu' })
+  }
+  if (!isShiftChatOpen(String(piha.week_start))) {
+    return res.status(403).json({ error: SHIFT_CHAT_NOT_YET_MSG })
   }
   const body = String(req.body.body || '').trim()
   if (!body) return res.status(400).json({ error: 'Kirjoita viesti' })
@@ -1948,17 +1958,17 @@ app.get('/api/chat/current', authMiddleware, (req, res) => {
   const user = (req as express.Request & { user: AuthUser }).user
   pruneExpiredShiftMessages()
   const today = format(new Date(), 'yyyy-MM-dd')
-  const row = db
+  const candidates = db
     .prepare(
       `SELECT p.* FROM pihavuorot p
        JOIN assignments a ON a.pihavuoro_id = p.id
        WHERE a.user_id = ?
          AND p.status = 'published'
          AND date(p.week_start, '+6 days') >= ?
-       ORDER BY p.week_start ASC
-       LIMIT 1`,
+       ORDER BY p.week_start ASC`,
     )
-    .get(user.id, today) as Record<string, unknown> | undefined
+    .all(user.id, today) as Record<string, unknown>[]
+  const row = candidates.find((p) => isShiftChatOpen(String(p.week_start)))
 
   if (!row) {
     return res.json({ chat: null })
@@ -2319,13 +2329,16 @@ app.get('/api/home', authMiddleware, async (req, res) => {
   ).c
 
   const nextId = row ? String(row.id) : null
-  const chatMessageCount = nextId
-    ? (
-        db
-          .prepare(`SELECT COUNT(*) AS c FROM shift_messages WHERE pihavuoro_id = ?`)
-          .get(nextId) as { c: number }
-      ).c
-    : 0
+  const nextWeekStart = row ? String(row.week_start) : null
+  const chatOpen = Boolean(nextWeekStart && isShiftChatOpen(nextWeekStart))
+  const chatMessageCount =
+    nextId && chatOpen
+      ? (
+          db
+            .prepare(`SELECT COUNT(*) AS c FROM shift_messages WHERE pihavuoro_id = ?`)
+            .get(nextId) as { c: number }
+        ).c
+      : 0
 
   res.json({
     nextPihavuoro: row ? hydratePihavuoro(row) : null,
@@ -2341,12 +2354,13 @@ app.get('/api/home', authMiddleware, async (req, res) => {
       weeksAhead: 10,
       blockedCount: myBlockedCount,
     },
-    chat: nextId
-      ? {
-          pihavuoroId: nextId,
-          messageCount: chatMessageCount,
-        }
-      : null,
+    chat:
+      nextId && chatOpen
+        ? {
+            pihavuoroId: nextId,
+            messageCount: chatMessageCount,
+          }
+        : null,
   })
 })
 

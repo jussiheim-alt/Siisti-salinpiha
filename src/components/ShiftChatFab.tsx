@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { api, type ShiftMessage } from '../api'
 import { useAuth } from '../auth'
@@ -73,6 +74,7 @@ export function ShiftChatFab() {
       if (!data.chat) setOpen(false)
     } catch {
       setChat(null)
+      setOpen(false)
     }
   }
 
@@ -89,6 +91,11 @@ export function ShiftChatFab() {
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Viestejä ei voitu ladata')
+      // Gate not open yet / no access — hide chat
+      if (e instanceof Error && /aukeaa|maanantai|vain vuorossa/i.test(e.message)) {
+        setChat(null)
+        setOpen(false)
+      }
     } finally {
       setLoadingMsgs(false)
     }
@@ -129,6 +136,34 @@ export function ShiftChatFab() {
     el.scrollTop = el.scrollHeight
   }, [messages, open])
 
+  /* Lock background scroll while the chat sheet is open (iOS). */
+  useEffect(() => {
+    if (!open) return
+    const main = document.querySelector('.app-main')
+    const prevOverflow = main instanceof HTMLElement ? main.style.overflow : ''
+    if (main instanceof HTMLElement) main.style.overflow = 'hidden'
+    document.documentElement.classList.add('chat-sheet-open')
+    document.body.classList.add('chat-sheet-open')
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const target = e.target
+      if (target instanceof Element && target.closest('.chat-sheet')) return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('touchmove', onTouchMove)
+      if (main instanceof HTMLElement) main.style.overflow = prevOverflow
+      document.documentElement.classList.remove('chat-sheet-open')
+      document.body.classList.remove('chat-sheet-open')
+    }
+  }, [open])
+
   async function send(e: FormEvent) {
     e.preventDefault()
     if (!chat || !body.trim()) return
@@ -160,7 +195,7 @@ export function ShiftChatFab() {
   const roleLabel =
     chat.myRole === 'lead' ? 'Vastuuveli' : chat.myRole === 'helper' ? 'Avustaja' : null
 
-  return (
+  const overlay = (
     <>
       {open && (
         <button
@@ -183,13 +218,11 @@ export function ShiftChatFab() {
       </button>
 
       {open && (
-        <div className="chat-sheet chat-sheet-modern" role="dialog" aria-label="Vuorokeskustelu">
+        <div className="chat-sheet chat-sheet-modern" role="dialog" aria-modal="true" aria-label="Vuorokeskustelu">
           <header className="chat-sheet-head">
             <div>
               <p className="chat-sheet-kicker">Vuoron chat</p>
-              <strong>
-                {formatWeekRangeFi(chat.weekStart, chat.weekEnd)}
-              </strong>
+              <strong>{formatWeekRangeFi(chat.weekStart, chat.weekEnd)}</strong>
               <p className="muted">
                 Yksityinen viikkokeskustelu
                 {roleLabel ? ` · ${roleLabel}` : ''}
@@ -253,4 +286,6 @@ export function ShiftChatFab() {
       )}
     </>
   )
+
+  return createPortal(overlay, document.body)
 }
