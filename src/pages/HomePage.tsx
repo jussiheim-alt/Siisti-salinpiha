@@ -45,9 +45,35 @@ function mondayOfYmd(ymd: string): string {
   return dt.toISOString().slice(0, 10)
 }
 
+const HOME_NEXT_CACHE = 'siisti-home-next-v1'
+
+function readCachedNext(userId: string | undefined): Pihavuoro | null | undefined {
+  if (!userId) return undefined
+  try {
+    const raw = sessionStorage.getItem(`${HOME_NEXT_CACHE}:${userId}`)
+    if (raw == null) return undefined
+    return JSON.parse(raw) as Pihavuoro | null
+  } catch {
+    return undefined
+  }
+}
+
+function writeCachedNext(userId: string | undefined, next: Pihavuoro | null) {
+  if (!userId) return
+  try {
+    sessionStorage.setItem(`${HOME_NEXT_CACHE}:${userId}`, JSON.stringify(next))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 export function HomePage() {
   const { user } = useAuth()
-  const [next, setNext] = useState<Pihavuoro | null>(null)
+  const [next, setNext] = useState<Pihavuoro | null>(() => {
+    const cached = readCachedNext(user?.id)
+    return cached === undefined ? null : cached
+  })
+  const [homeReady, setHomeReady] = useState(() => readCachedNext(user?.id) !== undefined)
   const [openNotices, setOpenNotices] = useState(0)
   const [openExtras, setOpenExtras] = useState(0)
   const [weather, setWeather] = useState<WeatherPayload | null>(null)
@@ -57,6 +83,7 @@ export function HomePage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    let cancelled = false
     api<{
       nextPihavuoro: Pihavuoro | null
       openNotices: number
@@ -67,7 +94,9 @@ export function HomePage() {
       availability?: { weeksAhead: number; blockedCount: number }
     }>('/api/home')
       .then((d) => {
+        if (cancelled) return
         setNext(d.nextPihavuoro)
+        writeCachedNext(user?.id, d.nextPihavuoro)
         setOpenNotices(d.openNotices)
         setOpenExtras(d.openExtraTasks)
         setWeather(d.weather)
@@ -75,14 +104,25 @@ export function HomePage() {
         setUnreadNotifications(d.unreadNotifications || 0)
         setBlockedCount(d.availability?.blockedCount ?? 0)
       })
-      .catch((e) => setError(e.message))
-  }, [])
+      .catch((e) => {
+        if (!cancelled) setError(e.message)
+      })
+      .finally(() => {
+        if (!cancelled) setHomeReady(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const myAssignment = next?.assignments.find((a) => a.userId === user?.id)
   const isLead = myAssignment?.role === 'lead'
   const showLeadNoHeavyNotice =
     isLead && weekHasOtherNoHeavy(next?.assignments, user?.id)
   const firstName = user?.name.split(' ')[0]
+  /* Until /api/home returns, keep the compact lead-like hero so admin CTA / lede
+     don't flash and shove the greeting down on every tab return. */
+  const showHelperHeroExtras = homeReady && !isLead
 
   const nowMeta = useMemo(() => {
     const today = todayYmdHelsinki()
@@ -105,7 +145,9 @@ export function HomePage() {
 
   return (
     <div className="page home-page">
-      <header className={`page-hero home-hero${isLead ? ' home-hero-lead' : ''}`}>
+      <header
+        className={`page-hero home-hero${isLead || !homeReady ? ' home-hero-lead' : ''}${homeReady ? ' home-hero-ready' : ''}`}
+      >
         <div className="home-hero-top">
           <p className="brand-mark">Siisti salin piha</p>
           <p className="home-now-meta" aria-label="Kuluvan viikon tiedot">
@@ -121,7 +163,7 @@ export function HomePage() {
             <h1>{`Hei ${firstName}, kiva nähdä!`}</h1>
             <p className="home-hero-thanks">Kiitos kun huolehdit salin pihasta😃</p>
           </div>
-          {!isLead && (
+          {showHelperHeroExtras && (
             <p className="lede">
               {next
                 ? nowMeta.shiftHint ||
@@ -129,8 +171,7 @@ export function HomePage() {
                 : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
             </p>
           )}
-          {/* Only admin empty-state CTA in hero — helper "Avaa Pihavuoro" clipped as a white box. */}
-          {!isLead && !next && user?.role === 'admin' && (
+          {showHelperHeroExtras && !next && user?.role === 'admin' && (
             <div className="hero-cta">
               <Link className="btn primary on-dark" to="/kalenteri">
                 Luo viikko kalenterissa
