@@ -450,11 +450,11 @@ a {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  /* Tall yard photo — keep presence even with short lead copy. */
-  min-height: min(88vw, 460px);
+  /* Slightly shorter than max tall — crop from bottom for balance with copy. */
+  min-height: min(74vw, 400px);
   /* Full-bleed yard photo — overlay keeps brand/CTA readable */
   margin: 0 calc(-1 * var(--page-pad-x, 1rem)) 1.15rem;
-  padding: 1.55rem var(--page-pad-x, 1rem) 2.85rem;
+  padding: 1.55rem var(--page-pad-x, 1rem) 4.75rem;
   /* Bleed into the root safe-area so the hero stays edge-to-edge under the notch. */
   margin-top: calc(-0.85rem - constant(safe-area-inset-top));
   margin-top: calc(-0.85rem - env(safe-area-inset-top, 0px));
@@ -517,8 +517,8 @@ a {
 
 .home-hero-copy {
   margin-top: auto;
-  /* Lift greeting/thanks off the bottom edge for visual balance. */
-  margin-bottom: 0.55rem;
+  /* Keep greeting/thanks clearly above the hero bottom edge. */
+  margin-bottom: 1.15rem;
   padding-top: 1.5rem;
   display: grid;
   gap: 0.2rem;
