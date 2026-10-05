@@ -122,29 +122,20 @@ export function HomePage() {
             <p className="home-hero-thanks">Kiitos kun huolehdit pihastani😃</p>
           </div>
           {!isLead && (
-            <>
-              <p className="lede">
-                {next
-                  ? nowMeta.shiftHint ||
-                    'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
-                  : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
-              </p>
-              <div className="hero-cta">
-                {next ? (
-                  <Link className="btn primary on-dark" to={`/pihavuoro/${next.id}`}>
-                    Avaa Pihavuoro
-                  </Link>
-                ) : user?.role === 'admin' ? (
-                  <Link className="btn primary on-dark" to="/kalenteri">
-                    Luo viikko kalenterissa
-                  </Link>
-                ) : (
-                  <Link className="btn primary on-dark" to="/kalenteri">
-                    Katso kalenteri
-                  </Link>
-                )}
-              </div>
-            </>
+            <p className="lede">
+              {next
+                ? nowMeta.shiftHint ||
+                  'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
+                : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
+            </p>
+          )}
+          {/* Only admin empty-state CTA in hero — helper "Avaa Pihavuoro" clipped as a white box. */}
+          {!isLead && !next && user?.role === 'admin' && (
+            <div className="hero-cta">
+              <Link className="btn primary on-dark" to="/kalenteri">
+                Luo viikko kalenterissa
+              </Link>
+            </div>
           )}
         </div>
       </header>
