@@ -454,7 +454,7 @@ a {
   min-height: min(88vw, 460px);
   /* Full-bleed yard photo — overlay keeps brand/CTA readable */
   margin: 0 calc(-1 * var(--page-pad-x, 1rem)) 1.15rem;
-  padding: 1.7rem var(--page-pad-x, 1rem) 1.55rem;
+  padding: 1.55rem var(--page-pad-x, 1rem) 2.85rem;
   /* Bleed into the root safe-area so the hero stays edge-to-edge under the notch. */
   margin-top: calc(-0.85rem - constant(safe-area-inset-top));
   margin-top: calc(-0.85rem - env(safe-area-inset-top, 0px));
@@ -517,7 +517,9 @@ a {
 
 .home-hero-copy {
   margin-top: auto;
-  padding-top: 2rem;
+  /* Lift greeting/thanks off the bottom edge for visual balance. */
+  margin-bottom: 0.55rem;
+  padding-top: 1.5rem;
   display: grid;
   gap: 0.2rem;
 }
