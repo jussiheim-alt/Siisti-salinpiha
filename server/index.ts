@@ -95,6 +95,12 @@ function loadJwtSecret() {
 const EFFECTIVE_JWT = loadJwtSecret()
 
 initDb()
+{
+  const synced = syncAllCardsToOpenWeeks()
+  if (synced > 0) {
+    console.log(`Synkattiin ${synced} tehtävää julkaistuihin/luonnosviikkoihin katalogista`)
+  }
+}
 ensureLeadGuideTable()
 ensureAppSettings()
 
@@ -311,6 +317,40 @@ function createTasksForPihavuoro(
       t.sortOrder,
     )
   }
+}
+
+/** Push catalog card text into draft/published week tasks that still use this template. */
+function syncShiftTasksFromCard(card: {
+  id: string
+  title: string
+  instructions: string
+  effort: string
+  sortOrder: number
+}): number {
+  const info = db
+    .prepare(
+      `UPDATE shift_tasks
+       SET title = ?, instructions = ?, effort = ?, sort_order = ?
+       WHERE template_id = ?
+         AND pihavuoro_id IN (
+           SELECT id FROM pihavuorot WHERE status IN ('draft', 'published')
+         )`,
+    )
+    .run(card.title, card.instructions, card.effort, card.sortOrder, card.id)
+  return Number(info.changes ?? 0)
+}
+
+/** Keep open weeks aligned with the latest task-card catalog (e.g. after an edit already saved). */
+function syncAllCardsToOpenWeeks(): number {
+  const rows = db.prepare(`SELECT * FROM task_cards`).all() as Record<string, unknown>[]
+  let total = 0
+  const tx = db.transaction(() => {
+    for (const row of rows) {
+      total += syncShiftTasksFromCard(publicTaskCard(row))
+    }
+  })
+  tx()
+  return total
 }
 
 function lastShiftAt(userId: string): string | null {
@@ -1051,7 +1091,9 @@ app.patch('/api/task-cards/:id', authMiddleware, requireAdmin, (req, res) => {
     string,
     unknown
   >
-  res.json({ card: publicTaskCard(next) })
+  const card = publicTaskCard(next)
+  const syncedTasks = syncShiftTasksFromCard(card)
+  res.json({ card, syncedTasks })
 })
 
 app.delete('/api/task-cards/:id', authMiddleware, requireAdmin, (req, res) => {
@@ -1071,7 +1113,7 @@ app.get('/api/meta/app', (_req, res) => {
   res.json({
     commit: commit ? String(commit).slice(0, 7) : null,
     commitFull: commit ? String(commit) : null,
-    uiVersion: 'home-hero-no-flicker-2026-10-05',
+    uiVersion: 'task-card-sync-published-2026-10-05',
   })
 })
 
