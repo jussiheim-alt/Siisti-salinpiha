@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type AppNotification, type Pihavuoro, type WeatherPayload } from '../api'
 import { useAuth } from '../auth'
@@ -8,6 +8,12 @@ import { NotificationStrip } from '../components/NotificationStrip'
 import { PushToggle } from '../components/PushToggle'
 import { WeatherStrip } from '../components/WeatherStrip'
 import { LEAD_NO_HEAVY_NOTICE, weekHasOtherNoHeavy } from '../shared/catalog'
+import {
+  formatWeekdayDateFi,
+  isoWeekNumber,
+  todayYmdHelsinki,
+  weeksUntilWeekStart,
+} from '../shared/datetime'
 
 function QuickLink({
   title,
@@ -29,6 +35,14 @@ function QuickLink({
       <span className="quick-link-action">{action}</span>
     </Link>
   )
+}
+
+function mondayOfYmd(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y!, m! - 1, d!, 12))
+  const day = dt.getUTCDay() || 7
+  dt.setUTCDate(dt.getUTCDate() - (day - 1))
+  return dt.toISOString().slice(0, 10)
 }
 
 export function HomePage() {
@@ -70,13 +84,40 @@ export function HomePage() {
     isLead && weekHasOtherNoHeavy(next?.assignments, user?.id)
   const firstName = user?.name.split(' ')[0]
 
+  const nowMeta = useMemo(() => {
+    const today = todayYmdHelsinki()
+    const thisMonday = mondayOfYmd(today)
+    const currentWeek = isoWeekNumber(today)
+    const shiftWeek = next ? isoWeekNumber(next.weekStart) : null
+    const weeksAway = next ? weeksUntilWeekStart(thisMonday, next.weekStart) : null
+    let shiftHint = ''
+    if (next && weeksAway != null && shiftWeek != null) {
+      if (weeksAway <= 0) shiftHint = `Oma vuoro tällä viikolla (vko ${shiftWeek})`
+      else if (weeksAway === 1) shiftHint = `Oma vuoro ensi viikolla (vko ${shiftWeek})`
+      else shiftHint = `Oma vuoro ${weeksAway} viikon päästä (vko ${shiftWeek})`
+    }
+    return {
+      currentWeek,
+      todayLabel: formatWeekdayDateFi(today),
+      shiftHint,
+      leadTitle: shiftWeek != null ? `Olet viikon ${shiftWeek} vastuuveli` : 'Olet viikon vastuuveli',
+    }
+  }, [next])
+
   return (
     <div className="page home-page">
       <header className="page-hero home-hero">
         <p className="brand-mark">Siisti salin piha</p>
+        <p className="home-now-meta" aria-label="Kuluvan viikon tiedot">
+          <span className="home-now-week">Viikko {nowMeta.currentWeek}</span>
+          <span className="home-now-sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="home-now-date">{nowMeta.todayLabel}</span>
+        </p>
         <h1>
           {isLead
-            ? 'Olet viikon vastuuveli'
+            ? nowMeta.leadTitle
             : next
               ? 'Seuraava vuorosi odottaa'
               : `Hei, ${firstName}`}
@@ -85,7 +126,8 @@ export function HomePage() {
           {isLead
             ? 'Sinulla on vastuu viikon töistä — katso ohjeet alta.'
             : next
-              ? 'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
+              ? nowMeta.shiftHint ||
+                'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
               : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
         </p>
         <div className="hero-cta">

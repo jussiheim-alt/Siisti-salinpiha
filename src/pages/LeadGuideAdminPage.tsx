@@ -87,6 +87,7 @@ export function LeadGuideAdminPage() {
             value={guide.calloutTitle}
             onChange={(e) => setGuide({ ...guide, calloutTitle: e.target.value })}
           />
+          <span className="hint">Käytä {'{viikko}'} viikkonumerolle, esim. Olet viikon {'{viikko}'} vastuuveli</span>
         </label>
         <label>
           Etusivun lyhyt teksti

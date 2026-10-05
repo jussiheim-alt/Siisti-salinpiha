@@ -12,7 +12,7 @@ export type LeadGuide = {
 }
 
 export const DEFAULT_LEAD_GUIDE: LeadGuide = {
-  calloutTitle: 'Olet tämän viikkovuoron vastuuveli',
+  calloutTitle: 'Olet viikon {viikko} vastuuveli',
   calloutBody: 'Sinulla on viikon kokonaisvastuu. Katso ohjeet ennen töiden aloitusta.',
   guideTitle: 'Vastuuveljen ohjeet',
   sections: [

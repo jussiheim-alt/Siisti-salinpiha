@@ -4,7 +4,7 @@ import { api, type Pihavuoro } from '../api'
 import { useAuth } from '../auth'
 import { AddToCalendarButton } from '../components/AddToCalendarButton'
 import { PublishWeekModal } from '../components/PublishWeekModal'
-import { formatWeekRangeFi } from '../shared/datetime'
+import { formatWeekRangeFi, isActiveCalendarWeek } from '../shared/datetime'
 import {
   DEFAULT_TOTAL_PEOPLE,
   MAX_TOTAL_PEOPLE,
@@ -126,19 +126,30 @@ export function CalendarPage() {
           const mine = p.assignments.find((a) => a.userId === user?.id)
           const lead = p.assignments.find((a) => a.role === 'lead')
           const openCount = p.tasks.filter((t) => t.status === 'open').length
+          const isAdmin = user?.role === 'admin'
+          const activeWeek =
+            isAdmin &&
+            p.status !== 'draft' &&
+            isActiveCalendarWeek(p.weekStart, p.weekEnd)
           return (
-            <div key={p.id} className="week-card">
+            <div
+              key={p.id}
+              className={`week-card${activeWeek ? ' week-card-active' : ''}`}
+            >
               <Link to={`/pihavuoro/${p.id}`} className="week-card-link">
                 <div className="week-card-top">
                   <strong>
                     {formatWeekRangeFi(p.weekStart, p.weekEnd)}
                   </strong>
-                  <span className={`pill status-${p.status}`}>
-                    {p.status === 'draft'
-                      ? 'Luonnos'
-                      : p.status === 'published'
-                        ? 'Julkaistu'
-                        : 'Valmis'}
+                  <span className="week-card-pills">
+                    {activeWeek && <span className="pill pill-active">Aktiivinen</span>}
+                    <span className={`pill status-${p.status}`}>
+                      {p.status === 'draft'
+                        ? 'Luonnos'
+                        : p.status === 'published'
+                          ? 'Julkaistu'
+                          : 'Valmis'}
+                    </span>
                   </span>
                 </div>
                 <p>
@@ -151,7 +162,7 @@ export function CalendarPage() {
                     : ''}
                 </p>
               </Link>
-              {user?.role === 'admin' && p.status === 'draft' && (
+              {isAdmin && p.status === 'draft' && (
                 <div className="row-actions">
                   <button
                     className="btn primary small"
