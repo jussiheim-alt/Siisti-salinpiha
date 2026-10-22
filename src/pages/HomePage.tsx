@@ -120,8 +120,8 @@ export function HomePage() {
   const showLeadNoHeavyNotice =
     isLead && weekHasOtherNoHeavy(next?.assignments, user?.id)
   const firstName = user?.name.split(' ')[0]
-  /* Until /api/home returns, keep the compact lead-like hero so admin CTA / lede
-     don't flash and shove the greeting down on every tab return. */
+  /* Until /api/home returns, keep the compact lead-like hero so the lede
+     doesn't flash and shove the greeting down on every tab return. */
   const showHelperHeroExtras = homeReady && !isLead
 
   const nowMeta = useMemo(() => {
@@ -170,13 +170,6 @@ export function HomePage() {
                   'Katso tehtävät, kokoonpano ja kuittaa työt viikon aikana.'
                 : 'Kun Pihavuoro julkaistaan, se näkyy tässä.'}
             </p>
-          )}
-          {showHelperHeroExtras && !next && user?.role === 'admin' && (
-            <div className="hero-cta">
-              <Link className="btn primary on-dark" to="/kalenteri">
-                Luo viikko kalenterissa
-              </Link>
-            </div>
           )}
         </div>
       </header>

@@ -584,11 +584,6 @@ a {
   font-size: 0.98rem;
 }
 
-.page-hero.home-hero .hero-cta {
-  margin-top: 1.05rem;
-  animation: home-hero-fade 0.4s var(--ease) 0.1s both;
-}
-
 .home-hero-thanks {
   margin: 0;
   color: rgba(232, 244, 238, 0.88);

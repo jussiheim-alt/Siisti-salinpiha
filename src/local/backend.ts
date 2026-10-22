@@ -1138,7 +1138,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'task-card-sync-published-2026-10-05' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'home-no-create-week-cta-2026-10-22' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
