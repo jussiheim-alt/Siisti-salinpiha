@@ -1138,7 +1138,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'home-no-create-week-cta-2026-10-22' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'vuorot-current-first-2026-11-01' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
