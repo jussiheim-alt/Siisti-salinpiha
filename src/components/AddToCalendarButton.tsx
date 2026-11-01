@@ -1,5 +1,5 @@
 import { googleCalendarUrl, type ShiftCalendarEvent } from '../shared/shiftCalendar'
-import { formatWeekRangeFiCompact } from '../shared/datetime'
+import { formatWeekRangeFiCompact, todayYmdHelsinki } from '../shared/datetime'
 
 type Props = {
   events: ShiftCalendarEvent[]
@@ -13,9 +13,12 @@ export function AddToCalendarButton({
   label = 'Lisää Google-kalenteriin',
   className = 'btn primary calendar-google-btn',
 }: Props) {
-  if (!events.length) return null
+  const today = todayYmdHelsinki()
+  /* Past weeks stay out of "add to calendar" — same rule as Vuorot list. */
+  const upcoming = events.filter((e) => e.weekEnd >= today)
+  if (!upcoming.length) return null
 
-  const sorted = [...events].sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+  const sorted = [...upcoming].sort((a, b) => a.weekStart.localeCompare(b.weekStart))
 
   return (
     <div className="stack calendar-google-block">
