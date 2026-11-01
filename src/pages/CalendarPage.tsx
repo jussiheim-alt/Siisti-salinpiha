@@ -4,7 +4,11 @@ import { api, type Pihavuoro } from '../api'
 import { useAuth } from '../auth'
 import { AddToCalendarButton } from '../components/AddToCalendarButton'
 import { PublishWeekModal } from '../components/PublishWeekModal'
-import { formatWeekRangeFi, isActiveCalendarWeek } from '../shared/datetime'
+import {
+  formatWeekRangeFi,
+  isActiveCalendarWeek,
+  todayYmdHelsinki,
+} from '../shared/datetime'
 import {
   DEFAULT_TOTAL_PEOPLE,
   MAX_TOTAL_PEOPLE,
@@ -47,9 +51,22 @@ export function CalendarPage() {
     (_, i) => MIN_TOTAL_PEOPLE + i,
   )
 
+  /* Current week first, then upcoming — past weeks stay in admin history only. */
+  const visibleList = useMemo(() => {
+    const today = todayYmdHelsinki()
+    return list
+      .filter((p) => p.weekEnd >= today)
+      .sort((a, b) => {
+        const aActive = isActiveCalendarWeek(a.weekStart, a.weekEnd)
+        const bActive = isActiveCalendarWeek(b.weekStart, b.weekEnd)
+        if (aActive !== bActive) return aActive ? -1 : 1
+        return a.weekStart.localeCompare(b.weekStart)
+      })
+  }, [list])
+
   const myShifts = useMemo(
     () =>
-      list
+      visibleList
         .filter((p) => p.status !== 'draft')
         .map((p) => {
           const mine = p.assignments.find((a) => a.userId === user?.id)
@@ -63,7 +80,7 @@ export function CalendarPage() {
           }
         })
         .filter((x): x is NonNullable<typeof x> => Boolean(x)),
-    [list, user?.id],
+    [visibleList, user?.id],
   )
 
   return (
@@ -71,7 +88,9 @@ export function CalendarPage() {
       <header className="page-hero compact">
         <p className="brand-mark">Siisti salin piha</p>
         <h1>Kalenteri</h1>
-        <p className="lede">Viikoittaiset Pihavuorot — luonnos tai julkaistu.</p>
+        <p className="lede">
+          Käynnissä oleva ja tulevat Pihavuorot. Menneet löytyvät ylläpidon historiasta.
+        </p>
       </header>
 
       {myShifts.length > 0 && (
@@ -122,7 +141,7 @@ export function CalendarPage() {
       {error && <p className="error">{error}</p>}
 
       <div className="card-list">
-        {list.map((p) => {
+        {visibleList.map((p) => {
           const mine = p.assignments.find((a) => a.userId === user?.id)
           const lead = p.assignments.find((a) => a.role === 'lead')
           const openCount = p.tasks.filter((t) => t.status === 'open').length
@@ -179,7 +198,13 @@ export function CalendarPage() {
             </div>
           )
         })}
-        {!list.length && <p className="muted">Ei vuoroja vielä.</p>}
+        {!visibleList.length && (
+          <p className="muted">
+            {list.length
+              ? 'Ei käynnissä olevia tai tulevia vuoroja. Menneet ovat ylläpidon historiassa.'
+              : 'Ei vuoroja vielä.'}
+          </p>
+        )}
       </div>
 
       {reviewMode && (
