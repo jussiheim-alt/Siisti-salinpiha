@@ -241,7 +241,7 @@ function buildTips(days: WeatherDay[], current: WeatherHour | undefined): Weathe
     tips.push({
       id: 'ice',
       title: 'Liukkaus',
-      body: 'Lämpötila käy nollan molemmin puolin — hiekoitus kannattaa.',
+      body: 'Lämpötila käy nollan molemmin puolin — hiekoita tarvittaessa.',
     })
   } else if (rainDay && !snowDay) {
     tips.push({
