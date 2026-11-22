@@ -233,7 +233,7 @@ function buildTips(days: WeatherDay[], current: WeatherHour | undefined): Weathe
       title: 'Lumityöt',
       body:
         snowDay.label === 'Tänään'
-          ? 'Lunta tai räntää tulossa — lumityöt ajoissa ennen väkeä.'
+          ? 'Lunta tai räntää tulossa — lumityöt ajoissa ennen kuin ystävät tulevat salille.'
           : `${snowDay.label} lumisadetta — suunnittele lumityöt etukäteen.`,
     })
   }

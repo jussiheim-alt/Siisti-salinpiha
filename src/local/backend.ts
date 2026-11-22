@@ -1138,7 +1138,7 @@ export async function localApi<T = unknown>(
   }
 
   if (pathname === '/api/meta/app' && method === 'GET') {
-    return ok({ commit: 'local', commitFull: null, uiVersion: 'calendar-hide-past-2026-11-01' })
+    return ok({ commit: 'local', commitFull: null, uiVersion: 'snow-tip-friends-2026-11-22' })
   }
 
   if (pathname === '/api/admin/week-history' && method === 'GET') {
